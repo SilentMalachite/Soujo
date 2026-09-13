@@ -142,3 +142,8 @@ spec・go スキルの plan 行きの next set から --effort を外した（go
 L14 レビュー #1〜#20 を修正: effort の判定を formatNext・validate の後にし、high\n や HIGH は通常の1行・値のエラーで拒否。層名は「」で示し、Effort 型・const・返り値の layer に整理。
 spec/plan は trim 後に大文字小文字も含め完全一致（SPEC 英日に明記）。テストは全文比較・改行と大文字・.soujo なしの順・CLI の拒否、skills.test で plan 行きに --effort がないことを検査。
 go は plan 行きを完全なコマンドで示し、spec・go は --layer を引用符で、plan スキルは未完了の層がなければ next set しない。README(+.ja) に high 固定。L14 の LOG の「層以外」は「spec/plan 以外の層」（#19）。
+
+## 2026-09-14 privacy-guard
+個人情報・認証情報の混入を確認: 追跡ファイル・作者情報（GitHub noreply）・キャッシュに混入なし。公開済みの ac20cbd・23c7ace・1fbe16a のメッセージに Claude のセッション URL の trailer がある（未対応）。
+test/privacy.test.ts が追跡ファイルの認証情報・セッション URL・ホームの絶対パス・個人のメールと認証ファイル名を検出。.gitignore に認証ファイルを追加。
+CLAUDE.md/AGENTS.md（+templates）の秘匿情報の規則にセッション URL・認証ファイル・ホームのパスを明記。ローカルの .git/hooks/commit-msg が同種のメッセージを拒否。

@@ -1,3 +1,11 @@
 node_modules/
 .test-dist/
 .DS_Store
+# Credentials: `soujo layer done` stages everything with git add -A.
+.env
+.env.*
+.npmrc
+.credentials.json
+auth.json
+*.pem
+*.key
