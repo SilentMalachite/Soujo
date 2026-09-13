@@ -30,10 +30,11 @@ test('init outside git uses the current directory, never overwrites, and lists s
     '作成: .soujo/LOG.md',
     '作成: AGENTS.md',
     '既存のため作らず: .soujo/NEXT.md, CLAUDE.md',
+    'git リポジトリではない: layer done / close の前に git init が要る',
   ]);
   assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), 'mine\n');
   assert.equal(readFileSync(join(dir, '.soujo', 'NEXT.md'), 'utf8'), 'mine\n');
-  assert.deepEqual(init(dir), [`既存のため作らず: ${ALL.join(', ')}`]);
+  assert.deepEqual(init(dir), [`既存のため作らず: ${ALL.join(', ')}`, 'git リポジトリではない: layer done / close の前に git init が要る']);
 });
 
 test('templates: NEXT.md is valid, PLAN.md has no layers, CLAUDE.md / AGENTS.md match the repository copies', () => {

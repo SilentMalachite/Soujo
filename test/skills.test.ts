@@ -1,14 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { packageDir } from '../src/files.js';
+import { EFFORTS } from '../src/state.js';
+import { temp } from './helpers.js';
 
+const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 const SKILLS = ['close', 'go', 'map', 'plan', 'resume', 'review', 'spec'];
 const SECTIONS = ['読むもの', 'やること', 'soujo に頼むこと', '出力の形'];
+// SPEC §7: no "always read", "run the tests", or "double-check" instructions.
+const FORBIDDEN = ['必ず', 'テストし', 'テストを実行', '再確認', '検証し'];
 
-// Frontmatter as key → raw value, and the body after it. Only "key: value" lines are accepted.
-function split(path: string): { keys: Map<string, string>; body: string[] } {
+// Directory entries that hosts load: validate_plugin.py also skips dot-entries and plain files.
+function entries(dir: string, directories: boolean): string[] {
+  return readdirSync(join(packageDir(), dir), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() === directories && !entry.name.startsWith('.'))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+// Frontmatter as key → value with one pair of surrounding quotes removed, and the body after it.
+// Only one-line "key: value" pairs are accepted: folded YAML is valid for both hosts, but these files do not need it.
+function split(path: string): { keys: Map<string, string>; body: string } {
   const text = readFileSync(path, 'utf8');
   const match = /^---\n([\s\S]*?)\n---\n/.exec(text);
   assert.ok(match, `${path} は frontmatter で始まる`);
@@ -16,19 +32,28 @@ function split(path: string): { keys: Map<string, string>; body: string[] } {
   for (const line of (match[1] ?? '').split('\n')) {
     const pair = /^([\w-]+): (.+)$/.exec(line);
     assert.ok(pair, `${path} の frontmatter の行が不正: ${line}`);
-    keys.set(pair[1] ?? '', pair[2] ?? '');
+    const value = pair[2] ?? '';
+    keys.set(pair[1] ?? '', /^(["']).*\1$/.test(value) ? value.slice(1, -1) : value);
   }
-  return { keys, body: text.slice(match[0].length).split('\n') };
+  return { keys, body: text.slice(match[0].length) };
 }
 
-function sections(body: string[]): Map<string, string[]> {
+// One sentence: a single "。", at the end.
+function assertOneSentence(description: string | undefined, label: string): void {
+  assert.match(description ?? '', /^[^。\n]+。$/, `${label} の description は1文`);
+}
+
+// Sections in order of appearance. The limit is on lines, as SPEC §7 states it; line length is left to review.
+function sections(body: string): Map<string, string[]> {
   const found = new Map<string, string[]>();
   let current: string[] | undefined;
-  for (const line of body) {
+  for (const line of body.split('\n')) {
     const heading = /^## (.+)$/.exec(line);
     if (heading) {
+      const name = heading[1] ?? '';
+      assert.ok(!found.has(name), `見出し「${name}」が重複`);
       current = [];
-      found.set(heading[1] ?? '', current);
+      found.set(name, current);
     } else if (line.trim() !== '') {
       assert.ok(current, `節の外に行がある: ${line}`);
       current.push(line);
@@ -37,9 +62,22 @@ function sections(body: string[]): Map<string, string[]> {
   return found;
 }
 
-test('skills/ has exactly the seven skills', () => {
-  const dirs = readdirSync(join(packageDir(), 'skills'), { withFileTypes: true });
-  assert.deepEqual(dirs.map((entry) => entry.name).sort(), SKILLS);
+// `soujo …` spans as argv: optional brackets unwrapped, quotes removed, and <low|…> checked against EFFORTS.
+function commands(body: string): string[][] {
+  return [...body.matchAll(/`soujo ([^`]+)`/g)].map((match) =>
+    [...(match[1] ?? '').replace(/[[\]]/g, '').matchAll(/'([^']*)'|(\S+)/g)].map(([token, quoted]) => {
+      if (quoted !== undefined) return quoted;
+      const choices = /^<([\w|]+)>$/.exec(token)?.[1];
+      if (choices === undefined) return token;
+      assert.deepEqual(choices.split('|'), [...EFFORTS]);
+      return EFFORTS[0];
+    }),
+  );
+}
+
+test('skills/ has exactly the seven skills and agents/ only reviewer.md', () => {
+  assert.deepEqual(entries('skills', true), SKILLS);
+  assert.deepEqual(entries('agents', false), ['reviewer.md']);
 });
 
 for (const name of SKILLS) {
@@ -47,7 +85,7 @@ for (const name of SKILLS) {
     const { keys, body } = split(join(packageDir(), 'skills', name, 'SKILL.md'));
     assert.deepEqual([...keys.keys()], ['name', 'description']);
     assert.equal(keys.get('name'), name);
-    assert.match(keys.get('description') ?? '', /^"[^"]+。"$/);
+    assertOneSentence(keys.get('description'), name);
 
     const found = sections(body);
     assert.deepEqual([...found.keys()], SECTIONS);
@@ -55,13 +93,30 @@ for (const name of SKILLS) {
       assert.ok(lines.length >= 1 && lines.length <= 3, `${name} の「${section}」は1〜3行（${lines.length}行）`);
     }
     const first = found.get('読むもの')?.[0] ?? '';
-    for (const word of ['.soujo/', 'soujo', 'git', '作業中のプロジェクト']) assert.ok(first.includes(word), `${name} の読むもの1行目に ${word}`);
+    for (const word of ['`soujo`', 'git', '`.soujo/`', '作業中のプロジェクト', '置き場所']) {
+      assert.ok(first.includes(word), `${name} の読むもの1行目に ${word}`);
+    }
+    for (const word of FORBIDDEN) assert.ok(!body.includes(word), `${name} に「${word}」`);
   });
 }
 
-test('agents/reviewer.md is a subagent named reviewer', () => {
+test('every soujo command in the skills is a known command with known options', (t) => {
+  const cwd = temp(t);
+  for (const name of SKILLS) {
+    for (const argv of commands(split(join(packageDir(), 'skills', name, 'SKILL.md')).body)) {
+      const result = spawnSync(process.execPath, [CLI, ...argv], { cwd, encoding: 'utf8' });
+      assert.doesNotMatch(result.stderr, /不明なコマンド|不明なオプション|オプションの値/, `${name}: soujo ${argv.join(' ')}`);
+    }
+  }
+});
+
+test('agents/reviewer.md is the subagent the review skill names', () => {
   const { keys, body } = split(join(packageDir(), 'agents', 'reviewer.md'));
+  assert.deepEqual([...keys.keys()], ['name', 'description', 'tools']);
   assert.equal(keys.get('name'), 'reviewer');
-  assert.match(keys.get('description') ?? '', /^"[^"]+。"$/);
-  assert.ok(body.some((line) => line.includes('# / 場所 / 何が / なぜ / 直し方')));
+  assertOneSentence(keys.get('description'), 'reviewer');
+  assert.equal(keys.get('tools'), 'Read, Grep, Glob, Bash');
+  assert.ok(body.includes('`# / 場所 / 何が / なぜ / 直し方`'));
+  const review = readFileSync(join(packageDir(), 'skills', 'review', 'SKILL.md'), 'utf8');
+  assert.ok(review.includes('`soujo:reviewer`'), 'review スキルが soujo:reviewer を名指しする');
 });

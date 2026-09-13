@@ -106,9 +106,9 @@ effort: <low|medium|high|xhigh>
 
 | Command | Behavior | Output |
 |---|---|---|
-| `soujo init` | Creates `.soujo/` from templates, plus CLAUDE.md / AGENTS.md if missing. Uses the git top level when inside a repository. Never overwrites existing files | Created files, then one line listing skipped ones |
+| `soujo init` | Creates `.soujo/` from templates, plus CLAUDE.md / AGENTS.md if missing. Uses the git top level when inside a repository. Never overwrites existing files | Created files, then one line listing skipped ones, and a line saying `git init` is needed outside a repository |
 | `soujo next show [--hook]` | Prints `NEXT.md`, or `NEXT.md なし`. With `--hook`, prints nothing when `NEXT.md` is missing | 5 lines |
-| `soujo next set --layer --premise --check [--caution] [--effort]` | Rewrites `NEXT.md`. Defaults: caution `なし`, effort `medium`. Values must be one line | 1 line |
+| `soujo next set --layer --premise --check [--caution] [--effort]` | Rewrites `NEXT.md`. Defaults: caution `なし`, effort `medium`. Values must be one line. When PLAN has layers, a layer not in PLAN (other than `spec` / `plan`) is refused and nothing is written | 1 line |
 | `soujo next check [--hook]` | Warns when `NEXT.md` is missing, invalid, points to a layer already `[x]` in PLAN or past an unchecked one, or there are uncommitted changes in the project. Silent outside Soujo projects. `--hook` returns `{"systemMessage": "..."}`. **Exit code is always 0** | 0–1 line |
 | `soujo plan list` | Layers and their state | 1 line per layer |
 | `soujo plan next` | First unfinished layer and its completion condition | 2 lines |
@@ -124,17 +124,19 @@ Public pure functions of `state.ts` (each has tests):
 
 ## 7. Skills (`skills/`, shared by both hosts)
 
-Common rules: `description` is one sentence with a narrow trigger (Astra truncates descriptions when there are many skills). The body has four sections — "what to read → what to do → what to ask `soujo` → output shape" — with at most 3 lines each. The first "what to read" line says that `.soujo/`, `soujo`, and git belong to the current project, not to the skill's install location. No "always read X", "run the tests", or "double-check" instructions (both models do that on their own).
+Common rules: `description` is one sentence with a narrow trigger (Astra truncates descriptions when there are many skills). The body has four sections — "what to read → what to do → what to ask `soujo` → output shape" — with at most 3 lines each. The first "what to read" line says that `soujo` (the command on PATH), git, and `.soujo/` belong to the current project, and that the skill's install location is never `cd`-ed into nor its `.soujo/` or `dist/` used. No "always read X", "run the tests", or "double-check" instructions (both models do that on their own). Values in command examples are single-quoted. `test/skills.test.ts` checks the format and every `soujo` command and option in the skills.
 
 | Skill | Reads | Does | CLI | Output | effort |
 |---|---|---|---|---|---|
-| `spec` | Existing `SPEC.md`; config files when proposing technical options | One question at a time, at most 7, each with numbered candidates. The stack is decided by asking; no defaults | `soujo init` → `soujo next set` (next: plan) | `SPEC.md` and one skeleton table | high |
-| `plan` | `SPEC.md` | Split into layers of ≤30 minutes, in dependency order, at most 12 | `soujo next set` → `soujo map plan` | `PLAN.md` and the diagram | high |
-| `go` | `NEXT.md` → `SPEC.md` → the layer in PLAN | Implement until the completion condition holds. **Write the next `NEXT.md` first, then `layer done`.** Switches to spec/plan when NEXT points there | `soujo next set` → `soujo layer done` | One-sentence result + changed files | from `NEXT.md` |
+| `spec` | `SPEC.md` after `soujo init`; config files when proposing technical options | One question at a time (the next only after an answer), at most 7, each with numbered candidates, written down after each answer. The stack comes from config files when they settle it, otherwise from a question; no defaults | `soujo init` → `soujo next set` (next: plan) | One `SPEC.md` skeleton table and the files init created | high |
+| `plan` | `SPEC.md` and an existing `PLAN.md` | Split what is not implemented into layers of ≤30 minutes, in dependency order, at most 12 unfinished. Adds nothing when nothing is left | `soujo next set` (only when `次:` is not the first unfinished layer) → `soujo map plan` | `PLAN.md` and the diagram | high |
+| `go` | `soujo resume` → `NEXT.md` → `SPEC.md` → the layer in PLAN | Follows `再開:` when it is not go. Implement until the completion condition holds. **Write the next `NEXT.md` first (`次: plan` after the last layer), then `layer done`.** Switches to spec/plan when NEXT points there | `soujo resume` → `soujo next set` → `soujo layer done` | One-sentence result + changed files | from `NEXT.md` |
 | `resume` | — | Return the CLI output as is | `soujo resume` | 4 lines | low |
-| `map` | `git diff` only for `diff` | `plan` / `code <dir>` show the CLI diagram verbatim; `diff` is drawn as Before/After by the model | `soujo map` | Diagram + ≤5 lines | medium |
-| `review` | Diff of the latest layer | **Report every finding** as `# / location / what / why / fix`; one `reviewer` subagent where available | — | Table | medium |
-| `close` | — | Pass the one-line note to `--note` | `soujo close` | 2 lines | low |
+| `map` | Only for `diff`: the latest layer's diff and its surroundings | `plan` / `code [dir]` show the CLI diagram verbatim; `diff` is drawn as Before/After by the model | `soujo map` | Diagram + ≤5 lines | medium |
+| `review` | The given range, or the diff from the latest `layer:` commit's parent to the working tree (untracked files included) | **Report every finding** as `# / location / what / why / fix`; starts one `soujo:reviewer` when it can and shows its table unedited | — | Table | medium |
+| `close` | — | Pass the one-line note to `--note`, or a line on progress when none is given | `soujo close` | 2 lines | low |
+
+The effort column is a guide for the human or host setting (§8); SKILL.md frontmatter has no place for it.
 
 `go` writes `NEXT.md` before `layer done` so that the commit includes the next `NEXT.md`. This keeps `next check` passing with "clean tree + valid NEXT".
 
@@ -226,6 +228,8 @@ Decided:
 - `soujo layer done` refuses when `NEXT.md` is missing, invalid, or still points to the layer being closed, so every layer commit carries the next step.
 - Codex 0.154 has no `--reasoning-effort` flag; effort is passed with `-c model_reasoning_effort=<v>`.
 - Layer names in this repository are ASCII so that `layer: <layer>` commit messages stay English.
+- After the last layer `NEXT.md` says `次: plan`; `plan` ends without adding layers when nothing in SPEC is left.
+- `soujo next set` refuses layers missing from PLAN (other than `spec` / `plan`), so a mistyped layer name is not noticed only at `layer done`.
 
 Open:
 - Rotating `LOG.md` when it grows (`soujo log rotate` moving months into `LOG-YYYY-MM.md`).
@@ -234,4 +238,5 @@ Open:
 - Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
 - The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer.
 - `NEXT.md` for "all layers done" still carries an `effort:` value.
+- `spec` / `plan` do not commit. Until the first `layer done`, `.soujo/` changes stay uncommitted and the Stop hook warns every time.
 - Codex context size: one `$go` used ~690K input tokens (mostly cached), largely from global Codex context.

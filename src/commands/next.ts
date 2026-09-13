@@ -19,12 +19,23 @@ export function nextShow(cwd: string, hook: boolean): string[] {
   }
 }
 
-/** Rewrites NEXT.md. Writes nothing when the result would be invalid. */
+// Steps before any layer exists; the spec and plan skills point NEXT.md at them.
+const PHASES = ['spec', 'plan'];
+
+/**
+ * Rewrites NEXT.md. Writes nothing when the result would be invalid, or when PLAN.md has layers and the layer is
+ * neither one of them nor a phase: a mistyped name would otherwise pass next check and resume until layer done.
+ */
 export function nextSet(cwd: string, input: NextInput): string[] {
   const dir = requireStateDir(cwd);
   const text = formatNext(input);
   const problems = validateNext(text);
   if (problems.length > 0) throw new Error(`NEXT.md を書かない: ${problems.join('、')}`);
+  const layer = input.layer.trim();
+  const items = parsePlan(readState(dir, 'PLAN.md') ?? '');
+  if (items.length > 0 && !PHASES.includes(layer) && !items.some((item) => item.layer === layer)) {
+    throw new Error(`NEXT.md を書かない: PLAN.md に層「${layer}」がない（PLAN の層名をそのまま、または ${PHASES.join(' / ')}）`);
+  }
   writeState(dir, 'NEXT.md', text);
   return [`NEXT.md を更新: 次: ${input.layer.trim()}`];
 }

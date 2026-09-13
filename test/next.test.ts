@@ -51,6 +51,19 @@ test('next set writes nothing for invalid values', (t) => {
   assert.throws(() => nextSet(temp(t), base), /\.soujo\/ が見つからない/);
 });
 
+test('next set refuses a layer missing from PLAN.md except spec and plan, and any layer while PLAN.md has none', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  const base = { premise: 'p', check: 'c' };
+  assert.throws(() => nextSet(dir, { ...base, layer: 'L2' }), /^Error: NEXT\.md を書かない: PLAN\.md に層「L2」がない/);
+  assert.throws(() => nextSet(dir, { ...base, layer: 'L2 state — test' }), /PLAN\.md に層「L2 state — test」がない/);
+  assert.equal(readNext(dir), NEXT);
+  for (const layer of [' L2 state ', 'L1 scaffold', 'spec', 'plan']) {
+    assert.deepEqual(nextSet(dir, { ...base, layer }), [`NEXT.md を更新: 次: ${layer.trim()}`]);
+  }
+  const empty = project(temp(t), { 'PLAN.md': '# PLAN\n' });
+  assert.deepEqual(nextSet(empty, { ...base, layer: 'L1' }), ['NEXT.md を更新: 次: L1']);
+});
+
 test('next check is silent for a clean tree with a valid NEXT.md, and outside Soujo projects', (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
   commitAll(dir);

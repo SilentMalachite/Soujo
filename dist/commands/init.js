@@ -4,7 +4,8 @@ import { STATE_DIR, STATE_FILES, createFile, ensureStateDir, readTemplate } from
 import { gitToplevel } from '../git.js';
 const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'];
 export function init(cwd) {
-    const root = gitToplevel(cwd) ?? resolve(cwd);
+    const toplevel = gitToplevel(cwd);
+    const root = toplevel ?? resolve(cwd);
     ensureStateDir(root);
     const targets = [
         ...STATE_FILES.map((file) => ({ template: file, path: `${STATE_DIR}/${file}` })),
@@ -18,5 +19,8 @@ export function init(cwd) {
     const lines = created.map((path) => `作成: ${path}`);
     if (skipped.length > 0)
         lines.push(`既存のため作らず: ${skipped.join(', ')}`);
+    // layer done and close commit, so say it now rather than after the first layer is implemented.
+    if (toplevel === undefined)
+        lines.push('git リポジトリではない: layer done / close の前に git init が要る');
     return lines;
 }

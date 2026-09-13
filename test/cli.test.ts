@@ -53,7 +53,8 @@ test('init, log add, and plan next work through the CLI', (t) => {
   const dir = temp(t);
   const created = soujoIn(dir, 'init');
   assert.equal(created.status, 0);
-  assert.equal(created.stdout.split('\n').filter(Boolean).length, 6);
+  // Six created files and the git init hint, since temp() is not a repository.
+  assert.equal(created.stdout.split('\n').filter(Boolean).length, 7);
 
   const logged = soujoIn(dir, 'log', 'add', 'L1 scaffold', '--line', 'a', '--line', 'b');
   assert.equal(logged.status, 0);

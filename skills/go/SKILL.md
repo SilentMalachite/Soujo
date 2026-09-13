@@ -4,19 +4,18 @@ description: "Soujo の .soujo/NEXT.md が指す層を実装し、次の NEXT.md
 ---
 
 ## 読むもの
-- `.soujo/`・`soujo`・git は作業中のプロジェクトのもの。このスキルの置き場所へ cd したり、そこのファイルを読んだりしない。
-- `.soujo/NEXT.md` → `.soujo/SPEC.md` → `.soujo/PLAN.md` の該当層の行。
-- `次:` が `spec` / `plan` なら、ここで spec / plan スキルに切り替える。
+- `soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもの。スキルの置き場所へ cd したり、そこの `.soujo/`・`dist/` を使ったりしない。`soujo` が見つからなければ止めて1行で伝える。
+- `soujo resume` の4行 → `.soujo/NEXT.md` → `.soujo/SPEC.md` → `.soujo/PLAN.md` の該当層の行。
 
 ## やること
-- `effort:` の深さで、PLAN の完了条件を満たすまで確認を挟まずに実装する。層の範囲を広げない。
-- 満たしたら、**先に**次の層の `NEXT.md` を書き、その後に層を締める。次の層は PLAN の次の未完了の層、なければ `plan`。
-- 途中で止まるなら `close` スキルに切り替える。
+- `再開:` が go 以外（layer done の再実行・next set）ならその通りにする。`次:` が `spec` / `plan` ならそのスキルに切り替える。
+- PLAN の完了条件までが実装してよい範囲。確認を挟まず、満たすまで続ける（テストが落ちたまま締めない）。途中で止まるなら close スキルへ。
+- 満たしたら**先に**次の層の NEXT.md を書き、その後に層を締める。拒否はエラーの1行に従って直し、git に書けなければ権限を求めて、同じコマンドを再実行する。
 
 ## soujo に頼むこと
-- `soujo next set --layer "<次の層>" --premise "<この層で済んだこと>" --check "<次の層の完了条件>" [--caution "<注意>"] [--effort <low|medium|high|xhigh>]`
-- `soujo layer done "<この層>" --note "<1〜3行>"`
-- 拒否やエラーはその1行に従って原因を直し、同じコマンドを再実行する（記録は重複しない）。
+- `soujo resume`
+- `soujo next set --layer '<次の層名>' --premise '<この層で済んだこと>' --check '<次の層の完了条件>' --effort <low|medium|high|xhigh> [--caution '<注意>']`（層名と完了条件は PLAN の行から写す。次の層がなければ `--layer plan --check 'SPEC に未実装が残っていない'`。effort は次の層の難しさで選ぶ）
+- `soujo layer done '<この層名>' --note '<1〜3行。改行は引数の中の実際の改行>'`
 
 ## 出力の形
 - 結果1文＋変更ファイル一覧。

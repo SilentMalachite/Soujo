@@ -107,9 +107,9 @@ effort: <low|medium|high|xhigh>
 
 | コマンド | 動作 | 出力 |
 |---|---|---|
-| `soujo init` | templates から `.soujo/` を作り、CLAUDE.md / AGENTS.md がなければ複製する。git 管理下ならトップレベルに作る。既存ファイルは上書きしない | 作成したファイル＋作らなかったファイルの1行 |
+| `soujo init` | templates から `.soujo/` を作り、CLAUDE.md / AGENTS.md がなければ複製する。git 管理下ならトップレベルに作る。既存ファイルは上書きしない | 作成したファイル＋作らなかったファイルの1行。git 管理外なら `git init` が要る旨の1行 |
 | `soujo next show [--hook]` | `NEXT.md` を表示。なければ「NEXT.md なし」。`--hook` 時は NEXT.md がなければ何も出さない | 5行 |
-| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。値は1行 | 1行 |
+| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否 | 1行 |
 | `soujo next check [--hook]` | NEXT.md がない・無効・PLAN で `[x]` 済みの層か未チェックの層より後ろを指す、またはプロジェクト内に未コミット変更があれば警告。Soujo を使っていないプロジェクトでは無音。`--hook` 時は `{"systemMessage": "..."}`。**終了コードは常に0** | 0〜1行 |
 | `soujo plan list` | 層の一覧と完了状態 | 層数分 |
 | `soujo plan next` | 最初の未完了層と完了条件 | 2行 |
@@ -125,17 +125,19 @@ effort: <low|medium|high|xhigh>
 
 ## 7. スキル（`skills/`、両ホスト共有）
 
-共通規約：description は1文・狭いトリガー（Astra はスキルが多いと description を切り詰める）。本文は「読むもの → やること → `soujo` に頼むこと → 出力の形」の4節、各節3行以内。「読むもの」の1行目で、`.soujo/`・`soujo`・git は作業中のプロジェクトのものでスキルの置き場所のものではない、と示す。「必ず〜を読め」「テストしろ」「再確認しろ」は書かない（両モデルとも自分でやる）。
+共通規約：description は1文・狭いトリガー（Astra はスキルが多いと description を切り詰める）。本文は「読むもの → やること → `soujo` に頼むこと → 出力の形」の4節、各節3行以内。「読むもの」の1行目で、`soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもので、スキルの置き場所へ cd したりそこの `.soujo/`・`dist/` を使ったりしない、と示す。「必ず〜を読め」「テストしろ」「再確認しろ」は書かない（両モデルとも自分でやる）。コマンド例の値は単一引用符で書く。形式と `soujo` のコマンド・オプションは `test/skills.test.ts` が検査する。
 
 | スキル | 読むもの | やること | 呼ぶ CLI | 出力 | effort |
 |---|---|---|---|---|---|
-| `spec` | 既存の `SPEC.md`。技術の候補を出すときは設定ファイル | 質問1つずつ・最大7問。各問に番号付きの答え候補。技術スタックは質問して決め、既定値を持たない | `soujo init` → `soujo next set`（次: 計画） | `SPEC.md` と骨組みの表1つ | high |
-| `plan` | `SPEC.md` | 30分以内の層に分割。依存順。最大12層 | `soujo next set` → `soujo map plan` | `PLAN.md` と図 | high |
-| `go` | `NEXT.md` → `SPEC.md` → PLAN の該当層 | 層を完了条件まで実装。**終わったら次の層の `NEXT.md` を先に書き、その後 `layer done`**。NEXT が spec / plan を指すならそちらへ | `soujo next set` → `soujo layer done` | 結果1文＋変更ファイル | `NEXT.md` の指定 |
+| `spec` | `soujo init` 後の `SPEC.md`。技術の候補を出すときは設定ファイル | 質問1つずつ（答えを受けてから次）・最大7問。各問に番号付きの答え候補。答えるたびに書く。技術スタックは設定ファイルで決まればそれ、決まらなければ質問（既定値を持たない） | `soujo init` → `soujo next set`（次: plan） | `SPEC.md` の骨組みの表1つと init が作ったファイル | high |
+| `plan` | `SPEC.md` と既存の `PLAN.md` | 未実装を30分以内の層に分割。依存順。未完了は最大12層。未実装がなければ層を足さず終える | `soujo next set`（`次:` が最初の未完了の層でないときだけ）→ `soujo map plan` | `PLAN.md` と図 | high |
+| `go` | `soujo resume` → `NEXT.md` → `SPEC.md` → PLAN の該当層 | `再開:` が go 以外ならそれに従う。層を完了条件まで実装。**終わったら次の層の `NEXT.md` を先に書き（最後の層の後は `次: plan`）、その後 `layer done`**。NEXT が spec / plan を指すならそちらへ | `soujo resume` → `soujo next set` → `soujo layer done` | 結果1文＋変更ファイル | `NEXT.md` の指定 |
 | `resume` | — | CLI の出力をそのまま返す | `soujo resume` | 4行 | low |
-| `map` | `diff` のときだけ `git diff` | `plan` / `code <dir>` は CLI の図をそのまま示す。`diff` は Before/After を自分で描く | `soujo map` | 図＋5行以内 | medium |
-| `review` | 直近の層の diff | **見つけたものは全部**、表 `# / 場所 / 何が / なぜ / 直し方`。使えるホストでは `reviewer` を1体 | — | 表 | medium |
-| `close` | — | 引数の一言を `--note` に渡すだけ | `soujo close` | 2行 | low |
+| `map` | `diff` のときだけ、直近の層の diff とその周辺 | `plan` / `code [dir]` は CLI の図をそのまま示す。`diff` は Before/After を自分で描く | `soujo map` | 図＋5行以内 | medium |
+| `review` | 引数の範囲、なければ最新の `layer:` コミットの親から作業ツリーまでの diff（未追跡も含む） | **見つけたものは全部**、表 `# / 場所 / 何が / なぜ / 直し方`。`soujo:reviewer` を起動できれば1体だけ起動し、表を加工せず出す | — | 表 | medium |
+| `close` | — | 引数の一言を `--note` に渡す。なければ進んだところを1行にして渡す | `soujo close` | 2行 | low |
+
+effort 列は人やホストの設定で使う目安（§8）。SKILL.md の frontmatter には書く場所がない。
 
 `go` が「NEXT を先に書いてから `layer done`」なのは、`layer done` のコミットに次の `NEXT.md` を含めるため。これで `next check` が常に「クリーンな木＋有効な NEXT」で通る。
 
@@ -227,6 +229,8 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - `soujo layer done` は NEXT.md がない・無効・まだ締める層を指しているときに拒否する（層のコミットに必ず次の一手を含めるため）。
 - Codex 0.154 に `--reasoning-effort` はない。effort は `-c model_reasoning_effort=<v>` で渡す。
 - このリポジトリの層名は ASCII（`layer: <層名>` のコミットメッセージを英語に保つ）。
+- 全層完了後の `NEXT.md` は `次: plan`。`plan` は SPEC に未実装が残っていなければ層を足さずに終える。
+- `soujo next set` は PLAN にない層（`spec` / `plan` を除く）を拒否する。層名の写し間違いが `layer done` まで気づかれないのを防ぐため。
 
 未決：
 - `LOG.md` が長くなったときの巻き取り（月ごとに `LOG-YYYY-MM.md` へ退避する `soujo log rotate`）。
@@ -235,4 +239,5 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - モデルがスキルの置き場所へ `cd` したり、そこの `.soujo/` を読もうとすることがある。ホスト側の保護で止まり、スキルにも警告を入れたが、CLI 側のガードは未対応。
 - `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち。
 - 全層完了時の `NEXT.md` にも `effort:` が残る。
+- `spec` / `plan` はコミットしない。最初の `layer done` までは `.soujo/` の変更が未コミットで、Stop フックが毎回警告する。
 - Codex の文脈量：`$go` 1回で入力約69万トークン（大半キャッシュ。主に Codex 全体の文脈）。

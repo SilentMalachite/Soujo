@@ -82,3 +82,8 @@ TS/JS は字句解析でコメント・文字列・正規表現を除いて impo
 skills/ 7本（spec/plan/go/resume/map/review/close）: frontmatter は name/description のみ、4節×各3行以内、読むもの1行目でプロジェクト側を明示。
 agents/reviewer.md: review から1体だけ、diff の指摘を絞らず表で返す。編集・コミットしない。
 test/skills.test.ts が7本の構成・frontmatter・節と行数・reviewer を検証。
+
+## 2026-09-13 review-fix-l9
+L9 レビュー #1〜#53 を修正: 読むもの1行目は PATH の soujo を使い置き場所の .soujo/・dist/ を使わない旨に。go は soujo resume から入り、最後の層の後は 次: plan、--effort 必須、git に書けなければ権限を求めて再実行。
+review/map の範囲は最新 layer: コミットの親から作業ツリー（未追跡含む）で soujo:reviewer の表を加工せず出す。spec は答えるたびに書き1回1問、plan は層名の制約、close は一言がなければ進捗を渡す。
+next set は PLAN にない層（spec/plan 除く）を拒否、init は git 外で git init を促す。skills.test は CLI のコマンド・オプション・禁止語も検査。#10 #53 は変更なし、#14 は SPEC 未決へ。
