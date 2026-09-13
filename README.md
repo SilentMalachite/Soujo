@@ -85,10 +85,11 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 
 ## CLI
 
-`soujo` takes arguments and exits. Output is usually a few Japanese lines (`map` prints diagrams); errors are one line on stderr with exit code 1. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
+`soujo` takes arguments and exits. Output is usually a few Japanese lines (`map` prints diagrams, `--help` one usage line per command); errors are one line on stderr with exit code 1. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
 
 | Command | Does |
 |---|---|
+| `soujo --help` / `soujo next set --help` | Usage lines of every command / of one command (also after `next`, `plan`, `layer`, `log`, `map`); runs nothing else |
 | `soujo init` | Creates `.soujo/` (and CLAUDE.md / AGENTS.md) without overwriting |
 | `soujo next show [--hook]` | Prints `NEXT.md`; `--hook` is for the SessionStart hook |
 | `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md` |

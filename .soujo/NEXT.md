@@ -1,5 +1,5 @@
-次: L13 help
-前提: PLAN.md 作成・更新（SPEC §6/§13/§14 に --help と spec/plan の effort を追記）
-確認: SPEC §6 の --help 行（全コマンド・1コマンド・2語コマンドの1語目・-h・-- の後と --x=--help は対象外・--hook 付きでも使い方・書き込みコマンドでも何も書かない・エラーの案内）がテストで通り、README・CHANGELOG(+.ja) に載る
-注意: test/cli.test.ts はエラー文言を完全一致で検査。next check は strict:false。README に soujo <command> --help と書くと docs.test が実行して落ちるので実在のコマンドで例示
+次: L14 effort
+前提: soujo --help を実装（使い方はコマンド表の usage 1か所から出し、コマンドなし・不明なコマンドのエラーは soujo --help を案内）
+確認: next set --layer spec/plan（前後の空白付きを含む）が effort 省略で high を書き、ほかの effort を何も書かずに拒否することがテストで通り、spec・go スキルの plan 行きの next set が --effort を付けない（go の節は3行のまま）
+注意: skills.test は1節3行を検査。nextSet は層名を trim して照合するが formatNext の既定 effort は trim 前に入る。拒否エラーは --effort を外すよう示す
 effort: medium

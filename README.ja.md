@@ -85,10 +85,11 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 
 ## CLI
 
-`soujo` は引数を受けて終了する。出力は通常数行の日本語（`map` は図）、エラーは標準エラーに1行で終了コード1。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
+`soujo` は引数を受けて終了する。出力は通常数行の日本語（`map` は図、`--help` は1コマンド1行の使い方）、エラーは標準エラーに1行で終了コード1。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
 
 | コマンド | 動作 |
 |---|---|
+| `soujo --help` / `soujo next set --help` | 全コマンド / 1コマンドの使い方の行（`next`・`plan`・`layer`・`log`・`map` の後にも付けられる）。ほかは何も実行しない |
 | `soujo init` | `.soujo/`（と CLAUDE.md / AGENTS.md）を上書きせずに作る |
 | `soujo next show [--hook]` | `NEXT.md` を出す。`--hook` は SessionStart フック用 |
 | `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える |

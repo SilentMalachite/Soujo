@@ -10,77 +10,104 @@ import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
 import { printable } from './state.js';
+const HELP_HINT = '（soujo --help で一覧）';
+function usageError(usage) {
+    return new Error(`使い方: soujo ${usage}`);
+}
 // Exactly count positionals, or from count to max when max is given.
 function expectPositionals(positionals, count, usage, max = count) {
     if (positionals.length < count || positionals.length > max)
-        throw new Error(`使い方: soujo ${usage}`);
+        throw usageError(usage);
 }
 function noArguments(usage, run) {
-    return (args, cwd) => {
-        const { positionals } = parseArgs({ args, allowPositionals: true });
-        expectPositionals(positionals, 0, usage);
-        return run(cwd);
+    return {
+        usage,
+        run: (args, cwd) => {
+            const { positionals } = parseArgs({ args, allowPositionals: true });
+            expectPositionals(positionals, 0, usage);
+            return run(cwd);
+        },
     };
 }
-// Keys are "<word>" or "<word> <word>"; two-word keys are matched first.
+// Keys are "<word>" or "<word> <word>"; two-word keys are matched first. The order is the order of --help.
 const COMMANDS = {
     init: noArguments('init', init),
-    'next show': (args, cwd) => {
-        const { positionals, values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true });
-        expectPositionals(positionals, 0, 'next show [--hook]');
-        return nextShow(cwd, values.hook ?? false);
+    'next show': {
+        usage: 'next show [--hook]',
+        run: (args, cwd, usage) => {
+            const { positionals, values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true });
+            expectPositionals(positionals, 0, usage);
+            return nextShow(cwd, values.hook ?? false);
+        },
     },
-    'next set': (args, cwd) => {
-        const usage = 'next set --layer <層> --premise <前提> --check <確認> [--caution <注意>] [--effort low|medium|high|xhigh]';
-        const { positionals, values } = parseArgs({
-            args,
-            options: {
-                layer: { type: 'string' },
-                premise: { type: 'string' },
-                check: { type: 'string' },
-                caution: { type: 'string' },
-                effort: { type: 'string' },
-            },
-            allowPositionals: true,
-        });
-        expectPositionals(positionals, 0, usage);
-        const { layer, premise, check, caution, effort } = values;
-        if (layer === undefined || premise === undefined || check === undefined)
-            throw new Error(`使い方: soujo ${usage}`);
-        return nextSet(cwd, { layer, premise, check, caution, effort });
+    'next set': {
+        usage: 'next set --layer <層> --premise <前提> --check <確認> [--caution <注意>] [--effort low|medium|high|xhigh]',
+        run: (args, cwd, usage) => {
+            const { positionals, values } = parseArgs({
+                args,
+                options: {
+                    layer: { type: 'string' },
+                    premise: { type: 'string' },
+                    check: { type: 'string' },
+                    caution: { type: 'string' },
+                    effort: { type: 'string' },
+                },
+                allowPositionals: true,
+            });
+            expectPositionals(positionals, 0, usage);
+            const { layer, premise, check, caution, effort } = values;
+            if (layer === undefined || premise === undefined || check === undefined)
+                throw usageError(usage);
+            return nextSet(cwd, { layer, premise, check, caution, effort });
+        },
     },
     // Hooks call this: unknown arguments are ignored so that it always exits 0.
-    'next check': (args, cwd) => {
-        const { values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true, strict: false });
-        return nextCheck(cwd, values.hook === true);
+    'next check': {
+        usage: 'next check [--hook]',
+        run: (args, cwd) => {
+            const { values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true, strict: false });
+            return nextCheck(cwd, values.hook === true);
+        },
     },
     'plan list': noArguments('plan list', planList),
     'plan next': noArguments('plan next', planNext),
-    'layer done': (args, cwd) => {
-        const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
-        expectPositionals(positionals, 1, 'layer done "<層名>" [--note <1〜3行>]');
-        return layerDone(cwd, positionals[0] ?? '', values.note);
+    'layer done': {
+        usage: 'layer done "<層名>" [--note <1〜3行>]',
+        run: (args, cwd, usage) => {
+            const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
+            expectPositionals(positionals, 1, usage);
+            return layerDone(cwd, positionals[0] ?? '', values.note);
+        },
     },
-    'log add': (args, cwd) => {
-        const { positionals, values } = parseArgs({
-            args,
-            options: { line: { type: 'string', multiple: true } },
-            allowPositionals: true,
-        });
-        expectPositionals(positionals, 1, 'log add "<層名>" --line <行> [--line <行>]');
-        return logAdd(cwd, positionals[0] ?? '', values.line ?? []);
+    'log add': {
+        usage: 'log add "<層名>" --line <行> [--line <行>]',
+        run: (args, cwd, usage) => {
+            const { positionals, values } = parseArgs({
+                args,
+                options: { line: { type: 'string', multiple: true } },
+                allowPositionals: true,
+            });
+            expectPositionals(positionals, 1, usage);
+            return logAdd(cwd, positionals[0] ?? '', values.line ?? []);
+        },
     },
     resume: noArguments('resume', resume),
-    close: (args, cwd) => {
-        const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
-        expectPositionals(positionals, 0, 'close [--note <1〜3行>]');
-        return close(cwd, values.note);
+    close: {
+        usage: 'close [--note <1〜3行>]',
+        run: (args, cwd, usage) => {
+            const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
+            expectPositionals(positionals, 0, usage);
+            return close(cwd, values.note);
+        },
     },
     'map plan': noArguments('map plan', mapPlan),
-    'map code': (args, cwd) => {
-        const { positionals } = parseArgs({ args, allowPositionals: true });
-        expectPositionals(positionals, 0, 'map code [ディレクトリ]', 1);
-        return mapCode(cwd, positionals[0]);
+    'map code': {
+        usage: 'map code [ディレクトリ]',
+        run: (args, cwd, usage) => {
+            const { positionals } = parseArgs({ args, allowPositionals: true });
+            expectPositionals(positionals, 0, usage, 1);
+            return mapCode(cwd, positionals[0]);
+        },
     },
 };
 // Own keys only, so that names like "constructor" or "__proto__" are unknown commands.
@@ -98,6 +125,29 @@ function resolve(argv) {
     }
     const command = lookup(first);
     return command ? { command, args: argv.slice(1) } : undefined;
+}
+function isHelp(arg) {
+    return arg === '--help' || arg === '-h';
+}
+// Only an argument of its own before "--" asks for help; "--note=--help" and anything after "--" are ordinary.
+function asksHelp(args) {
+    const end = args.indexOf('--');
+    return (end === -1 ? args : args.slice(0, end)).some(isHelp);
+}
+function usageLines(include) {
+    return Object.entries(COMMANDS)
+        .filter(([key]) => include(key))
+        .map(([, command]) => `soujo ${command.usage}`);
+}
+// Usage lines for "soujo --help", "soujo <command> --help", or "soujo <first word> --help", or undefined.
+// Decided before any other argument, so that asking for help never validates or runs a command.
+function help(argv, found) {
+    if (isHelp(argv[0]))
+        return usageLines(() => true);
+    if (found)
+        return asksHelp(found.args) ? [`soujo ${found.command.usage}`] : undefined;
+    const group = usageLines((key) => key.startsWith(`${argv[0]} `));
+    return group.length > 0 && asksHelp(argv.slice(1)) ? group : undefined;
 }
 function describe(error) {
     if (!(error instanceof Error))
@@ -125,10 +175,10 @@ function oneLine(text) {
 function main(argv) {
     try {
         const found = resolve(argv);
-        if (!found) {
-            throw new Error(argv[0] === undefined ? 'コマンドがありません' : `不明なコマンド: ${argv[0]}`);
+        const lines = help(argv, found) ?? found?.command.run(found.args, process.cwd(), found.command.usage);
+        if (lines === undefined) {
+            throw new Error(argv[0] === undefined ? `コマンドがありません${HELP_HINT}` : `不明なコマンド: ${argv[0]}${HELP_HINT}`);
         }
-        const lines = found.command(found.args, process.cwd());
         // Values from files can carry CR or other controls; each returned line stays one terminal line.
         if (lines.length > 0)
             process.stdout.write(`${lines.map(printable).join('\n')}\n`);

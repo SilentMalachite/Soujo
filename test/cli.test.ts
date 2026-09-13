@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repo, temp } from './helpers.js';
+import { commitAll, repo, temp } from './helpers.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 
@@ -16,17 +16,127 @@ function soujo(...args: string[]) {
   return soujoIn(process.cwd(), ...args);
 }
 
-test('unknown command prints one stderr line and exits 1', () => {
-  const result = soujo('foo');
-  assert.equal(result.status, 1);
-  assert.equal(result.stdout, '');
-  assert.equal(result.stderr, 'soujo: 不明なコマンド: foo\n');
+test('unknown command prints one stderr line pointing to --help and exits 1', () => {
+  for (const args of [['foo'], ['foo', '--help'], ['help']]) {
+    const result = soujo(...args);
+    assert.deepEqual([result.status, result.stdout, result.stderr], [1, '', `soujo: 不明なコマンド: ${args[0]}（soujo --help で一覧）\n`], args.join(' '));
+  }
 });
 
-test('missing command prints one stderr line and exits 1', () => {
+test('missing command prints one stderr line pointing to --help and exits 1', () => {
   const result = soujo();
   assert.equal(result.status, 1);
-  assert.equal(result.stderr, 'soujo: コマンドがありません\n');
+  assert.equal(result.stderr, 'soujo: コマンドがありません（soujo --help で一覧）\n');
+});
+
+const USAGES = [
+  'soujo init',
+  'soujo next show [--hook]',
+  'soujo next set --layer <層> --premise <前提> --check <確認> [--caution <注意>] [--effort low|medium|high|xhigh]',
+  'soujo next check [--hook]',
+  'soujo plan list',
+  'soujo plan next',
+  'soujo layer done "<層名>" [--note <1〜3行>]',
+  'soujo log add "<層名>" --line <行> [--line <行>]',
+  'soujo resume',
+  'soujo close [--note <1〜3行>]',
+  'soujo map plan',
+  'soujo map code [ディレクトリ]',
+];
+
+function lines(...usages: string[]): string {
+  return `${usages.join('\n')}\n`;
+}
+
+test('--help and -h as the first argument print every usage line and exit 0', () => {
+  for (const args of [['--help'], ['-h'], ['--help', 'next', 'set'], ['-h', 'foo']]) {
+    const result = soujo(...args);
+    assert.deepEqual([result.status, result.stdout, result.stderr], [0, lines(...USAGES), ''], args.join(' '));
+  }
+});
+
+test('<command> --help prints that command’s usage line, the same text as its usage error', () => {
+  for (const usage of USAGES) {
+    const words = /^soujo ([a-z]+(?: [a-z]+)?)(?= |$)/.exec(usage)?.[1]?.split(' ') ?? [];
+    for (const flag of ['--help', '-h']) {
+      const result = soujo(...words, flag);
+      assert.deepEqual([result.status, result.stdout, result.stderr], [0, lines(usage), ''], `${words.join(' ')} ${flag}`);
+    }
+  }
+  for (const [args, usage] of [
+    [['init', 'extra'], USAGES[0]],
+    [['next', 'set', '--layer', 'L1'], USAGES[2]],
+    [['layer', 'done'], USAGES[6]],
+    [['log', 'add', 'a', 'b', '--line', 'x'], USAGES[7]],
+    [['close', 'x'], USAGES[9]],
+    [['map', 'code', 'a', 'b'], USAGES[11]],
+  ] as [string[], string][]) {
+    assert.equal(soujo(...args).stderr, `soujo: 使い方: ${usage}\n`, args.join(' '));
+  }
+});
+
+test('the first word of two-word commands with --help lists the commands starting with it', () => {
+  const cases: [string[], string[]][] = [
+    [['next', '--help'], USAGES.slice(1, 4)],
+    [['next', 'foo', '-h'], USAGES.slice(1, 4)],
+    [['plan', '-h'], USAGES.slice(4, 6)],
+    [['layer', '--help'], [USAGES[6] ?? '']],
+    [['log', '--help'], [USAGES[7] ?? '']],
+    [['map', '--help'], USAGES.slice(10, 12)],
+  ];
+  for (const [args, usages] of cases) {
+    const result = soujo(...args);
+    assert.deepEqual([result.status, result.stdout, result.stderr], [0, lines(...usages), ''], args.join(' '));
+  }
+});
+
+test('--help wins over other arguments and --hook, but not after -- or as an attached value', (t) => {
+  const outside = temp(t);
+  for (const args of [
+    ['plan', 'list', '--all', '--help'],
+    ['init', 'extra', '-h'],
+    ['next', 'check', '--hook', '--help'],
+    ['next', 'show', '--hook', '-h'],
+    ['layer', 'done', 'L1', '--note', '--help'],
+  ]) {
+    const result = soujoIn(outside, ...args);
+    assert.equal(result.status, 0, args.join(' '));
+    assert.equal(result.stderr, '', args.join(' '));
+    assert.match(result.stdout, /^soujo [^\n]+\n$/, args.join(' '));
+  }
+  const afterDashes = soujoIn(outside, 'map', 'code', '--', '--help');
+  assert.deepEqual([afterDashes.status, afterDashes.stdout, afterDashes.stderr], [1, '', 'soujo: ディレクトリがない: --help\n']);
+  const attached = soujoIn(outside, 'log', 'add', 'L1', '--line=--help');
+  assert.equal(attached.status, 1);
+  assert.doesNotMatch(attached.stderr, /使い方|soujo log add/);
+});
+
+test('--help on write commands writes nothing', (t) => {
+  const dir = repo(t);
+  const fresh = soujoIn(dir, 'init', '--help');
+  assert.deepEqual([fresh.status, fresh.stdout], [0, lines(USAGES[0] ?? '')]);
+  assert.deepEqual(readdirSync(dir), ['.git']);
+
+  soujoIn(dir, 'init');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [ ] L1 scaffold — build\n');
+  commitAll(dir);
+  const snapshot = () => [
+    ...['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'].map((file) => readFileSync(join(dir, '.soujo', file), 'utf8')),
+    execFileSync('git', ['log', '--oneline'], { cwd: dir, encoding: 'utf8' }),
+    execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' }),
+  ];
+  const before = snapshot();
+  for (const args of [
+    ['init', '--help'],
+    ['next', 'set', '--layer', 'L1 scaffold', '--premise', 'p', '--check', 'c', '--help'],
+    ['log', 'add', 'L1 scaffold', '--line', 'a', '-h'],
+    ['layer', 'done', 'L1 scaffold', '--note', 'a', '--help'],
+    ['close', '--note', 'a', '-h'],
+  ]) {
+    const result = soujoIn(dir, ...args);
+    assert.deepEqual([result.status, result.stderr], [0, ''], args.join(' '));
+    assert.deepEqual(snapshot(), before, args.join(' '));
+  }
 });
 
 test('newlines in arguments do not break the one-line error', () => {
@@ -38,7 +148,7 @@ test('newlines in arguments do not break the one-line error', () => {
 test('Object.prototype names are unknown commands', () => {
   for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
     const result = soujo(name);
-    assert.deepEqual([result.status, result.stderr], [1, `soujo: 不明なコマンド: ${name}\n`], name);
+    assert.deepEqual([result.status, result.stderr], [1, `soujo: 不明なコマンド: ${name}（soujo --help で一覧）\n`], name);
   }
 });
 
@@ -151,11 +261,11 @@ test('argument errors are one Japanese line with exit 1', () => {
     [['plan', 'list', '--all'], 'soujo: 不明なオプション: --all\n'],
     [['log', 'add', 'L1', '--line'], 'soujo: オプションの値が不正: --line <value>\n'],
     [['log', 'add', 'L1', 'scaffold', '--line', 'a'], 'soujo: 使い方: soujo log add "<層名>" --line <行> [--line <行>]\n'],
-    [['plan'], 'soujo: 不明なコマンド: plan\n'],
+    [['plan'], 'soujo: 不明なコマンド: plan（soujo --help で一覧）\n'],
     [['resume', 'now'], 'soujo: 使い方: soujo resume\n'],
     [['close', 'note'], 'soujo: 使い方: soujo close [--note <1〜3行>]\n'],
     [['close', '--note', '- 途中'], 'soujo: オプションの値が「-」で始まる: --note=<値> の形で書く\n'],
-    [['map'], 'soujo: 不明なコマンド: map\n'],
+    [['map'], 'soujo: 不明なコマンド: map（soujo --help で一覧）\n'],
     [['map', 'plan', 'x'], 'soujo: 使い方: soujo map plan\n'],
     [['map', 'code', 'a', 'b'], 'soujo: 使い方: soujo map code [ディレクトリ]\n'],
     [
