@@ -57,7 +57,7 @@ Runtime text (CLI output, skills, templates) is Japanese.
    claude plugin install soujo@soujo
    ```
 
-   Installing copies the working tree into Claude Code's plugin cache, and `claude plugin update` skips an unchanged version. After pulling changes, run `claude plugin uninstall soujo@soujo` and install again.
+   With a local path, sessions load the plugin from that directory itself, so pulled changes reach new sessions without reinstalling (installing also copies it into Claude Code's plugin cache).
 
 3. Codex:
 

@@ -152,7 +152,7 @@ The effort column is a guide for the human or host setting (§8); SKILL.md front
 | Subagent | `review` starts `agents/reviewer.md` once | Not used; `review` is done by the main agent |
 | Concurrency | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` documented in README | n/a |
 | Effort | Given in conversation per layer from `NEXT.md` | `codex -c model_reasoning_effort=<v>` or `model_reasoning_effort` in `~/.codex/config.toml` |
-| Where skills are read | Installing copies the working tree (untracked and git-ignored files included, `.git` not) into `~/.claude/plugins/cache/soujo/`; `claude plugin update` skips an unchanged version, so reinstall to refresh. `claude --plugin-dir <path>` reads in place | From the install cache `~/.codex/plugins/cache/soujo/`, a copy of the whole repository (`.git`, `node_modules`, `.soujo/` included); run `codex plugin add soujo@soujo` again to refresh |
+| Where skills are read | A local directory marketplace is read in place: sessions list the plugin at that directory, load skills from it, and see a skill added there without reinstalling. Installing still copies the working tree (untracked and git-ignored files included, `.git` not) into `~/.claude/plugins/cache/soujo/`, and `claude plugin update` skips an unchanged version. `claude --plugin-dir <path>` also reads in place | From the install cache `~/.codex/plugins/cache/soujo/`, a copy of the whole repository (`.git`, `node_modules`, `.soujo/` included); run `codex plugin add soujo@soujo` again to refresh |
 | Commits | Allowed by normal permissions | The `workspace-write` sandbox cannot write `.git`; `layer done` / `close` need an approval (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
 | Validation | `claude plugin validate .` (marketplace) and `claude plugin validate .claude-plugin/plugin.json` (plugin, agents, hooks) | `validate_plugin.py` from the built-in `$plugin-creator` |
 
@@ -194,18 +194,22 @@ Follows OpenAI's "Rethinking skills and prompts for GPT-6 Astra" (2026-09-11).
 
 ## 12. Acceptance criteria
 
-All ten were verified on 2026-09-13 in layer L12, with `soujo` from `npm link` and the plugin installed in both hosts (`claude plugin install`, `codex plugin add`). In a clone of an existing Python project (AgentReview 0.4.0, tested with `unittest`), `spec`, `plan`, and L1 ran in Claude Code, L2 in Codex, and L3 in Claude Code, each in a new headless session (`claude -p`, `codex exec`). Summary in `.soujo/LOG.md`.
+All ten were verified on 2026-09-13 in layer L12, with `soujo` from `npm link` and the plugin installed in both hosts (`claude plugin install`, `codex plugin add`). The target was a clone of an existing Python project (AgentReview 0.4.0, tested with `unittest`) that already had its own `AGENTS.md`, so `soujo init` added only `CLAUDE.md` and Codex worked under the project's `AGENTS.md`. `spec`, `plan`, and L1 ran in Claude Code, L2 in Codex, and L3 in Claude Code. Summary in `.soujo/LOG.md`.
+
+- Claude Code: `claude -p` with `--permission-mode acceptEdits` and an allowlist for `soujo`, `git`, `python3`, and the file tools. `spec` was one session continued with `--resume` for 4 turns; `plan`, L1, `resume`, L3, `review`, and the Stop hook checks each ran in a new session.
+- Codex: `codex exec` (`workspace-write`, `--add-dir .git`) ran `$resume` and L2's `$go` in separate sessions; the Soujo hooks stayed untrusted.
+- Criteria 5, 7, 9, and 10 were checked by running `soujo close` / `soujo next check`, `validate_plugin.py`, `npm test`, and `readlink "$(command -v soujo)"` directly.
 
 | # | Criterion | Status |
 |---|---|---|
-| 1 | `resume` → `go` works with only the four `.soujo/` files and no conversation history | ✓ every `go` ran in a new session |
-| 2 | **Switching Claude Code → Codex → Claude Code in the same repository keeps the `.soujo/` records continuous** | ✓ `layer: L1` / `L2` / `L3` commits and LOG entries in order |
+| 1 | `resume` → `go` works with only the four `.soujo/` files and no conversation history | ✓ every `resume` and `go` ran in a new session (Codex searched its memory file: no match) |
+| 2 | **Switching Claude Code → Codex → Claude Code in the same repository keeps the `.soujo/` records continuous** | ✓ `layer:` commits and LOG entries of L1 (Claude Code), L2 (Codex), and L3 (Claude Code) in order |
 | 3 | `spec` always asks one question at a time and produces `SPEC.md` within 7 questions | ✓ 3 questions, `SPEC.md` written after each answer |
 | 4 | One `go` implements and commits one layer and updates `PLAN.md` / `LOG.md` / `NEXT.md` | ✓ in both hosts |
-| 5 | When `NEXT.md` exceeds 5 lines, `soujo close` refuses and `soujo next check` warns | ✓ `close` exits 1 and writes nothing; `next check` exits 0 |
-| 6 | Claude Code: ending without updating `NEXT.md` triggers a Stop hook warning (not a block) | ✓ `systemMessage` only; the session ended normally |
+| 5 | When `NEXT.md` exceeds 5 lines, `soujo close` refuses and `soujo next check` warns | ✓ `close` exits 1 and writes nothing; `next check` warns and exits 0 |
+| 6 | Claude Code: ending without updating `NEXT.md` triggers a Stop hook warning (not a block) | ✓ with uncommitted changes, and with a clean tree whose `次:` is already checked; `systemMessage` only, the session ended normally |
 | 7 | Codex: `validate_plugin.py` from `$plugin-creator` passes | ✓ |
-| 8 | `review` output is a table and findings are not filtered | ✓ all 8 findings of `soujo:reviewer` in order; cells reworded (§14) |
+| 8 | `review` output is a table and findings are not filtered | ✓ Claude Code only: all 8 findings of `soujo:reviewer` in order, but edited (§14) |
 | 9 | `npm test` passes; each public function of `state.ts` has at least one test | ✓ 171 tests |
 | 10 | The CLI has zero runtime dependencies and `soujo` is on PATH after `npm i -g` or `npm link` | ✓ `soujo` resolves to this repository's `dist/cli.js` |
 
@@ -238,8 +242,11 @@ Open:
 - Codex 0.154 runs `hooks/hooks.json` once the user trusts it (`[hooks.state]` in `~/.codex/config.toml`); whether `${CLAUDE_PLUGIN_ROOT}` expands there and `systemMessage` is shown is unverified.
 - `soujo --help`: both hosts tried it and got an error.
 - Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
-- The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer (in L12 it wrote after each answer).
+- The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer (not reproduced in L12).
 - `NEXT.md` for "all layers done" still carries an `effort:` value.
 - `spec` / `plan` do not commit. Until the first `layer done`, `.soujo/` changes stay uncommitted and the Stop hook warns every time.
-- Codex context size: one `$go` used 295K–690K input tokens (mostly cached), largely from global Codex context (in L12 it also read an unrelated global skill and the Codex memory file).
-- `review` in Claude Code kept every finding in order but reworded the reviewer's cells and shortened its absolute paths, despite "返った表を加工せずに出す".
+- Codex context size: one `$go` used ~295K–690K input tokens (mostly cached), largely from global Codex context; in L12 it also read an unrelated global skill and searched the Codex memory file.
+- `review` in Claude Code kept every finding of `soujo:reviewer` in order but did not show the returned table unedited (§7): it shortened paths, reworded cells, dropped a few phrases, and added a leading sentence.
+- `soujo:reviewer` writes absolute paths in the location column; `agents/reviewer.md` asks only for `path:line`.
+- Under a Bash allowlist, the first command of `spec` (`command -v soujo && soujo init; ls; …`) was denied once; the model retried with single commands.
+- `go` (L3) also edited `CHANGELOG.ja.md`, outside the target SPEC's scope, because an existing test required it; it reported this but left the SPEC unchanged.

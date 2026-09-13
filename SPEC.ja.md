@@ -153,7 +153,7 @@ effort 列は人やホストの設定で使う目安（§8）。SKILL.md の fro
 | サブエージェント | `review` が `agents/reviewer.md` を1体だけ起動 | 使わない。`review` は本体が直接行う |
 | 同時起動の上限 | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` を README に記載 | 該当なし |
 | effort の指定 | 層ごとに `NEXT.md` の値を会話で指示 | `codex -c model_reasoning_effort=<v>` か `~/.codex/config.toml` の `model_reasoning_effort` |
-| スキルの読み込み元 | 導入時に作業ツリー（未追跡・git 無視のファイルを含み、`.git` は除く）を `~/.claude/plugins/cache/soujo/` へ複製する。`claude plugin update` はバージョンが同じなら何もしないので、入れ直して更新する。`claude --plugin-dir <path>` はその場で読む | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`（`.git`・`node_modules`・`.soujo/` を含むリポジトリ全体の複製）。更新は `codex plugin add soujo@soujo` をもう一度 |
+| スキルの読み込み元 | ローカルディレクトリのマーケットプレイスはその場で読む：セッションはプラグインをそのディレクトリで並べ、スキルをそこから読み、そこへ足したスキルも入れ直さずに見える。導入時の作業ツリー（未追跡・git 無視のファイルを含み、`.git` は除く）の `~/.claude/plugins/cache/soujo/` への複製は行われ、`claude plugin update` はバージョンが同じなら何もしない。`claude --plugin-dir <path>` もその場で読む | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`（`.git`・`node_modules`・`.soujo/` を含むリポジトリ全体の複製）。更新は `codex plugin add soujo@soujo` をもう一度 |
 | コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`layer done` / `close` は承認が要る（`codex exec` なら `--add-dir "$PWD/.git"`）。再実行でコミットだけやり直る |
 | 検証の方法 | `claude plugin validate .`（マーケットプレイス）と `claude plugin validate .claude-plugin/plugin.json`（プラグイン・agents・hooks） | 組み込みの `$plugin-creator` が持つ `validate_plugin.py` |
 
@@ -195,18 +195,22 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 ## 12. 受け入れ基準
 
-2026-09-13 に L12 で10項目すべてを確認した。`soujo` は `npm link`、プラグインは両ホストに導入（`claude plugin install`・`codex plugin add`）。既存の Python プロジェクト（AgentReview 0.4.0、テストは `unittest`）の複製で、`spec`・`plan`・L1 を Claude Code、L2 を Codex、L3 を Claude Code で、それぞれ新しいヘッドレスセッション（`claude -p`・`codex exec`）で進めた。要約は `.soujo/LOG.md`。
+2026-09-13 に L12 で10項目すべてを確認した。`soujo` は `npm link`、プラグインは両ホストに導入（`claude plugin install`・`codex plugin add`）。対象は既存の Python プロジェクト（AgentReview 0.4.0、テストは `unittest`）の複製で、元から独自の `AGENTS.md` があったため `soujo init` は `CLAUDE.md` だけを足し、Codex はそのプロジェクトの `AGENTS.md` のもとで動いた。`spec`・`plan`・L1 を Claude Code、L2 を Codex、L3 を Claude Code で進めた。要約は `.soujo/LOG.md`。
+
+- Claude Code：`claude -p` に `--permission-mode acceptEdits` と、`soujo`・`git`・`python3` とファイル操作ツールの許可リスト。`spec` は1セッションを `--resume` で4往復、`plan`・L1・`resume`・L3・`review`・Stop フックの確認はそれぞれ新しいセッション。
+- Codex：`codex exec`（`workspace-write`、`--add-dir .git`）で `$resume` と L2 の `$go` を別セッションで実行。Soujo のフックは信頼しないまま。
+- 基準5・7・9・10 は `soujo close` / `soujo next check`・`validate_plugin.py`・`npm test`・`readlink "$(command -v soujo)"` を直接実行して確認。
 
 | # | 基準 | 状態 |
 |---|---|---|
-| 1 | `.soujo/` の4ファイルだけで、会話履歴なしに `resume` → `go` が成立する | ✓ `go` は毎回新しいセッション |
-| 2 | **同じリポジトリで Claude Code → Codex → Claude Code と切り替えても、`.soujo/` の記録が途切れない** | ✓ `layer: L1` / `L2` / `L3` のコミットと LOG が順に並ぶ |
+| 1 | `.soujo/` の4ファイルだけで、会話履歴なしに `resume` → `go` が成立する | ✓ `resume` と `go` は毎回新しいセッション（Codex はメモリファイルを検索したが一致なし） |
+| 2 | **同じリポジトリで Claude Code → Codex → Claude Code と切り替えても、`.soujo/` の記録が途切れない** | ✓ L1（Claude Code）・L2（Codex）・L3（Claude Code）の `layer:` コミットと LOG が順に並ぶ |
 | 3 | `spec` の質問は常に1つずつで、7問以内に `SPEC.md` ができる | ✓ 3問、回答ごとに `SPEC.md` を更新 |
 | 4 | `go` 1回で、1層が実装・コミットまで到達し、`PLAN.md`/`LOG.md`/`NEXT.md` が更新される | ✓ 両ホストで |
-| 5 | `NEXT.md` が5行を超えると `soujo close` が拒否し、`soujo next check` が警告する | ✓ `close` は終了1で何も書かない。`next check` は終了0 |
-| 6 | Claude Code：`NEXT.md` を更新せずに終えると Stop フックが警告する（ブロックはしない） | ✓ `systemMessage` だけで、セッションは普通に終わった |
+| 5 | `NEXT.md` が5行を超えると `soujo close` が拒否し、`soujo next check` が警告する | ✓ `close` は終了1で何も書かない。`next check` は警告して終了0 |
+| 6 | Claude Code：`NEXT.md` を更新せずに終えると Stop フックが警告する（ブロックはしない） | ✓ 未コミットの変更があるとき、木がクリーンで `次:` がチェック済みの層のときの両方。`systemMessage` だけで、セッションは普通に終わった |
 | 7 | Codex：`$plugin-creator` の `validate_plugin.py` が通る | ✓ |
-| 8 | `review` の出力が表形式で、件数を絞っていない | ✓ `soujo:reviewer` の8件を順に全部。セルは言い換えられた（§14） |
+| 8 | `review` の出力が表形式で、件数を絞っていない | ✓ Claude Code のみ：`soujo:reviewer` の8件を順に全部。ただし加工あり（§14） |
 | 9 | `npm test` が通る。`state.ts` の公開関数それぞれに1つ以上のテストがある | ✓ 171テスト |
 | 10 | CLI は実行時依存ゼロで、`npm i -g` または `npm link` 後に `soujo` が PATH から呼べる | ✓ `soujo` はこのリポジトリの `dist/cli.js` を指す |
 
@@ -239,8 +243,11 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - Codex 0.154 はユーザーが信頼すると `hooks/hooks.json` を実行する（`~/.codex/config.toml` の `[hooks.state]`）。そこで `${CLAUDE_PLUGIN_ROOT}` が展開されるか、`systemMessage` が表示されるかは未確認。
 - `soujo --help`：両ホストで試されてエラーになった。
 - モデルがスキルの置き場所へ `cd` したり、そこの `.soujo/` を読もうとすることがある。ホスト側の保護で止まり、スキルにも警告を入れたが、CLI 側のガードは未対応。
-- `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち（L12 では回答ごとに書いた）。
+- `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち（L12 では再現せず）。
 - 全層完了時の `NEXT.md` にも `effort:` が残る。
 - `spec` / `plan` はコミットしない。最初の `layer done` までは `.soujo/` の変更が未コミットで、Stop フックが毎回警告する。
-- Codex の文脈量：`$go` 1回で入力約30万〜69万トークン（大半キャッシュ。主に Codex 全体の文脈。L12 では無関係なグローバルスキルと Codex のメモリファイルも読んだ）。
-- Claude Code の `review` は指摘を順に全部残したが、「返った表を加工せずに出す」に反して reviewer のセルを言い換え、絶対パスを短くした。
+- Codex の文脈量：`$go` 1回で入力約30万〜69万トークン（大半キャッシュ。主に Codex 全体の文脈）。L12 では無関係なグローバルスキルも読み、Codex のメモリファイルを検索した。
+- Claude Code の `review` は `soujo:reviewer` の指摘を順に全部残したが、返った表を加工せずに出さなかった（§7）：パスを短くし、セルを言い換え、句をいくつか落とし、前置きの1文を足した。
+- `soujo:reviewer` は場所の列に絶対パスを書く。`agents/reviewer.md` は `path:line` としか指定していない。
+- Bash の許可リストのもとで、`spec` の最初のコマンド（`command -v soujo && soujo init; ls; …`）が1回拒否され、モデルは単独のコマンドでやり直した。
+- `go`（L3）は、既存のテストが求めたため、導入先 SPEC の範囲外の `CHANGELOG.ja.md` も変えた。報告はしたが SPEC は直さなかった。

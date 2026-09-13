@@ -57,7 +57,7 @@ Claude Code と Codex で使う、いつ中断しても再開できる「仕様 
    claude plugin install soujo@soujo
    ```
 
-   導入時に作業ツリーが Claude Code のプラグインキャッシュへ複製され、`claude plugin update` はバージョンが同じなら何もしない。変更を取り込んだら `claude plugin uninstall soujo@soujo` のあと入れ直す。
+   ローカルのパスなら、セッションはそのディレクトリ自体からプラグインを読むので、取り込んだ変更は入れ直さなくても新しいセッションに届く（導入時に Claude Code のプラグインキャッシュへの複製も作られる）。
 
 3. Codex：
 
