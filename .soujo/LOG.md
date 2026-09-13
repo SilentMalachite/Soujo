@@ -189,3 +189,6 @@ Dependabot を設定: github-actions と npm（devDependencies）を毎月、そ
 
 ## 2026-09-14 readme-badges
 README(+ja) の言語切り替えの下に CI と TypeScript のバッジを追加。TypeScript は shields.io が GitHub 上の package.json の devDependency から版を読む（Dependabot の更新に追従）。
+
+## 2026-09-14 readme-badges
+README(+ja) に 0BSD のライセンスバッジ（LICENSE へのリンク）を追加。GitHub は LICENSE を 0BSD と判定しない（NOASSERTION）ので、動的ではなく固定のバッジにした。
