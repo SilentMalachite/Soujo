@@ -155,6 +155,11 @@ export function parsePlan(text: string): PlanItem[] {
   return items;
 }
 
+/** "[x] <layer>" or "[ ] <layer>", as plan list and map plan show a layer. */
+export function formatItem(item: PlanItem): string {
+  return `[${item.done ? 'x' : ' '}] ${item.layer}`;
+}
+
 /** The first unfinished layer, or undefined when every layer is done. */
 export function nextLayer(items: PlanItem[]): PlanItem | undefined {
   return items.find((item) => !item.done);

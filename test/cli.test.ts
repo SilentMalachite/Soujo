@@ -129,13 +129,17 @@ test('map plan and map code print their diagrams through the CLI', (t) => {
   soujoIn(dir, 'init');
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [x] L1 scaffold — build\n- [ ] L2 map — 図\n');
   const plan = soujoIn(dir, 'map', 'plan');
-  assert.deepEqual([plan.status, plan.stdout], [0, '[x] L1 scaffold\n │  build\n[ ] L2 map ←次\n    図\n']);
+  assert.deepEqual([plan.status, plan.stdout], [0, '[x] L1 scaffold\n |  build\n[ ] L2 map ←次\n    図\n']);
 
   mkdirSync(join(dir, 'src'));
   writeFileSync(join(dir, 'src', 'a.ts'), "import './b.js';\n");
   writeFileSync(join(dir, 'src', 'b.ts'), '');
-  const code = soujoIn(dir, 'map', 'code', 'src');
-  assert.deepEqual([code.status, code.stdout], [0, 'graph LR\n  n0["a.ts"]\n  n1["b.ts"]\n  n0 --> n1\n']);
+  const code = soujoIn(join(dir, 'src'), 'map', 'code');
+  assert.equal(code.status, 0, code.stderr);
+  assert.equal(
+    code.stdout,
+    'graph LR\n  %% 相対 import のみ（パッケージ・パス別名は線にしない）\n  m_src_a_ts["src/a.ts"]\n  m_src_b_ts["src/b.ts"]\n  m_src_a_ts --> m_src_b_ts\n',
+  );
   const missing = soujoIn(dir, 'map', 'code', 'nope');
   assert.deepEqual([missing.status, missing.stderr], [1, 'soujo: ディレクトリがない: nope\n']);
 });

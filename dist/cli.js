@@ -10,8 +10,9 @@ import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
 import { printable } from './state.js';
-function expectPositionals(positionals, count, usage) {
-    if (positionals.length !== count)
+// Exactly count positionals, or from count to max when max is given.
+function expectPositionals(positionals, count, usage, max = count) {
+    if (positionals.length < count || positionals.length > max)
         throw new Error(`使い方: soujo ${usage}`);
 }
 function noArguments(usage, run) {
@@ -78,8 +79,7 @@ const COMMANDS = {
     'map plan': noArguments('map plan', mapPlan),
     'map code': (args, cwd) => {
         const { positionals } = parseArgs({ args, allowPositionals: true });
-        if (positionals.length > 1)
-            throw new Error('使い方: soujo map code [ディレクトリ]');
+        expectPositionals(positionals, 0, 'map code [ディレクトリ]', 1);
         return mapCode(cwd, positionals[0]);
     },
 };

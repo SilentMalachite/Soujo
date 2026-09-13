@@ -72,3 +72,8 @@ git の add/commit/status は -- . でプロジェクト内に限定、.soujo/ �
 map.ts（純粋関数）: planDiagram は層ごとに2行・次の層に ←次・完了条件を縦線の横に。importGraph は LANGUAGES（TS/JS 1行）の相対 import を Mermaid graph LR に（.js→.ts 置換・index 解決・外部パッケージ除外）。
 未対応言語だけのディレクトリは directoryTree（フォルダ先・コードポイント順）。走査は node_modules・dist・ドットエントリ・symlink を飛ばす。
 commands/map.ts が走査と読み込み、cli.ts に map plan / map code [dir] を追加。
+
+## 2026-09-13 review-fix-l8
+L8 レビュー #1〜#29 を修正: map code は主言語（ファイル数最多）で図か木を選ぶ。LANGUAGES は1言語1行で import 規則（抽出・解決）を行に持ち、規則のない言語は木。
+TS/JS は字句解析でコメント・文字列・正規表現を除いて import を抽出。解決は TS 流の拡張子対応・./.. は index のみ・自己参照除外・大文字小文字無視。ID はパス由来。
+既定はプロジェクトルート。出力は ASCII、上限（走査5000・ファイル100・線300・木200行）と読めない件数を注記。formatItem・readPlan を共有、SPEC §6 を更新。

@@ -14,8 +14,9 @@ import { printable } from './state.js';
 
 type Command = (args: string[], cwd: string) => string[];
 
-function expectPositionals(positionals: string[], count: number, usage: string): void {
-  if (positionals.length !== count) throw new Error(`使い方: soujo ${usage}`);
+// Exactly count positionals, or from count to max when max is given.
+function expectPositionals(positionals: string[], count: number, usage: string, max: number = count): void {
+  if (positionals.length < count || positionals.length > max) throw new Error(`使い方: soujo ${usage}`);
 }
 
 function noArguments(usage: string, run: (cwd: string) => string[]): Command {
@@ -82,7 +83,7 @@ const COMMANDS: Record<string, Command> = {
   'map plan': noArguments('map plan', mapPlan),
   'map code': (args, cwd) => {
     const { positionals } = parseArgs({ args, allowPositionals: true });
-    if (positionals.length > 1) throw new Error('使い方: soujo map code [ディレクトリ]');
+    expectPositionals(positionals, 0, 'map code [ディレクトリ]', 1);
     return mapCode(cwd, positionals[0]);
   },
 };

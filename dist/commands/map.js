@@ -1,60 +1,92 @@
 // soujo map plan / map code: PLAN.md as a vertical diagram, and a directory's imports as Mermaid (or its tree).
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
-import { requireState, requireStateDir } from '../files.js';
-import { directoryTree, importGraph, languageOf, planDiagram, skipEntry } from '../map.js';
-import { parsePlan } from '../state.js';
+import { basename, dirname, join, resolve } from 'node:path';
+import { findStateDir } from '../files.js';
+import { MAP_LIMITS, directoryTree, importGraph, mainLanguage, planDiagram, scanNotes, skipEntry, } from '../map.js';
+import { NO_LAYERS, readPlan } from './shared.js';
 export function mapPlan(cwd) {
-    const items = parsePlan(requireState(requireStateDir(cwd), 'PLAN.md'));
-    return items.length === 0 ? ['PLAN.md に層がない'] : planDiagram(items);
+    const items = readPlan(cwd);
+    return items.length === 0 ? [NO_LAYERS] : planDiagram(items);
 }
-// Files under root as "/"-separated relative paths. Skipped entries are never entered; symlinks are not followed.
-function listFiles(root) {
-    const files = [];
-    const walk = (dir, prefix) => {
+function reason(error) {
+    return error.code ?? error.message;
+}
+function requireDirectory(root, shown) {
+    let isDirectory;
+    try {
+        isDirectory = statSync(root).isDirectory();
+    }
+    catch (error) {
+        const code = error.code;
+        if (code === 'ENOENT' || code === 'ENOTDIR')
+            throw new Error(`ディレクトリがない: ${shown}`);
+        throw new Error(`ディレクトリを読めない: ${shown}（${reason(error)}）`);
+    }
+    if (!isDirectory)
+        throw new Error(`ディレクトリではない: ${shown}`);
+}
+// Files and directories under root, breadth first so that a cut keeps the upper levels. Skipped names and symlinks
+// (to files or directories) are left out entirely; unreadable subdirectories are counted and skipped.
+function scanDirectory(root, shown, limit) {
+    const scan = { files: [], dirs: [], unreadable: 0, truncated: false };
+    const queue = [{ dir: root, prefix: '' }];
+    for (const { dir, prefix } of queue) {
         let entries;
         try {
             entries = readdirSync(dir, { withFileTypes: true });
         }
         catch (error) {
-            throw new Error(`${prefix || '.'} を読めない: ${error.message}`);
+            if (prefix === '')
+                throw new Error(`ディレクトリを読めない: ${shown}（${reason(error)}）`);
+            scan.unreadable += 1;
+            continue;
         }
+        entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
         for (const entry of entries) {
-            if (skipEntry(entry.name))
+            if (skipEntry(entry.name) || !(entry.isFile() || entry.isDirectory()))
                 continue;
+            if (scan.files.length + scan.dirs.length >= limit) {
+                scan.truncated = true;
+                return scan;
+            }
             const path = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
-            if (entry.isDirectory())
-                walk(join(dir, entry.name), path);
-            else if (entry.isFile())
-                files.push(path);
+            if (entry.isFile())
+                scan.files.push(path);
+            else {
+                scan.dirs.push(`${path}/`);
+                queue.push({ dir: join(dir, entry.name), prefix: path });
+            }
         }
-    };
-    walk(root, '');
-    return files;
+    }
+    return scan;
 }
-function read(root, path) {
-    try {
-        return readFileSync(join(root, path), 'utf8');
+/**
+ * Mermaid of the imports in the main language under dir (default: the project root, or cwd outside Soujo projects);
+ * a directory tree when that language has no import rules or no file is recognized. Unreadable files are counted and skipped.
+ */
+export function mapCode(cwd, dir, limits = MAP_LIMITS) {
+    const stateDir = findStateDir(cwd);
+    const root = dir !== undefined ? resolve(cwd, dir) : stateDir !== undefined ? dirname(stateDir) : resolve(cwd);
+    const shown = dir ?? root;
+    requireDirectory(root, shown);
+    const scan = scanDirectory(root, shown, limits.entries);
+    const main = mainLanguage(scan.files);
+    const rules = main?.language.graph;
+    if (main === undefined || rules === undefined) {
+        return directoryTree(basename(root) || '.', [...scan.dirs, ...scan.files], scanNotes(scan, limits), limits);
     }
-    catch (error) {
-        throw new Error(`${path} を読めない: ${error.message}`);
+    const files = [];
+    let unreadable = scan.unreadable;
+    for (const path of main.paths) {
+        let text;
+        try {
+            text = readFileSync(join(root, path), 'utf8');
+        }
+        catch {
+            unreadable += 1;
+            continue;
+        }
+        files.push({ path, imports: rules.imports(text) });
     }
-}
-/** Mermaid of the imports under dir (default cwd); a directory tree when no file is in a supported language. */
-export function mapCode(cwd, dir = '.') {
-    const root = resolve(cwd, dir);
-    let isDirectory = false;
-    try {
-        isDirectory = statSync(root).isDirectory();
-    }
-    catch {
-        // Missing or unreadable: reported below.
-    }
-    if (!isDirectory)
-        throw new Error(`ディレクトリがない: ${dir}`);
-    const paths = listFiles(root);
-    const sources = paths.filter((path) => languageOf(path) !== undefined);
-    if (sources.length === 0)
-        return directoryTree(basename(root) || root, paths);
-    return importGraph(sources.map((path) => ({ path, text: read(root, path) })));
+    return importGraph(rules, files, scanNotes({ unreadable, truncated: scan.truncated }, limits), limits);
 }

@@ -117,11 +117,11 @@ effort: <low|medium|high|xhigh>
 | `soujo layer done <層名> [--note ...]` | PLAN にチェック → LOG 追記 → プロジェクトのディレクトリで `git add -A -- .` と `git commit -m "layer: <層名>" -- .`（サブディレクトリのプロジェクトはそこだけをコミット）。次のときは何も書かずに拒否する：層が PLAN にない・note が LOG の上限を破る／NEXT.md がない・無効・`次:` がまだこの層／git リポジトリでない、`.soujo/` が symlink、merge・rebase・cherry-pick・revert の途中、競合が未解決、`.soujo/` のファイルが git に無視されている／コミット済み（`layer: <層名>` のコミットがある、または HEAD の PLAN でチェック済み）。チェックが作業ツリーにだけある（前回が途中で止まった）ときは、LOG の最後がこの層でなければ追記してコミットする。書いた後の失敗は記録済みの範囲を示し、原因を直して再実行すれば続きから進む | 1行（追加ファイルを最大5件添える） |
 | `soujo resume` | `次: <層>（effort: <e>）確認: <確認>`（NEXT.md）／`前回: <日付> <層> — <1行目>`（LOG.md 末尾エントリ）／`コミット: <hash> <件名>（未コミット N件）`／`再開: /soujo:go（Codex は $go）`。値は60文字で `…` に切る。NEXT.md がない・読めない・無効・チェック済みの層を指すとき：`次:` は PLAN の次の層、`再開:` に理由と `soujo next set`。残りの層がなければ `/soujo:spec`（SPEC.md がないかテンプレートのまま）か `/soujo:plan`。NEXT.md が未チェックの層より後ろを指すとき：`次:` はその層、`再開:` は `soujo layer done` を示す。PLAN のチェックが未コミット（layer done が途中）なら `再開:` はその再実行。読めないファイルや git の失敗はその行だけを縮退させる | 4行 |
 | `soujo close [--note ...]` | `--note` を LOG に「中断: ...」で記録 → プロジェクトを `wip: <層名>` でコミット → 再開方法。次のときは何も書かずに終了1：layer done と同じコミット不能条件／NEXT.md がない・無効・チェック済みの層を指す／PLAN のチェックが未コミット（先に layer done を再実行）／note が空・LOG の上限を破る。層は `次:`、ただし `次:` が未チェックの層より後ろを指すとき（next set と layer done の間で止まった）はその未チェックの層。LOG の末尾にその層の未コミットの「中断」エントリがあれば追記せず残すので、コミット失敗後の再実行はコミットだけやり直す | 2行 |
-| `soujo map plan` | `PLAN.md` を縦の ASCII 図に（完了 `[x]`／次 `←次`、完了条件を縦線の横に） | 層数×2行 |
-| `soujo map code [dir]` | import を走査して Mermaid `graph LR` を出す。言語ごとの import パターンは `src/map.ts` の `LANGUAGES` に1行ずつ（初期は TS/JS）。`node_modules`・`dist`・ドットで始まるものは除外。未対応言語はディレクトリ木にフォールバック | Mermaid |
+| `soujo map plan` | `PLAN.md` を縦の ASCII 図に（完了 `[x]`／次 `←次`、完了条件を縦線 `\|` の横に）。全層完了なら末尾に `全層完了` | 層数×2行 |
+| `soujo map code [dir]` | `dir`（既定はプロジェクトのルート、Soujo 外では cwd）の主言語（ファイル数が最多）の相対 import を Mermaid `graph LR` にする。言語は `src/map.ts` の `LANGUAGES` に1行ずつ。import 規則を持つ行（初期は TS/JS）だけを図にし、主言語が規則なし・認識できるファイルがないときは ASCII のディレクトリ木。パッケージとパス別名の import は線にしない。`node_modules`・`dist`・`build`・`target`・`vendor`・`deps`・`_build`・`__pycache__`・`venv`・`coverage`・ドットで始まるもの・symlink は除外。読めないサブディレクトリとファイルは飛ばして件数を示す。上限は走査5000件・ファイル100（つながりの多い順に残す）・線300・木200行で、超えたら注記 | Mermaid か木 |
 
 `state.ts` の公開関数（純粋関数、それぞれテストあり）：
-`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `nextLayer` / `nextStatus` / `newlyDone` / `markDone` / `printable` / `logLines` / `appendLog` / `parseLog` / `lastLog` / `formatDate`。
+`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `formatItem` / `nextLayer` / `nextStatus` / `newlyDone` / `markDone` / `printable` / `logLines` / `appendLog` / `parseLog` / `lastLog` / `formatDate`。
 
 ## 7. スキル（`skills/`、両ホスト共有）
 

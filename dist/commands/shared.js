@@ -1,9 +1,14 @@
-// Checks and messages used by more than one command: committing records, reading NEXT.md, and naming skills for both hosts.
+// Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 import { join } from 'node:path';
-import { STATE_DIR, STATE_PATHS, isSymlink, readState, trackedStatePath } from '../files.js';
+import { STATE_DIR, STATE_PATHS, isSymlink, readState, requireState, requireStateDir, trackedStatePath, } from '../files.js';
 import { gitHeadFile, gitIgnored, gitOperationInProgress, gitToplevel, gitUnmergedCount } from '../git.js';
-import { parseNext, validateNext } from '../state.js';
+import { parseNext, parsePlan, validateNext } from '../state.js';
 const CLIP = 60;
+export const NO_LAYERS = 'PLAN.md に層がない';
+/** The layers of PLAN.md in the project above cwd; throws outside Soujo projects or without PLAN.md. */
+export function readPlan(cwd) {
+    return parsePlan(requireState(requireStateDir(cwd), 'PLAN.md'));
+}
 /** A skill as typed in Claude Code, with the Codex spelling. */
 export function skill(name) {
     return `/soujo:${name}（Codex は $${name}）`;

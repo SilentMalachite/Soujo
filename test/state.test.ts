@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   appendLog,
   formatDate,
+  formatItem,
   formatNext,
   lastLog,
   logLines,
@@ -141,6 +142,10 @@ test('long whitespace runs are processed in linear time', () => {
   parsePlan(`- [ ] L1${spaces}x${spaces}y\n`);
   appendLog(`a${spaces}b${spaces}`, { date: '2026-09-13', layer: 'L1', lines: [] });
   assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)}ms`);
+});
+
+test('formatItem shows a layer with its checkbox', () => {
+  assert.deepEqual(parsePlan(PLAN).map(formatItem), ['[x] L1 scaffold', '[ ] L2 state', '[ ] L3 io']);
 });
 
 test('nextLayer returns the first unfinished layer or undefined', () => {

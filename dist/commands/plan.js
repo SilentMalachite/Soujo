@@ -1,20 +1,16 @@
 // soujo plan list / plan next: read-only views of PLAN.md.
-import { requireState, requireStateDir } from '../files.js';
-import { nextLayer, parsePlan } from '../state.js';
-const EMPTY = 'PLAN.md に層がない';
-function readPlan(cwd) {
-    return parsePlan(requireState(requireStateDir(cwd), 'PLAN.md'));
-}
+import { formatItem, nextLayer } from '../state.js';
+import { NO_LAYERS, readPlan } from './shared.js';
 export function planList(cwd) {
     const items = readPlan(cwd);
     if (items.length === 0)
-        return [EMPTY];
-    return items.map((item) => `[${item.done ? 'x' : ' '}] ${item.layer}`);
+        return [NO_LAYERS];
+    return items.map((item) => formatItem(item));
 }
 export function planNext(cwd) {
     const items = readPlan(cwd);
     if (items.length === 0)
-        return [EMPTY];
+        return [NO_LAYERS];
     const item = nextLayer(items);
     if (item === undefined)
         return ['全層完了'];
