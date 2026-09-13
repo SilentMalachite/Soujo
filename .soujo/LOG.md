@@ -192,3 +192,7 @@ README(+ja) の言語切り替えの下に CI と TypeScript のバッジを追�
 
 ## 2026-09-14 readme-badges
 README(+ja) に 0BSD のライセンスバッジ（LICENSE へのリンク）を追加。GitHub は LICENSE を 0BSD と判定しない（NOASSERTION）ので、動的ではなく固定のバッジにした。
+
+## 2026-09-14 license-text
+LICENSE を choosealicense.com の BSD Zero Clause License の標準の書式に（条項は同一、著作権表示 2026 Silent Malachite を追加）。GitHub が 0BSD と判定した。
+README(+ja) のライセンスバッジを、GitHub の判定を読む動的なもの（0BSD 表示を確認）に切り替え。

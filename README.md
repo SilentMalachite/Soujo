@@ -2,7 +2,7 @@
 
 **English** | [日本語](README.ja.md)
 
-[![CI](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml/badge.svg)](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml) [![TypeScript](https://img.shields.io/github/package-json/dependency-version/SilentMalachite/Soujo/dev/typescript?logo=typescript&logoColor=white&color=3178C6)](https://www.typescriptlang.org/) [![License: 0BSD](https://img.shields.io/badge/license-0BSD-blue)](LICENSE)
+[![CI](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml/badge.svg)](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml) [![TypeScript](https://img.shields.io/github/package-json/dependency-version/SilentMalachite/Soujo/dev/typescript?logo=typescript&logoColor=white&color=3178C6)](https://www.typescriptlang.org/) [![License](https://img.shields.io/github/license/SilentMalachite/Soujo)](LICENSE)
 
 A spec → plan → layer workflow for Claude Code and Codex that survives any interruption. All state lives in four files under `.soujo/`, so work continues without conversation history — in the same host or the other one.
 
