@@ -50,19 +50,21 @@ Runtime text (CLI output, skills, templates) is Japanese.
    command -v soujo
    ```
 
+Steps 2 and 3 run in the same `Soujo` directory. Both hosts save `./` as that clone's absolute path, so keep the clone where it is. Write `./`, not `.`: Claude Code rejects `.`.
+
 2. Claude Code:
 
    ```sh
-   claude plugin marketplace add /path/to/Soujo
+   claude plugin marketplace add ./
    claude plugin install soujo@soujo
    ```
 
-   With a local path, sessions load the plugin from that directory itself, so pulled changes reach new sessions without reinstalling (installing also copies it into Claude Code's plugin cache).
+   Sessions load the plugin from the clone itself, so pulled changes reach new sessions without reinstalling (installing also copies it into Claude Code's plugin cache).
 
 3. Codex:
 
    ```sh
-   codex plugin marketplace add /path/to/Soujo
+   codex plugin marketplace add ./
    codex plugin add soujo@soujo
    ```
 
