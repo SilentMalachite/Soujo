@@ -15,7 +15,7 @@ description: "Soujo で作るものを1問ずつの対話で決め、.soujo/SPEC
 
 ## soujo に頼むこと
 - 最初に `soujo init`（`.soujo/` と、無ければ CLAUDE.md / AGENTS.md を作る。既存は上書きしない）。git リポジトリでないと出たら、`git init` するかを1問目で聞く。
-- 書き終えたら `soujo next set --layer plan --premise 'SPEC.md 完成' --check 'PLAN.md に層と完了条件が並ぶ' --effort high`。
+- 書き終えたら `soujo next set --layer plan --premise 'SPEC.md 完成' --check 'PLAN.md に層と完了条件が並ぶ'`（plan の effort は CLI が high にするので `--effort` は付けない）。
 
 ## 出力の形
 - 質問中は、1問と番号付きの候補の短い表だけ。

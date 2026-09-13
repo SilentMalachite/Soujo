@@ -132,3 +132,8 @@ help はほかの引数より先に判定（-- の後と --x=--help は対象外
 L13 レビュー #1〜#19 を修正: help の順を SPEC・README に合わせ log add → layer done に。不明なコマンドは打たれた名前を「」で示し（2語目も含む）、空白入りの1引数はコマンドにしない。
 SPEC に next check は使い方エラーなし・1語目の後の不明な語は無視を明記。テストは期待行の完全一致、-- の後の -h、--note=--help、--help=x、空文字、Object.prototype 名＋--help を追加し重複を整理。
 README・CHANGELOG(+.ja) に1語目での一覧とエラーの案内。NEXT の注意を nextSet の処理順に。L13 の LOG は「エラーに（soujo --help で一覧）を付けた」の意（#19）。
+
+## 2026-09-14 L14 effort
+next set は層 spec/plan（trim 後）に effort high を書き、ほかの --effort は何も書かずに「--effort を外して再実行」で拒否。
+判定は formatNext より前で、層以外の既定 medium は変えない。受け入れ・拒否と無書込を next.test に追加。
+spec・go スキルの plan 行きの next set から --effort を外した（go の節は3行のまま）。

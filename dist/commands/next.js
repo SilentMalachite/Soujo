@@ -21,17 +21,27 @@ export function nextShow(cwd, hook) {
 }
 // Steps before any layer exists; the spec and plan skills point NEXT.md at them.
 const PHASES = ['spec', 'plan'];
+// The effort of the spec and plan skills (SPEC §7), so that it is not chosen anew after the last layer.
+const PHASE_EFFORT = 'high';
 /**
- * Rewrites NEXT.md. Writes nothing when the result would be invalid, or when PLAN.md has layers and the layer is
- * neither one of them nor a phase: a mistyped name would otherwise pass next check and resume until layer done.
+ * Rewrites NEXT.md. Writes nothing when the result would be invalid, when a phase is given an effort other than
+ * PHASE_EFFORT, or when PLAN.md has layers and the layer is neither one of them nor a phase: a mistyped name would
+ * otherwise pass next check and resume until layer done.
  */
 export function nextSet(cwd, input) {
     const dir = requireStateDir(cwd);
-    const text = formatNext(input);
+    const layer = input.layer.trim();
+    let { effort } = input;
+    if (PHASES.includes(layer)) {
+        if (effort !== undefined && effort.trim() !== PHASE_EFFORT) {
+            throw new Error(`NEXT.md を書かない: ${layer} の effort は ${PHASE_EFFORT} 固定（--effort を外して再実行）`);
+        }
+        effort = PHASE_EFFORT;
+    }
+    const text = formatNext({ ...input, effort });
     const problems = validateNext(text);
     if (problems.length > 0)
         throw new Error(`NEXT.md を書かない: ${problems.join('、')}`);
-    const layer = input.layer.trim();
     const items = parsePlan(readState(dir, 'PLAN.md') ?? '');
     if (items.length > 0 && !PHASES.includes(layer) && !items.some((item) => item.layer === layer)) {
         throw new Error(`NEXT.md を書かない: PLAN.md に層「${layer}」がない（PLAN の層名をそのまま、または ${PHASES.join(' / ')}）`);

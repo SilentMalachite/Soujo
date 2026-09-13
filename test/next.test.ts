@@ -64,6 +64,28 @@ test('next set refuses a layer missing from PLAN.md except spec and plan, and an
   assert.deepEqual(nextSet(empty, { ...base, layer: 'L1' }), ['NEXT.md を更新: 次: L1']);
 });
 
+test('next set writes effort high for spec and plan, and refuses any other effort for them', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  const base = { premise: 'p', check: 'c' };
+  const accepted: [string, string | undefined][] = [['plan', undefined], [' spec ', undefined], ['plan', 'high'], ['\tplan', ' high ']];
+  for (const [layer, effort] of accepted) {
+    assert.deepEqual(nextSet(dir, { ...base, layer, effort }), [`NEXT.md を更新: 次: ${layer.trim()}`]);
+    assert.match(readNext(dir), /\neffort: high\n$/, `${layer} ${effort}`);
+  }
+  nextSet(dir, { ...base, layer: 'L2 state' });
+  const before = readNext(dir);
+  const refused: [string, string][] = [['plan', 'medium'], [' spec ', 'low'], ['plan', 'xhigh'], ['plan', 'max'], ['plan', '']];
+  for (const [layer, effort] of refused) {
+    assert.throws(
+      () => nextSet(dir, { ...base, layer, effort }),
+      new RegExp(`^Error: NEXT\\.md を書かない: ${layer.trim()} の effort は high 固定（--effort を外して再実行）$`),
+      `${layer} ${effort}`,
+    );
+    assert.equal(readNext(dir), before, `${layer} ${effort}`);
+  }
+  assert.match(before, /\neffort: medium\n$/);
+});
+
 test('next check is silent for a clean tree with a valid NEXT.md, and outside Soujo projects', (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
   commitAll(dir);

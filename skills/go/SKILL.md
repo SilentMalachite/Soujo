@@ -14,7 +14,7 @@ description: "Soujo の .soujo/NEXT.md が指す層を実装し、次の NEXT.md
 
 ## soujo に頼むこと
 - `soujo resume`
-- `soujo next set --layer '<次の層名>' --premise '<この層で済んだこと>' --check '<次の層の完了条件>' --effort <low|medium|high|xhigh> [--caution '<注意>']`（層名と完了条件は PLAN の行から写す。次の層がなければ `--layer plan --check 'SPEC に未実装が残っていない'`。effort は次の層の難しさで選ぶ）
+- `soujo next set --layer '<次の層名>' --premise '<この層で済んだこと>' --check '<次の層の完了条件>' --effort <low|medium|high|xhigh> [--caution '<注意>']`（層名と完了条件は PLAN の行から写し、effort は次の層の難しさで選ぶ。次の層がなければ `--layer plan --check 'SPEC に未実装が残っていない'` で、`--effort` は付けない）
 - `soujo layer done '<この層名>' --note '<1〜3行。改行は引数の中の実際の改行>'`
 
 ## 出力の形
