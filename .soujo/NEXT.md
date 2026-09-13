@@ -1,5 +1,5 @@
-次: L8 map
-前提: L7 resume-close 完了（resume 4行・close の中断ログと wip コミット）
-確認: map plan の縦 ASCII 図と map code の Mermaid(TS/JS)・未対応言語のディレクトリ木がテストで通る
-注意: map.ts は純粋関数。LANGUAGES は1言語1行。node_modules・dist・ドットエントリを飛ばす
+次: L9 skills
+前提: L8 map 完了（map plan の縦図・map code の Mermaid とディレクトリ木）
+確認: skills/ 7本(frontmatter は name/description のみ・4節×各3行以内)と agents/reviewer.md が揃う
+注意: SKILL.md は soujo の呼び方だけ。「読む」節の1行目に .soujo/・soujo・git は導入先のものと書く
 effort: medium

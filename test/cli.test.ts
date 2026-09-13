@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repo, temp } from './helpers.js';
 
@@ -124,6 +124,22 @@ test('close exits 1 on an invalid NEXT.md without writing, then commits through 
   assert.match(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), /\n中断: - 途中\n$/);
 });
 
+test('map plan and map code print their diagrams through the CLI', (t) => {
+  const dir = temp(t);
+  soujoIn(dir, 'init');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [x] L1 scaffold — build\n- [ ] L2 map — 図\n');
+  const plan = soujoIn(dir, 'map', 'plan');
+  assert.deepEqual([plan.status, plan.stdout], [0, '[x] L1 scaffold\n │  build\n[ ] L2 map ←次\n    図\n']);
+
+  mkdirSync(join(dir, 'src'));
+  writeFileSync(join(dir, 'src', 'a.ts'), "import './b.js';\n");
+  writeFileSync(join(dir, 'src', 'b.ts'), '');
+  const code = soujoIn(dir, 'map', 'code', 'src');
+  assert.deepEqual([code.status, code.stdout], [0, 'graph LR\n  n0["a.ts"]\n  n1["b.ts"]\n  n0 --> n1\n']);
+  const missing = soujoIn(dir, 'map', 'code', 'nope');
+  assert.deepEqual([missing.status, missing.stderr], [1, 'soujo: ディレクトリがない: nope\n']);
+});
+
 test('argument errors are one Japanese line with exit 1', () => {
   const cases: [string[], string][] = [
     [['init', 'extra'], 'soujo: 使い方: soujo init\n'],
@@ -134,6 +150,9 @@ test('argument errors are one Japanese line with exit 1', () => {
     [['resume', 'now'], 'soujo: 使い方: soujo resume\n'],
     [['close', 'note'], 'soujo: 使い方: soujo close [--note <1〜3行>]\n'],
     [['close', '--note', '- 途中'], 'soujo: オプションの値が「-」で始まる: --note=<値> の形で書く\n'],
+    [['map'], 'soujo: 不明なコマンド: map\n'],
+    [['map', 'plan', 'x'], 'soujo: 使い方: soujo map plan\n'],
+    [['map', 'code', 'a', 'b'], 'soujo: 使い方: soujo map code [ディレクトリ]\n'],
     [
       ['next', 'set', '--layer', 'L1'],
       'soujo: 使い方: soujo next set --layer <層> --premise <前提> --check <確認> [--caution <注意>] [--effort low|medium|high|xhigh]\n',

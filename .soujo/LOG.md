@@ -67,3 +67,8 @@ close: NEXT 検証→「中断: …」を NEXT の層で LOG へ→wip コミッ
 L7 レビュー #1〜#37 を修正: close は HEAD に無い末尾の中断エントリだけ再利用 / PLAN チェック未コミット（layer done 途中）は拒否 / next set 後に止まったら未チェックの層で wip。
 resume は NEXT 無効・完了済み・層飛ばし・layer done 途中をそれぞれ案内し、読めない行だけ縮退、値は60文字で切る。next check も層飛ばしを警告。
 git の add/commit/status は -- . でプロジェクト内に限定、.soujo/ の symlink を拒否、出力の制御文字を空白に、CRLF の LOG は CRLF で追記。共有処理は commands/shared.ts。
+
+## 2026-09-13 L8 map
+map.ts（純粋関数）: planDiagram は層ごとに2行・次の層に ←次・完了条件を縦線の横に。importGraph は LANGUAGES（TS/JS 1行）の相対 import を Mermaid graph LR に（.js→.ts 置換・index 解決・外部パッケージ除外）。
+未対応言語だけのディレクトリは directoryTree（フォルダ先・コードポイント順）。走査は node_modules・dist・ドットエントリ・symlink を飛ばす。
+commands/map.ts が走査と読み込み、cli.ts に map plan / map code [dir] を追加。

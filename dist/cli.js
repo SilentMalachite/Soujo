@@ -5,6 +5,7 @@ import { close } from './commands/close.js';
 import { init } from './commands/init.js';
 import { layerDone } from './commands/layer.js';
 import { logAdd } from './commands/log.js';
+import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
@@ -73,6 +74,13 @@ const COMMANDS = {
         const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
         expectPositionals(positionals, 0, 'close [--note <1〜3行>]');
         return close(cwd, values.note);
+    },
+    'map plan': noArguments('map plan', mapPlan),
+    'map code': (args, cwd) => {
+        const { positionals } = parseArgs({ args, allowPositionals: true });
+        if (positionals.length > 1)
+            throw new Error('使い方: soujo map code [ディレクトリ]');
+        return mapCode(cwd, positionals[0]);
     },
 };
 // Own keys only, so that names like "constructor" or "__proto__" are unknown commands.
