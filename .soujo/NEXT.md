@@ -1,5 +1,5 @@
-次: L9 skills
-前提: L8 map 完了（map plan の縦図・map code の Mermaid とディレクトリ木）
-確認: skills/ 7本(frontmatter は name/description のみ・4節×各3行以内)と agents/reviewer.md が揃う
-注意: SKILL.md は soujo の呼び方だけ。「読む」節の1行目に .soujo/・soujo・git は導入先のものと書く
+次: L10 hosts
+前提: L9 skills 完了（skills/ 7本・agents/reviewer.md・test/skills.test.ts）
+確認: 両マニフェスト・両マーケットプレイス・hooks.json が揃い、claude plugin validate . と validate_plugin.py が通る
+注意: .codex-plugin/plugin.json に hooks を書かない。hooks.json は dist/cli.js を直接呼ぶ
 effort: medium

@@ -77,3 +77,8 @@ commands/map.ts が走査と読み込み、cli.ts に map plan / map code [dir] 
 L8 レビュー #1〜#29 を修正: map code は主言語（ファイル数最多）で図か木を選ぶ。LANGUAGES は1言語1行で import 規則（抽出・解決）を行に持ち、規則のない言語は木。
 TS/JS は字句解析でコメント・文字列・正規表現を除いて import を抽出。解決は TS 流の拡張子対応・./.. は index のみ・自己参照除外・大文字小文字無視。ID はパス由来。
 既定はプロジェクトルート。出力は ASCII、上限（走査5000・ファイル100・線300・木200行）と読めない件数を注記。formatItem・readPlan を共有、SPEC §6 を更新。
+
+## 2026-09-13 L9 skills
+skills/ 7本（spec/plan/go/resume/map/review/close）: frontmatter は name/description のみ、4節×各3行以内、読むもの1行目でプロジェクト側を明示。
+agents/reviewer.md: review から1体だけ、diff の指摘を絞らず表で返す。編集・コミットしない。
+test/skills.test.ts が7本の構成・frontmatter・節と行数・reviewer を検証。
