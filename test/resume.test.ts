@@ -44,6 +44,25 @@ test('resume reads CRLF files, counts uncommitted changes, and clips long values
   ]);
 });
 
+test('resume clips long layer names too, but keeps them whole inside commands', (t) => {
+  const long = `L3 ${'層'.repeat(80)}`;
+  const clipped = `L3 ${'層'.repeat(56)}…`;
+  const plan = PLAN.replace('L3 io', long);
+  const ok = project(temp(t), { 'NEXT.md': NEXT.replace('L3 io', long), 'PLAN.md': plan, 'LOG.md': `# LOG\n\n## 2026-09-13 ${long}\nx\n` });
+  const [next, log] = resume(ok);
+  assert.equal(next, `次: ${clipped}（effort: high）確認: io のテストが通る`);
+  assert.equal(log, `前回: 2026-09-13 ${clipped} — x`);
+
+  const skipped = project(temp(t), { 'NEXT.md': NEXT.replace('L3 io', 'L4 cli'), 'PLAN.md': plan });
+  assert.deepEqual([resume(skipped)[0], resume(skipped)[3]], [
+    `次: ${clipped}（PLAN で未完了。NEXT.md は「L4 cli」）確認: io`,
+    `再開: 「${clipped}」を締めていない → 完了なら soujo layer done "${long}"、途中なら soujo next set で次を戻す`,
+  ]);
+
+  const missing = project(temp(t), { 'PLAN.md': plan });
+  assert.equal(resume(missing)[0], `次: ${clipped}（PLAN から）確認: io`);
+});
+
 test('resume falls back to the next layer of PLAN when NEXT.md is missing, invalid, or finished', (t) => {
   const missing = project(repo(t), { 'PLAN.md': '- [ ] L3 io — io\n', 'LOG.md': '' });
   writeFileSync(join(missing, 'a.ts'), '');

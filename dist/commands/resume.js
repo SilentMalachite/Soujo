@@ -28,19 +28,20 @@ function checkOf(item) {
     return clip(item.condition || '未記入');
 }
 // 次 and 再開 from NEXT.md; PLAN's next layer when NEXT.md is missing, unreadable, invalid, or points to a finished layer.
+// Layer names are clipped like other values, except inside a command, which must stay runnable.
 function nextAndCommand(dir, plan) {
     const items = typeof plan === 'string' ? parsePlan(plan) : [];
     const text = attempt(() => readState(dir, 'NEXT.md'));
     const next = typeof text === 'string' ? parseNext(text) : undefined;
     const status = next === undefined ? undefined : nextStatus(next.layer, items);
     if (next !== undefined && status?.state === 'ok') {
-        return [`次: ${next.layer}（effort: ${next.effort}）確認: ${clip(next.check)}`, `再開: ${skill('go')}`];
+        return [`次: ${clip(next.layer)}（effort: ${next.effort}）確認: ${clip(next.check)}`, `再開: ${skill('go')}`];
     }
     if (next !== undefined && status?.state === 'skipped') {
         const layer = status.unfinished.layer;
         return [
-            `次: ${layer}（PLAN で未完了。NEXT.md は「${next.layer}」）確認: ${checkOf(status.unfinished)}`,
-            `再開: 「${layer}」を締めていない → 完了なら soujo layer done "${layer}"、途中なら soujo next set で次を戻す`,
+            `次: ${clip(layer)}（PLAN で未完了。NEXT.md は「${clip(next.layer)}」）確認: ${checkOf(status.unfinished)}`,
+            `再開: 「${clip(layer)}」を締めていない → 完了なら soujo layer done "${layer}"、途中なら soujo next set で次を戻す`,
         ];
     }
     let reason;
@@ -51,12 +52,12 @@ function nextAndCommand(dir, plan) {
     else if (next === undefined)
         reason = clip(describeInvalidNext(validateNext(text)));
     else
-        reason = `NEXT.md の次「${next.layer}」は PLAN で完了済み`;
+        reason = `NEXT.md の次「${clip(next.layer)}」は PLAN で完了済み`;
     if (plan instanceof Error)
         return ['次: 不明（PLAN.md を読めない）', `再開: ${reason} → PLAN.md を読めるようにしてから soujo resume`];
     const item = nextLayer(items);
     if (item !== undefined) {
-        return [`次: ${item.layer}（PLAN から）確認: ${checkOf(item)}`, `再開: ${reason} → soujo next set で書いてから ${skill('go')}`];
+        return [`次: ${clip(item.layer)}（PLAN から）確認: ${checkOf(item)}`, `再開: ${reason} → soujo next set で書いてから ${skill('go')}`];
     }
     if (items.length > 0)
         return ['次: なし（PLAN は全層完了）', `再開: ${reason} → 層を足すなら ${skill('plan')}`];
@@ -72,7 +73,7 @@ function unfinishedLayerDone(root, items) {
     const [pending] = newlyDone(parsePlan(head ?? ''), items);
     if (pending === undefined)
         return undefined;
-    return `再開: 「${pending.layer}」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done "${pending.layer}" を再実行`;
+    return `再開: 「${clip(pending.layer)}」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done "${pending.layer}" を再実行`;
 }
 function logLine(dir) {
     const text = attempt(() => readState(dir, 'LOG.md'));
@@ -82,7 +83,7 @@ function logLine(dir) {
     if (entry === undefined)
         return '前回: LOG.md に記録なし';
     const first = entry.lines[0];
-    return `前回: ${entry.date} ${entry.layer}${first === undefined ? '' : ` — ${clip(first)}`}`;
+    return `前回: ${entry.date} ${clip(entry.layer)}${first === undefined ? '' : ` — ${clip(first)}`}`;
 }
 function commitLine(root) {
     if (gitToplevel(root) === undefined)
