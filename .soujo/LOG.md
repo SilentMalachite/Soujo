@@ -23,3 +23,8 @@ git の失敗は stderr 先頭行（なければ stdout 末尾行）で「git <c
 templates/NEXT.md は「次: spec」の有効な NEXT。templates の CLAUDE.md/AGENTS.md はルートとの一致をテストで守る。
 packageDir は package.json を上へ探す（dist/ と .test-dist/src/ のどちらからも templates に届く）。
 コマンドは (args, cwd) を取る関数。parseArgs の英語エラーは cli.ts で1行の日本語に訳す。
+
+## 2026-09-13 L5 next
+next check は問題を「 / 」で1行に連結し、--hook では {"systemMessage"} にする。予期しない失敗も警告に変えて終了0。
+未コミット検査は git 管理下のときだけ。next check は未知の引数を無視する（hook から常に終了0）。
+next show --hook はプロジェクト外・NEXT.md なし・読めないときに無音。

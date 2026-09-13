@@ -1,5 +1,5 @@
-次: L5 next
-前提: L4 init-plan-log 完了（init・plan list/next・log add。引数は cli.ts の parseArgs、コマンドは (args, cwd) 関数）
-確認: next show/set/check が --hook を含めテストで通り、check は常に終了0・Soujo 外では無音
-注意: L6 まで PLAN と NEXT は手更新・手コミット（LOG は node dist/cli.js log add で可）。--hook は {"systemMessage": "..."}
+次: L6 layer-done
+前提: L5 next 完了（next show/set/check。check は常に終了0、問題は「soujo 警告: a / b」の1行）
+確認: layer done が PLAN→LOG→commit を行い、不正入力で無書込・コミットだけ再試行・コミット済み拒否がテストで通る
+注意: この層は手で締める最後の層（PLAN チェックと commit）。NEXT は next set、LOG は log add を使う
 effort: medium

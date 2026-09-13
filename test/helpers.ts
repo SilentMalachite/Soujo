@@ -23,6 +23,12 @@ export function repo(t: TestContext): string {
   return dir;
 }
 
+/** Stages and commits everything in the repository. */
+export function commitAll(dir: string, message = 'test commit'): void {
+  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-q', '-m', message], { cwd: dir, stdio: 'ignore' });
+}
+
 /** Writes .soujo/ with the given files into dir and returns dir. */
 export function project(dir: string, files: Partial<Record<StateFile, string>> = {}): string {
   mkdirSync(join(dir, '.soujo'), { recursive: true });

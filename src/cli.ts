@@ -4,6 +4,7 @@
 import { parseArgs } from 'node:util';
 import { init } from './commands/init.js';
 import { logAdd } from './commands/log.js';
+import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 
 type Command = (args: string[], cwd: string) => string[];
@@ -23,6 +24,34 @@ function noArguments(usage: string, run: (cwd: string) => string[]): Command {
 // Keys are "<word>" or "<word> <word>"; two-word keys are matched first.
 const COMMANDS: Record<string, Command> = {
   init: noArguments('init', init),
+  'next show': (args, cwd) => {
+    const { positionals, values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true });
+    expectPositionals(positionals, 0, 'next show [--hook]');
+    return nextShow(cwd, values.hook ?? false);
+  },
+  'next set': (args, cwd) => {
+    const usage = 'next set --layer <層> --premise <前提> --check <確認> [--caution <注意>] [--effort low|medium|high|xhigh]';
+    const { positionals, values } = parseArgs({
+      args,
+      options: {
+        layer: { type: 'string' },
+        premise: { type: 'string' },
+        check: { type: 'string' },
+        caution: { type: 'string' },
+        effort: { type: 'string' },
+      },
+      allowPositionals: true,
+    });
+    expectPositionals(positionals, 0, usage);
+    const { layer, premise, check, caution, effort } = values;
+    if (layer === undefined || premise === undefined || check === undefined) throw new Error(`使い方: soujo ${usage}`);
+    return nextSet(cwd, { layer, premise, check, caution, effort });
+  },
+  // Hooks call this: unknown arguments are ignored so that it always exits 0.
+  'next check': (args, cwd) => {
+    const { values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true, strict: false });
+    return nextCheck(cwd, values.hook === true);
+  },
   'plan list': noArguments('plan list', planList),
   'plan next': noArguments('plan next', planNext),
   'log add': (args, cwd) => {

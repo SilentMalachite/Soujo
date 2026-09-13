@@ -49,6 +49,21 @@ test('init, log add, and plan next work through the CLI', (t) => {
   ]);
 });
 
+test('next set, show, and check work through the CLI; check exits 0 even with bad arguments', (t) => {
+  const dir = temp(t);
+  soujoIn(dir, 'init');
+  const set = soujoIn(dir, 'next', 'set', '--layer', 'L1', '--premise', 'p', '--check', 'c', '--effort', 'low');
+  assert.deepEqual([set.status, set.stdout], [0, 'NEXT.md を更新: 次: L1\n']);
+  assert.equal(soujoIn(dir, 'next', 'show').stdout, '次: L1\n前提: p\n確認: c\n注意: なし\neffort: low\n');
+  assert.deepEqual([soujoIn(dir, 'next', 'check').status, soujoIn(dir, 'next', 'check').stdout], [0, '']);
+
+  const outside = temp(t);
+  for (const args of [['next', 'check', '--hook'], ['next', 'check', '--bogus', 'x'], ['next', 'show', '--hook']]) {
+    const result = soujoIn(outside, ...args);
+    assert.deepEqual([result.status, result.stdout, result.stderr], [0, '', ''], args.join(' '));
+  }
+});
+
 test('argument errors are one Japanese line with exit 1', () => {
   const cases: [string[], string][] = [
     [['init', 'extra'], 'soujo: 使い方: soujo init\n'],
@@ -56,6 +71,10 @@ test('argument errors are one Japanese line with exit 1', () => {
     [['log', 'add', 'L1', '--line'], 'soujo: オプションの値が不正: --line <value>\n'],
     [['log', 'add', 'L1', 'scaffold', '--line', 'a'], 'soujo: 使い方: soujo log add "<層名>" --line <行> [--line <行>]\n'],
     [['plan'], 'soujo: 不明なコマンド: plan\n'],
+    [
+      ['next', 'set', '--layer', 'L1'],
+      'soujo: 使い方: soujo next set --layer <層> --premise <前提> --check <確認> [--caution <注意>] [--effort low|medium|high|xhigh]\n',
+    ],
   ];
   for (const [args, stderr] of cases) {
     const result = soujo(...args);
