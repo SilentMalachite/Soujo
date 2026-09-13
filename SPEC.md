@@ -69,7 +69,7 @@ Soujo/
 │   └── SPEC.md  PLAN.md  LOG.md  NEXT.md
 ├── CLAUDE.md  AGENTS.md              # instructions for this repository (identical to templates)
 ├── README.md  SPEC.md  CHANGELOG.md  CONTRIBUTING.md  SECURITY.md  CODE_OF_CONDUCT.md  LICENSE  (+ .ja.md translations)
-├── .github/                          # issue forms, the pull request template, and CI (npm test)
+├── .github/                          # issue forms, the pull request template, CI (npm test), and Dependabot
 └── package.json  tsconfig.json  tsconfig.test.json
 ```
 

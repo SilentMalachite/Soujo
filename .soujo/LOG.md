@@ -182,3 +182,7 @@ README(+ja) の開発節と SPEC(+ja) §4 に追記。SECURITY は GitHub の非
 ## 2026-09-14 ci
 GitHub Actions の CI を追加: push（main）と PR で npm ci → npm test。Ubuntu の Node 20・22・24・26 と macOS の Node 24。
 actions/checkout v7.0.1・setup-node v7.0.0 を SHA で固定、permissions は contents: read。CONTRIBUTING(+ja)・SPEC(+ja) §4 に追記。
+
+## 2026-09-14 dependabot
+Dependabot を設定: github-actions と npm（devDependencies）を毎月、それぞれ1つの PR にまとめる。@types/node のメジャー更新は engines の下限に合わせて除外。
+リポジトリの Dependabot アラートとセキュリティ更新を有効化。CONTRIBUTING(+ja)・SPEC(+ja) §4 に追記。
