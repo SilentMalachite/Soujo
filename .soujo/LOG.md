@@ -196,3 +196,7 @@ README(+ja) に 0BSD のライセンスバッジ（LICENSE へのリンク）を
 ## 2026-09-14 license-text
 LICENSE を choosealicense.com の BSD Zero Clause License の標準の書式に（条項は同一、著作権表示 2026 Silent Malachite を追加）。GitHub が 0BSD と判定した。
 README(+ja) のライセンスバッジを、GitHub の判定を読む動的なもの（0BSD 表示を確認）に切り替え。
+
+## 2026-09-14 release-0.1.0
+ユーザーの判断で v0.1.0 のタグを最新の main に付け替え（旧 bac8682）、CI・Dependabot・標準の LICENSE・英日の文書をリリースに含めた。
+CHANGELOG(+ja) の 0.1.0 に文書と設定の項目を追加し、リリースノートを差し替え。

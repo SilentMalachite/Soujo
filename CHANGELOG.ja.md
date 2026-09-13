@@ -15,3 +15,4 @@
 - Claude Code のフック：SessionStart で `NEXT.md` を文脈に入れ、Stop で再開できない状態を警告する。
 - 中断に耐える記録：`layer done` と `close` は、merge・rebase・cherry-pick・revert の途中、競合が未解決、または git が記録を取りこぼすときにコミットを拒否する。失敗後の再実行は止まったところから続き、`.soujo/` への書き込みはプロジェクトの外に出ない。
 - 両ホストのプラグインマニフェストとマーケットプレイス（CLI とともに GitHub から直接入れられる）、`soujo init` 用の `templates/`（Opus 5 向け CLAUDE.md、GPT-6 Astra 向け AGENTS.md）。
+- プロジェクトの文書と設定：英語（正本）と日本語の CONTRIBUTING・SECURITY・CODE_OF_CONDUCT、Issue フォーム、プルリクエストのテンプレート、Node 20・22・24・26 で `npm test` を実行する CI、固定したアクションと devDependencies を更新する Dependabot。
