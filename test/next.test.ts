@@ -70,20 +70,29 @@ test('next set writes effort high for spec and plan, and refuses any other effor
   const accepted: [string, string | undefined][] = [['plan', undefined], [' spec ', undefined], ['plan', 'high'], ['\tplan', ' high ']];
   for (const [layer, effort] of accepted) {
     assert.deepEqual(nextSet(dir, { ...base, layer, effort }), [`NEXT.md を更新: 次: ${layer.trim()}`]);
-    assert.match(readNext(dir), /\neffort: high\n$/, `${layer} ${effort}`);
+    assert.equal(readNext(dir), `次: ${layer.trim()}\n前提: p\n確認: c\n注意: なし\neffort: high\n`, `${layer} ${effort}`);
   }
   nextSet(dir, { ...base, layer: 'L2 state' });
   const before = readNext(dir);
-  const refused: [string, string][] = [['plan', 'medium'], [' spec ', 'low'], ['plan', 'xhigh'], ['plan', 'max'], ['plan', '']];
-  for (const [layer, effort] of refused) {
-    assert.throws(
-      () => nextSet(dir, { ...base, layer, effort }),
-      new RegExp(`^Error: NEXT\\.md を書かない: ${layer.trim()} の effort は high 固定（--effort を外して再実行）$`),
-      `${layer} ${effort}`,
-    );
+  assert.match(before, /\neffort: medium\n$/);
+  const refused: [string, string | undefined, RegExp][] = [
+    ['plan', 'medium', /^Error: NEXT\.md を書かない: 層「plan」の effort は high 固定（--effort を外して再実行）$/],
+    [' spec ', 'low', /^Error: NEXT\.md を書かない: 層「spec」の effort は high 固定（--effort を外して再実行）$/],
+    ['\tspec', ' xhigh ', /^Error: NEXT\.md を書かない: 層「spec」の effort は high 固定/],
+    // Unknown and multi-line values are reported as for any layer, before the fixed effort.
+    ['plan', 'HIGH', /^Error: NEXT\.md を書かない: effort は low\|medium\|high\|xhigh のどれか: HIGH$/],
+    ['plan', 'max', /^Error: NEXT\.md を書かない: effort は/],
+    ['plan', '', /^Error: NEXT\.md を書かない: /],
+    ['plan', 'high\n', /「effort」は1行で書く/],
+    ['plan\n', 'medium', /「次」は1行で書く/],
+    // Phases match exactly, so "Plan" is an ordinary layer and missing from PLAN.md.
+    ['Plan', undefined, /PLAN\.md に層「Plan」がない/],
+  ];
+  for (const [layer, effort, error] of refused) {
+    assert.throws(() => nextSet(dir, { ...base, layer, effort }), error, `${layer} ${effort}`);
     assert.equal(readNext(dir), before, `${layer} ${effort}`);
   }
-  assert.match(before, /\neffort: medium\n$/);
+  assert.throws(() => nextSet(temp(t), { ...base, layer: 'plan', effort: 'medium' }), /\.soujo\/ が見つからない/);
 });
 
 test('next check is silent for a clean tree with a valid NEXT.md, and outside Soujo projects', (t) => {

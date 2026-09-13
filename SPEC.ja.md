@@ -110,7 +110,7 @@ effort: <low|medium|high|xhigh>
 | `soujo --help` / `soujo <コマンド> --help` | 使い方の行を標準出力に出して終了0：最初の引数なら全コマンド、コマンドの後ならそのコマンドの1行、2語コマンドの1語目（`next`・`plan`・`log`・`layer`・`map`）の後ならその語で始まるコマンド（後に不明な語が続いても）。`-h` も同じ。`--` より前の単独の引数だけが対象（`--note=--help` や `--` の後は普通の引数）で、ほかの引数より先に判定するので、何も検査・実行しない（`--hook` 付きの `next show` / `next check` でも）。各行はそのコマンドの使い方エラーが示すのと同じ `soujo …` の文字列（`next check` には使い方エラーがない）。不明なコマンドは従来どおり、打たれた名前を示すエラーで、コマンドなし・不明なコマンドのエラーは `soujo --help` を案内する | 1コマンド1行 |
 | `soujo init` | templates から `.soujo/` を作り、CLAUDE.md / AGENTS.md がなければ複製する。git 管理下ならトップレベルに作る。既存ファイルは上書きしない | 作成したファイル＋作らなかったファイルの1行。git 管理外なら `git init` が要る旨の1行 |
 | `soujo next show [--hook]` | `NEXT.md` を表示。なければ「NEXT.md なし」。`--hook` 時は NEXT.md がなければ何も出さない | 5行 |
-| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。層 `spec` / `plan`（前後の空白を除いて比べる）の effort は `high`（§7）：ほかの `--effort` は拒否して何も書かず、エラーは `--effort` を外すよう示す。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否 | 1行 |
+| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。層 `spec` / `plan`（前後の空白を除き、大文字小文字も含めて完全一致で比べる）の effort は `high`（§7）：ほかの `--effort` は拒否して何も書かず、エラーは `--effort` を外すよう示す。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否 | 1行 |
 | `soujo next check [--hook]` | NEXT.md がない・無効・PLAN で `[x]` 済みの層か未チェックの層より後ろを指す、またはプロジェクト内に未コミット変更があれば警告。Soujo を使っていないプロジェクトでは無音。`--hook` 時は `{"systemMessage": "..."}`。**終了コードは常に0** | 0〜1行 |
 | `soujo plan list` | 層の一覧と完了状態 | 層数分 |
 | `soujo plan next` | 最初の未完了層と完了条件 | 2行 |

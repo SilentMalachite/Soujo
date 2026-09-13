@@ -217,6 +217,12 @@ test('next set, show, and check work through the CLI; check exits 0 even with ba
   assert.deepEqual([set.status, set.stdout], [0, 'NEXT.md を更新: 次: L1\n']);
   assert.equal(soujoIn(dir, 'next', 'show').stdout, '次: L1\n前提: p\n確認: c\n注意: なし\neffort: low\n');
   assert.deepEqual([soujoIn(dir, 'next', 'check').status, soujoIn(dir, 'next', 'check').stdout], [0, '']);
+  const phase = soujoIn(dir, 'next', 'set', '--layer', 'plan', '--premise', 'p', '--check', 'c', '--effort', 'low');
+  assert.deepEqual([phase.status, phase.stdout, phase.stderr], [
+    1,
+    '',
+    'soujo: NEXT.md を書かない: 層「plan」の effort は high 固定（--effort を外して再実行）\n',
+  ]);
 
   const outside = temp(t);
   for (const args of [['next', 'check', '--hook'], ['next', 'check', '--bogus', 'x'], ['next', 'show', '--hook']]) {

@@ -13,7 +13,7 @@ description: "Soujo の .soujo/SPEC.md を30分以内の層に分け、.soujo/PL
 - 層名は英数字の短い名前（例：`L3 auth`）。` — `・` - ` のような区切りや引用符を含めず、PLAN の中とも過去の `layer:` コミットとも重複させない。
 
 ## soujo に頼むこと
-- `次:` が PLAN の最初の未完了の層でなければ `soujo next set --layer '<その層名>' --premise 'PLAN.md 作成・更新' --check '<その層の完了条件>' --effort <low|medium|high|xhigh>`（effort はその層の難しさで選ぶ）。
+- 未完了の層があり、`次:` がその最初の層でなければ `soujo next set --layer '<その層名>' --premise 'PLAN.md 作成・更新' --check '<その層の完了条件>' --effort <low|medium|high|xhigh>`（effort はその層の難しさで選ぶ）。
 - `soujo map plan`
 
 ## 出力の形

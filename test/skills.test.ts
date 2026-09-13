@@ -92,6 +92,20 @@ test('every soujo command in the skills is a known command with known options', 
   }
 });
 
+// SPEC §6: next set fixes the effort of spec and plan, so a skill passing one would be refused.
+test('next set for spec or plan in the skills passes no --effort', () => {
+  let found = 0;
+  for (const name of SKILLS) {
+    for (const argv of commands(split(join(packageDir(), 'skills', name, 'SKILL.md')).body)) {
+      const layer = argv[argv.indexOf('--layer') + 1];
+      if (argv[0] !== 'next' || argv[1] !== 'set' || (layer !== 'spec' && layer !== 'plan')) continue;
+      found += 1;
+      assert.ok(!argv.some((token) => token === '--effort' || token.startsWith('--effort=')), `${name}: soujo ${argv.join(' ')}`);
+    }
+  }
+  assert.ok(found >= 2, 'spec と go に plan 行きの next set がある');
+});
+
 test('agents/reviewer.md is the subagent the review skill names', () => {
   const { keys, body } = split(join(packageDir(), 'agents', 'reviewer.md'));
   assert.deepEqual([...keys.keys()], ['name', 'description', 'tools']);
