@@ -195,20 +195,20 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 ## 12. 受け入れ基準
 
-2026-09-13 に L12（既存の Python プロジェクトの複製で Claude Code → Codex → Claude Code）で10項目すべてを確認した。詳細は `.soujo/LOG.md`。
+2026-09-13 に L12 で10項目すべてを確認した。`soujo` は `npm link`、プラグインは両ホストに導入（`claude plugin install`・`codex plugin add`）。既存の Python プロジェクト（AgentReview 0.4.0、テストは `unittest`）の複製で、`spec`・`plan`・L1 を Claude Code、L2 を Codex、L3 を Claude Code で、それぞれ新しいヘッドレスセッション（`claude -p`・`codex exec`）で進めた。要約は `.soujo/LOG.md`。
 
 | # | 基準 | 状態 |
 |---|---|---|
-| 1 | `.soujo/` の4ファイルだけで、会話履歴なしに `resume` → `go` が成立する | ✓ |
-| 2 | **同じリポジトリで Claude Code → Codex → Claude Code と切り替えても、`.soujo/` の記録が途切れない** | ✓ |
-| 3 | `spec` の質問は常に1つずつで、7問以内に `SPEC.md` ができる | ✓（6問） |
-| 4 | `go` 1回で、1層が実装・コミットまで到達し、`PLAN.md`/`LOG.md`/`NEXT.md` が更新される | ✓ |
-| 5 | `NEXT.md` が5行を超えると `soujo close` が拒否し、`soujo next check` が警告する | ✓ |
-| 6 | Claude Code：`NEXT.md` を更新せずに終えると Stop フックが警告する（ブロックはしない） | ✓ |
+| 1 | `.soujo/` の4ファイルだけで、会話履歴なしに `resume` → `go` が成立する | ✓ `go` は毎回新しいセッション |
+| 2 | **同じリポジトリで Claude Code → Codex → Claude Code と切り替えても、`.soujo/` の記録が途切れない** | ✓ `layer: L1` / `L2` / `L3` のコミットと LOG が順に並ぶ |
+| 3 | `spec` の質問は常に1つずつで、7問以内に `SPEC.md` ができる | ✓ 3問、回答ごとに `SPEC.md` を更新 |
+| 4 | `go` 1回で、1層が実装・コミットまで到達し、`PLAN.md`/`LOG.md`/`NEXT.md` が更新される | ✓ 両ホストで |
+| 5 | `NEXT.md` が5行を超えると `soujo close` が拒否し、`soujo next check` が警告する | ✓ `close` は終了1で何も書かない。`next check` は終了0 |
+| 6 | Claude Code：`NEXT.md` を更新せずに終えると Stop フックが警告する（ブロックはしない） | ✓ `systemMessage` だけで、セッションは普通に終わった |
 | 7 | Codex：`$plugin-creator` の `validate_plugin.py` が通る | ✓ |
-| 8 | `review` の出力が表形式で、件数を絞っていない | ✓ |
-| 9 | `npm test` が通る。`state.ts` の公開関数それぞれに1つ以上のテストがある | ✓ |
-| 10 | CLI は実行時依存ゼロで、`npm i -g` または `npm link` 後に `soujo` が PATH から呼べる | ✓ |
+| 8 | `review` の出力が表形式で、件数を絞っていない | ✓ `soujo:reviewer` の8件を順に全部。セルは言い換えられた（§14） |
+| 9 | `npm test` が通る。`state.ts` の公開関数それぞれに1つ以上のテストがある | ✓ 171テスト |
+| 10 | CLI は実行時依存ゼロで、`npm i -g` または `npm link` 後に `soujo` が PATH から呼べる | ✓ `soujo` はこのリポジトリの `dist/cli.js` を指す |
 
 ## 13. 実装
 
@@ -239,7 +239,8 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - Codex 0.154 はユーザーが信頼すると `hooks/hooks.json` を実行する（`~/.codex/config.toml` の `[hooks.state]`）。そこで `${CLAUDE_PLUGIN_ROOT}` が展開されるか、`systemMessage` が表示されるかは未確認。
 - `soujo --help`：両ホストで試されてエラーになった。
 - モデルがスキルの置き場所へ `cd` したり、そこの `.soujo/` を読もうとすることがある。ホスト側の保護で止まり、スキルにも警告を入れたが、CLI 側のガードは未対応。
-- `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち。
+- `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち（L12 では回答ごとに書いた）。
 - 全層完了時の `NEXT.md` にも `effort:` が残る。
 - `spec` / `plan` はコミットしない。最初の `layer done` までは `.soujo/` の変更が未コミットで、Stop フックが毎回警告する。
-- Codex の文脈量：`$go` 1回で入力約69万トークン（大半キャッシュ。主に Codex 全体の文脈）。
+- Codex の文脈量：`$go` 1回で入力約30万〜69万トークン（大半キャッシュ。主に Codex 全体の文脈。L12 では無関係なグローバルスキルと Codex のメモリファイルも読んだ）。
+- Claude Code の `review` は指摘を順に全部残したが、「返った表を加工せずに出す」に反して reviewer のセルを言い換え、絶対パスを短くした。

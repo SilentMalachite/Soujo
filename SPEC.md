@@ -194,20 +194,20 @@ Follows OpenAI's "Rethinking skills and prompts for GPT-6 Astra" (2026-09-11).
 
 ## 12. Acceptance criteria
 
-All ten were verified on 2026-09-13 in layer L12 (a clone of an existing Python project, Claude Code → Codex → Claude Code). See `.soujo/LOG.md`.
+All ten were verified on 2026-09-13 in layer L12, with `soujo` from `npm link` and the plugin installed in both hosts (`claude plugin install`, `codex plugin add`). In a clone of an existing Python project (AgentReview 0.4.0, tested with `unittest`), `spec`, `plan`, and L1 ran in Claude Code, L2 in Codex, and L3 in Claude Code, each in a new headless session (`claude -p`, `codex exec`). Summary in `.soujo/LOG.md`.
 
 | # | Criterion | Status |
 |---|---|---|
-| 1 | `resume` → `go` works with only the four `.soujo/` files and no conversation history | ✓ |
-| 2 | **Switching Claude Code → Codex → Claude Code in the same repository keeps the `.soujo/` records continuous** | ✓ |
-| 3 | `spec` always asks one question at a time and produces `SPEC.md` within 7 questions | ✓ (6 questions) |
-| 4 | One `go` implements and commits one layer and updates `PLAN.md` / `LOG.md` / `NEXT.md` | ✓ |
-| 5 | When `NEXT.md` exceeds 5 lines, `soujo close` refuses and `soujo next check` warns | ✓ |
-| 6 | Claude Code: ending without updating `NEXT.md` triggers a Stop hook warning (not a block) | ✓ |
+| 1 | `resume` → `go` works with only the four `.soujo/` files and no conversation history | ✓ every `go` ran in a new session |
+| 2 | **Switching Claude Code → Codex → Claude Code in the same repository keeps the `.soujo/` records continuous** | ✓ `layer: L1` / `L2` / `L3` commits and LOG entries in order |
+| 3 | `spec` always asks one question at a time and produces `SPEC.md` within 7 questions | ✓ 3 questions, `SPEC.md` written after each answer |
+| 4 | One `go` implements and commits one layer and updates `PLAN.md` / `LOG.md` / `NEXT.md` | ✓ in both hosts |
+| 5 | When `NEXT.md` exceeds 5 lines, `soujo close` refuses and `soujo next check` warns | ✓ `close` exits 1 and writes nothing; `next check` exits 0 |
+| 6 | Claude Code: ending without updating `NEXT.md` triggers a Stop hook warning (not a block) | ✓ `systemMessage` only; the session ended normally |
 | 7 | Codex: `validate_plugin.py` from `$plugin-creator` passes | ✓ |
-| 8 | `review` output is a table and findings are not filtered | ✓ |
-| 9 | `npm test` passes; each public function of `state.ts` has at least one test | ✓ |
-| 10 | The CLI has zero runtime dependencies and `soujo` is on PATH after `npm i -g` or `npm link` | ✓ |
+| 8 | `review` output is a table and findings are not filtered | ✓ all 8 findings of `soujo:reviewer` in order; cells reworded (§14) |
+| 9 | `npm test` passes; each public function of `state.ts` has at least one test | ✓ 171 tests |
+| 10 | The CLI has zero runtime dependencies and `soujo` is on PATH after `npm i -g` or `npm link` | ✓ `soujo` resolves to this repository's `dist/cli.js` |
 
 ## 13. Implementation
 
@@ -238,7 +238,8 @@ Open:
 - Codex 0.154 runs `hooks/hooks.json` once the user trusts it (`[hooks.state]` in `~/.codex/config.toml`); whether `${CLAUDE_PLUGIN_ROOT}` expands there and `systemMessage` is shown is unverified.
 - `soujo --help`: both hosts tried it and got an error.
 - Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
-- The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer.
+- The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer (in L12 it wrote after each answer).
 - `NEXT.md` for "all layers done" still carries an `effort:` value.
 - `spec` / `plan` do not commit. Until the first `layer done`, `.soujo/` changes stay uncommitted and the Stop hook warns every time.
-- Codex context size: one `$go` used ~690K input tokens (mostly cached), largely from global Codex context.
+- Codex context size: one `$go` used 295K–690K input tokens (mostly cached), largely from global Codex context (in L12 it also read an unrelated global skill and the Codex memory file).
+- `review` in Claude Code kept every finding in order but reworded the reviewer's cells and shortened its absolute paths, despite "返った表を加工せずに出す".

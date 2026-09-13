@@ -1,5 +1,5 @@
-次: L12 accept
-前提: L11 docs 完了（README/CHANGELOG と .ja.md・test/docs.test.ts・dist/cli.js を実行可能にビルド）
-確認: 既存 Python プロジェクトの複製で Claude Code→Codex→Claude Code を通し、受け入れ基準1〜10を LOG に記録
-注意: 実環境の npm link・claude plugin install・codex plugin add は未実施。Codex の hooks は信頼後の動作が未確認。SPEC §12 の ✓ と冒頭文は L12 の結果で書き直す
+次: plan
+前提: L12 accept 完了（全12層・受け入れ基準1〜10を実機で確認）
+確認: SPEC §14 の未決から次の層を PLAN に足すか、足さないと決めて LOG に記録する
+注意: review のセル言い換え・Codex hooks の信頼後動作は未決（SPEC §14）
 effort: high

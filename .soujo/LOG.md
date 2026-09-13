@@ -107,3 +107,8 @@ Claude Code 2.1.270 も導入時に作業ツリーをキャッシュへ複製し
 L11 レビュー #1〜#21 を修正: 実行ビットの検査は所有者ビットだけ。引数付きの soujo span は使い方エラーも検出。docs.test は英日のブロック構成とリンクのアンカーも照合。
 README: review の範囲・effort は会話で設定・map は図・--hook・--line の繰り返し・<dir>・PATH の soujo は必須・Codex の hooks は信頼しない。CHANGELOG は unreleased。
 新しい clone で npm link / npm i -g . が node_modules なしで動き、Claude は再インストールだけで更新・git 無視のファイルも複製と確認（SPEC §8）。#18 は NEXT へ、#19 #20 は変更なし。
+
+## 2026-09-13 L12 accept
+実環境で npm link・claude plugin install・codex plugin add の後、AgentReview の複製で spec・plan・L1=Claude Code / L2=Codex / L3=Claude Code を各新セッションで通し基準1〜4 ✓（spec 3問）。
+基準5 close 終了1・無書込/next check 警告、6 Stop は systemMessage のみ、7 validate_plugin.py、9 npm test 171件、10 soujo が PATH から本リポジトリの dist/cli.js を指す。
+基準8 は reviewer の8件を順に全部出したがセルを言い換えた（SPEC §14 未決へ）。SPEC §12 の冒頭文と状態欄を結果で書き直し。
