@@ -53,6 +53,26 @@ test('requireCommittable refuses each unsafe state', { skip: process.platform ==
   project(join(linked, 'real'));
   symlinkSync('real/.soujo', join(linked, '.soujo'));
   assert.throws(() => requireCommittable(linked), /^Error: \.soujo\/ が symlink なので記録をコミットできない/);
+
+  const sequencing = project(repo(t));
+  mkdirSync(join(sequencing, '.git', 'sequencer'));
+  assert.throws(() => requireCommittable(sequencing), /^Error: git の cherry-pick \/ revert が途中なのでコミットしない/);
+
+  const ignoredTarget = project(repo(t));
+  mkdirSync(join(ignoredTarget, 'records'));
+  writeFileSync(join(ignoredTarget, 'records', 'PLAN.md'), '');
+  writeFileSync(join(ignoredTarget, '.gitignore'), 'records/\n');
+  symlinkSync('../records/PLAN.md', join(ignoredTarget, '.soujo', 'PLAN.md'));
+  assert.throws(() => requireCommittable(ignoredTarget), /^Error: records\/PLAN\.md が git に無視されていて/);
+
+  const outsideTarget = project(repo(t));
+  const elsewhere = join(temp(t), 'LOG.md');
+  writeFileSync(elsewhere, '');
+  symlinkSync(elsewhere, join(outsideTarget, '.soujo', 'LOG.md'));
+  assert.throws(
+    () => requireCommittable(outsideTarget),
+    /^Error: \.soujo\/LOG\.md の実体（symlink の先）がプロジェクトの外なので記録をコミットできない$/,
+  );
 });
 
 test('headState reads the committed file, following a symlinked state file', { skip: process.platform === 'win32' }, (t) => {

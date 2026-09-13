@@ -5,9 +5,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitCommitAll, gitLastCommit } from '../git.js';
 import { appendLog, formatDate, logLines, newlyDone, nextStatus, parseLog, parsePlan, type LogEntry } from '../state.js';
-import { headState, requireCommittable, requireNext, resumable, skill } from './shared.js';
+import { INTERRUPTED, headState, requireCommittable, requireNext, resumable, skill, uncommittedLastLog } from './shared.js';
 
-const INTERRUPTED = '中断: ';
 const HINT = '（soujo next set で書き直してから再実行）';
 
 // The note as LOG lines with "中断: " before the first; a "中断:" already written by the caller is not doubled.
@@ -19,10 +18,8 @@ function interruptionLines(note: string): string[] {
 
 // The last LOG entry when it is a 中断 entry of layer that HEAD does not have yet: a previous close whose commit failed.
 function uncommittedInterruption(log: string, head: string | undefined, layer: string): LogEntry | undefined {
-  const entries = parseLog(log);
-  const last = entries.at(-1);
-  if (last === undefined || entries.length <= parseLog(head ?? '').length) return undefined;
-  return last.layer === layer && last.lines[0]?.startsWith(INTERRUPTED) ? last : undefined;
+  const last = uncommittedLastLog(log, head);
+  return last?.layer === layer && last.lines[0]?.startsWith(INTERRUPTED) ? last : undefined;
 }
 
 /**

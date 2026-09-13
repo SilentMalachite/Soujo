@@ -1,10 +1,12 @@
 // soujo layer done: checks the layer in PLAN.md, appends LOG.md, and commits everything as "layer: <layer>".
 import { dirname } from 'node:path';
-import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
-import { gitAddedFiles, gitCommitAll, gitFindCommit, gitLastCommit } from '../git.js';
-import { appendLog, formatDate, lastLog, markDone, parsePlan } from '../state.js';
-import { headState, requireCommittable, requireNext, resumable } from './shared.js';
+import { readState, removeLeftoverTemps, requireState, requireStateDir, trackedStatePath, writeState } from '../files.js';
+import { gitAddAll, gitAddedFiles, gitCommit, gitFindCommit, gitHasStagedChanges, gitLastCommit, gitNotStaged } from '../git.js';
+import { appendLog, formatDate, markDone, parsePlan } from '../state.js';
+import { INTERRUPTED, headState, requireCommittable, requireNext, resumable, uncommittedLastLog } from './shared.js';
 const SHOWN_FILES = 5;
+// The records a layer commit must carry as written.
+const RECORDS = ['PLAN.md', 'LOG.md', 'NEXT.md'];
 function isChecked(plan, layer) {
     return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
 }
@@ -34,8 +36,10 @@ function describeAdded(root) {
  * - checked in PLAN at HEAD (committed under another subject), even if unchecked again in the working tree → refuse
  * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
  * - unchecked in PLAN                                         → check PLAN, append LOG, commit
- * - checked only in the working tree (interrupted run)        → append LOG only if the last entry is not this layer, then commit
- * After the first write, every failure says what is recorded, so that fixing the cause and re-running resumes.
+ * - checked only in the working tree (interrupted run)        → append LOG unless its last entry is this layer's uncommitted
+ *                                                                completion entry (a 中断 entry of close does not count), then commit
+ * After the first write, every failure says what is recorded, so that fixing the cause and re-running resumes. Nothing is
+ * committed while PLAN, LOG, or NEXT is not staged as written (skip-worktree), since a re-run could not add them afterwards.
  */
 export function layerDone(cwd, layer, note, now = new Date()) {
     const dir = requireStateDir(cwd);
@@ -55,7 +59,8 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     }
     requireNextStep(dir, name);
     const log = readState(dir, 'LOG.md') ?? '';
-    const logged = item.done && lastLog(log)?.layer === name;
+    const last = item.done ? uncommittedLastLog(log, headState(root, 'LOG.md')) : undefined;
+    const logged = last?.layer === name && !last.lines[0]?.startsWith(INTERRUPTED);
     const newPlan = item.done ? undefined : markDone(plan, name);
     // Built even when the existing entry is reused, so an invalid note is refused on a re-run too.
     const appended = appendLog(log, { date: formatDate(now), layer: name, lines: note === undefined ? [] : [note] });
@@ -66,7 +71,16 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     if (newLog !== undefined) {
         resumable(() => writeState(dir, 'LOG.md', newLog), 'PLAN は記録済み。原因を直して再実行すれば LOG 追記からやり直す');
     }
-    const done = resumable(() => gitCommitAll(root, subject), 'PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す');
+    const done = resumable(() => {
+        gitAddAll(root);
+        const unstaged = gitNotStaged(root, RECORDS.map((file) => trackedStatePath(root, file)));
+        if (unstaged.length > 0)
+            throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
+        if (!gitHasStagedChanges(root))
+            return false;
+        gitCommit(root, subject);
+        return true;
+    }, 'PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す');
     if (!done)
         throw new Error('コミットする変更がない（PLAN と LOG の変更を git が拾っていない。skip-worktree などを確認）');
     const hash = gitLastCommit(root)?.hash ?? '?';

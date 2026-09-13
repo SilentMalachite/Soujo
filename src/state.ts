@@ -169,15 +169,16 @@ export type NextStatus = { state: 'ok' } | { state: 'done' } | { state: 'skipped
 
 /**
  * How NEXT.md's layer stands in PLAN: 'done' when it is checked, 'skipped' when an unchecked layer comes before it
- * (NEXT.md was moved on but that layer was never closed), 'ok' otherwise, including layers not in PLAN such as "spec".
+ * (NEXT.md was moved on but that layer was never closed), 'ok' otherwise. "plan" comes after every layer, since the go
+ * skill writes it after the last one; other layers not in PLAN, such as "spec", are 'ok'.
  */
 export function nextStatus(layer: string, items: PlanItem[]): NextStatus {
-  const index = items.findIndex((item) => item.layer === layer);
-  if (index === -1) return { state: 'ok' };
-  if (items[index]?.done) return { state: 'done' };
+  const found = items.findIndex((item) => item.layer === layer);
+  if (items[found]?.done) return { state: 'done' };
+  const position = found === -1 && layer === 'plan' ? items.length : found;
   const unfinished = items.findIndex((item) => !item.done);
   const item = items[unfinished];
-  return item !== undefined && unfinished < index ? { state: 'skipped', unfinished: item } : { state: 'ok' };
+  return item !== undefined && unfinished < position ? { state: 'skipped', unfinished: item } : { state: 'ok' };
 }
 
 /** Layers checked in after but not in before (e.g. the working tree against HEAD), in after's order. */

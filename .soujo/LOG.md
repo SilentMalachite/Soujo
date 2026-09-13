@@ -156,3 +156,8 @@ L7 以降の全コミットのハッシュが変わったので、GitHub へは 
 ## 2026-09-14 codex-review-write-safety
 Codex 全体レビュー #1・#5・#6: writeState は実体（symlink の先）がプロジェクト外・.git 内なら書かず、一時ファイルを wx で排他作成して自作分だけ消し、元の権限を保つ。
 removeLeftoverTemps は一時ファイル名の symlink も消し、プロジェクト外の実体の隣は触らない。SPEC(+ja) §6・§14 に明記。
+
+## 2026-09-14 codex-review-records
+Codex 全体レビュー #2〜4・#7〜9: layer done は PLAN/LOG/NEXT がステージされていなければコミットせず、LOG の再利用は HEAD にない完了エントリだけ（中断は除く）。
+requireCommittable は symlink の先の外部・.git・無視と sequencer/ を拒否。次: plan は全層の後ろとみなし、git status は -unormal 固定。
+SPEC(+ja) §6・§14 に明記。

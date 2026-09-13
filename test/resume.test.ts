@@ -105,6 +105,9 @@ test('resume names the unclosed layer when NEXT.md was moved on before layer don
     `コミット: ${gitLastCommit(dir)?.hash} test commit`,
     '再開: 「L3 io」を締めていない → 完了なら soujo layer done "L3 io"、途中なら soujo next set で次を戻す',
   ]);
+
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', 'plan'));
+  assert.deepEqual(resume(dir)[0], '次: L3 io（PLAN で未完了。NEXT.md は「plan」）確認: io');
 });
 
 test('resume says to re-run layer done when a PLAN check is not committed yet', (t) => {

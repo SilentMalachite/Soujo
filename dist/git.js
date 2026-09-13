@@ -48,9 +48,12 @@ export function gitHasCommits(cwd) {
 // Staging, committing, and status are limited to cwd with this pathspec, so a project in a subdirectory of a larger
 // repository never sweeps up changes outside it.
 const HERE = ['--', '.'];
-/** `git status --porcelain` lines for cwd and below; empty when clean. Untracked files are included. */
+/**
+ * `git status --porcelain` lines for cwd and below; empty when clean. Untracked files are included, an untracked directory
+ * as one line, whatever status.showUntrackedFiles says.
+ */
 export function gitStatus(cwd) {
-    return git(cwd, ['status', '--porcelain', ...HERE]).split('\n').filter((line) => line !== '');
+    return git(cwd, ['status', '--porcelain', '--untracked-files=normal', ...HERE]).split('\n').filter((line) => line !== '');
 }
 const OPERATIONS = [
     ['MERGE_HEAD', 'merge'],
@@ -58,6 +61,8 @@ const OPERATIONS = [
     ['rebase-apply', 'rebase'],
     ['CHERRY_PICK_HEAD', 'cherry-pick'],
     ['REVERT_HEAD', 'revert'],
+    // Left by a multi-commit cherry-pick or revert even after CHERRY_PICK_HEAD / REVERT_HEAD are gone.
+    ['sequencer', 'cherry-pick / revert'],
 ];
 /** The unfinished git operation (merge, rebase, cherry-pick, revert), or undefined. */
 export function gitOperationInProgress(cwd) {
@@ -75,6 +80,21 @@ export function gitCommit(cwd, message) {
 /** Whether the index has anything to commit in cwd and below (compared with HEAD, or with nothing before the first commit). */
 export function gitHasStagedChanges(cwd) {
     return exitCode(cwd, ['diff', '--cached', '--quiet', ...HERE]) === 1;
+}
+/**
+ * The paths (relative to cwd) whose file is not staged as it is, for example because skip-worktree or assume-unchanged
+ * keeps `git add` from picking it up. Compared by object id, so clean filters and line-ending conversion count as staged.
+ * Missing files are skipped.
+ */
+export function gitNotStaged(cwd, paths) {
+    return paths.filter((path) => {
+        if (!existsSync(join(cwd, path)))
+            return false;
+        const staged = run(cwd, ['rev-parse', '--verify', '--quiet', `:./${path}`]);
+        if (staged.error !== undefined || (staged.status !== 0 && staged.status !== 1))
+            throw failure(['rev-parse'], staged);
+        return staged.status === 1 || staged.stdout.trim() !== git(cwd, ['hash-object', '--', path]).trim();
+    });
 }
 /** Stages everything in cwd and below and commits it. Returns false, without committing, when nothing ends up staged. */
 export function gitCommitAll(cwd, message) {

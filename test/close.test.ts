@@ -117,6 +117,11 @@ test('close refuses an uncommittable repository before writing', (t) => {
   assert.throws(() => close(merging, 'note', NOW), /^Error: git の merge が途中なのでコミットしない/);
   assert.equal(read(merging, 'LOG.md'), LOG);
 
+  const sequencing = workingProject(t);
+  mkdirSync(join(sequencing, '.git', 'sequencer'));
+  assert.throws(() => close(sequencing, 'note', NOW), /^Error: git の cherry-pick \/ revert が途中なのでコミットしない/);
+  assert.equal(read(sequencing, 'LOG.md'), LOG);
+
   const invalidAndOutside = project(temp(t), { ...STATE, 'NEXT.md': '' });
   assert.throws(() => close(invalidAndOutside, 'note', NOW), /git リポジトリではない/);
 });
@@ -205,6 +210,15 @@ test('closed between next set and layer done, the wip commit and 中断 entry na
   layerDone(dir, 'L7 resume-close', 'done', NOW);
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L7 resume-close');
   assert.match(read(dir, 'LOG.md'), /中断: テスト途中\n\n## 2026-09-13 L7 resume-close\ndone\n$/);
+});
+
+test('stopped between next set --layer plan and layer done of the last layer, close names that layer', (t) => {
+  const dir = project(repo(t), { ...STATE, 'PLAN.md': '- [x] L6 layer-done — d\n- [ ] L7 resume-close — c\n' });
+  commitAll(dir, 'layer: L6 layer-done');
+  writeNext(dir, 'plan');
+  writeFileSync(join(dir, 'resume.ts'), '');
+  assert.match(close(dir, 'テスト途中', NOW)[0] ?? '', /wip: L7 resume-close$/);
+  assert.equal(read(dir, 'LOG.md'), `${LOG}${ENTRY}中断: テスト途中\n`);
 });
 
 test('close keeps CRLF in LOG.md, flattens control characters, and removes leftover temporary files', (t) => {

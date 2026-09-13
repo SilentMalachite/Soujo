@@ -200,6 +200,16 @@ test('nextStatus tells a finished layer and a layer left unclosed before NEXT.md
   assert.deepEqual(nextStatus('L3', items), { state: 'skipped', unfinished: { layer: 'L2', condition: 'b', done: false } });
 });
 
+test('nextStatus puts plan after every layer, so an unchecked layer before it was never closed', () => {
+  const last = parsePlan('- [x] L1 — a\n- [ ] L2 — b\n');
+  assert.deepEqual(nextStatus('plan', last), { state: 'skipped', unfinished: { layer: 'L2', condition: 'b', done: false } });
+  assert.deepEqual(nextStatus('plan', parsePlan('- [ ] L1 — a\n')), { state: 'skipped', unfinished: { layer: 'L1', condition: 'a', done: false } });
+  assert.deepEqual(nextStatus('plan', parsePlan('- [x] L1 — a\n')), { state: 'ok' });
+  assert.deepEqual(nextStatus('plan', []), { state: 'ok' });
+  assert.deepEqual(nextStatus('spec', last), { state: 'ok' });
+  assert.deepEqual(nextStatus('L9', last), { state: 'ok' });
+});
+
 test('newlyDone lists layers checked only in the later PLAN', () => {
   const head = parsePlan('- [x] L1\n- [ ] L2\n- [ ] L3\n');
   const working = parsePlan('- [x] L1\n- [x] L2\n- [ ] L3\n- [x] L4\n');

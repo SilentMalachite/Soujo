@@ -134,12 +134,42 @@ test('layer done refuses when .soujo/ files are git-ignored, and reports when gi
     assert.equal(read(ignoring, 'PLAN.md'), PLAN);
   }
 
-  const skipping = workingProject(t);
-  rmSync(join(skipping, 'state.ts'));
-  execFileSync('git', ['update-index', '--skip-worktree', '.soujo/PLAN.md', '.soujo/LOG.md'], { cwd: skipping });
-  const before = gitLastCommit(skipping)?.hash;
-  assert.throws(() => layerDone(skipping, 'L2 state', undefined, NOW), /^Error: コミットする変更がない（/);
-  assert.equal(gitLastCommit(skipping)?.hash, before);
+  const recorded = '（PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す）';
+  for (const withSource of [false, true]) {
+    const skipping = workingProject(t);
+    if (!withSource) rmSync(join(skipping, 'state.ts'));
+    execFileSync('git', ['update-index', '--skip-worktree', '.soujo/PLAN.md', '.soujo/LOG.md'], { cwd: skipping });
+    const before = gitLastCommit(skipping)?.hash;
+    assert.throws(
+      () => layerDone(skipping, 'L2 state', undefined, NOW),
+      new RegExp(`^Error: \\.soujo/PLAN\\.md, \\.soujo/LOG\\.md の変更を git が拾っていない（skip-worktree などを確認）${recorded}$`),
+      `with a source change: ${withSource}`,
+    );
+    assert.equal(gitLastCommit(skipping)?.hash, before);
+  }
+});
+
+test('layer done commits nothing while NEXT.md is not staged as written, and a re-run commits it', (t) => {
+  const dir = workingProject(t);
+  execFileSync('git', ['update-index', '--skip-worktree', '.soujo/NEXT.md'], { cwd: dir });
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', 'L10 later'));
+  const before = gitLastCommit(dir)?.hash;
+  assert.throws(() => layerDone(dir, 'L2 state', 'note', NOW), /^Error: \.soujo\/NEXT\.md の変更を git が拾っていない/);
+  assert.equal(gitLastCommit(dir)?.hash, before);
+
+  execFileSync('git', ['update-index', '--no-skip-worktree', '.soujo/NEXT.md'], { cwd: dir });
+  assert.match(layerDone(dir, 'L2 state', 'note', NOW)[0] ?? '', /のコミットをやり直した/);
+  assert.deepEqual(gitStatus(dir), []);
+  assert.equal(read(dir, 'LOG.md'), `${LOG}\n## 2026-09-13 L2 state\nnote\n`);
+});
+
+test('a re-run after an interruption before LOG does not take an earlier 中断 entry of the layer for its record', (t) => {
+  const dir = project(repo(t), { ...STATE, 'LOG.md': `${LOG}\n## 2026-09-12 L2 state\n中断: 途中\n` });
+  commitAll(dir, 'wip: L2 state');
+  writeFileSync(join(dir, 'state.ts'), 'export {};\n');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), markDone(PLAN, 'L2 state'));
+  assert.match(layerDone(dir, 'L2 state', '完了', NOW)[0] ?? '', /のコミットをやり直した/);
+  assert.equal(read(dir, 'LOG.md'), `${LOG}\n## 2026-09-12 L2 state\n中断: 途中\n\n## 2026-09-13 L2 state\n完了\n`);
 });
 
 test('if interrupted after checking PLAN but before LOG, re-running appends LOG once and commits', (t) => {

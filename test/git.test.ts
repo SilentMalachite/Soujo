@@ -14,6 +14,7 @@ import {
   gitHeadFile,
   gitIgnored,
   gitLastCommit,
+  gitNotStaged,
   gitOperationInProgress,
   gitStatus,
   gitToplevel,
@@ -44,11 +45,40 @@ test('gitStatus, gitAddAll, gitCommit, and gitLastCommit record a layer', (t) =>
 
 test('gitStatus handles output larger than 1 MB', (t) => {
   const dir = repo(t);
-  execFileSync('git', ['config', 'status.showUntrackedFiles', 'all'], { cwd: dir });
-  mkdirSync(join(dir, 'many'));
   const name = 'x'.repeat(200);
-  for (let index = 0; index < 6000; index++) writeFileSync(join(dir, 'many', `${name}${index}`), '');
+  for (let index = 0; index < 6000; index++) writeFileSync(join(dir, `${name}${index}`), '');
   assert.equal(gitStatus(dir).length, 6000);
+});
+
+test('gitStatus counts untracked files once per untracked directory whatever status.showUntrackedFiles says', (t) => {
+  const dir = repo(t);
+  mkdirSync(join(dir, 'new'));
+  writeFileSync(join(dir, 'new', 'a.ts'), '');
+  writeFileSync(join(dir, 'new', 'b.ts'), '');
+  writeFileSync(join(dir, 'c.ts'), '');
+  for (const setting of ['no', 'all', 'normal']) {
+    execFileSync('git', ['config', 'status.showUntrackedFiles', setting], { cwd: dir });
+    assert.deepEqual(gitStatus(dir), ['?? c.ts', '?? new/'], setting);
+  }
+});
+
+test('gitNotStaged reports files that git add leaves unstaged, and not converted line endings', (t) => {
+  const dir = repo(t);
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  writeFileSync(join(dir, 'a.md'), 'a\n');
+  writeFileSync(join(dir, 'b.md'), 'b\n');
+  writeFileSync(join(dir, '.gitattributes'), 'crlf.md text eol=crlf\n');
+  writeFileSync(join(dir, 'crlf.md'), 'x\r\n');
+  gitCommitAll(dir, 'base');
+  git('update-index', '--skip-worktree', 'a.md');
+  writeFileSync(join(dir, 'a.md'), 'changed\n');
+  writeFileSync(join(dir, 'b.md'), 'changed\n');
+  writeFileSync(join(dir, 'crlf.md'), 'y\r\n');
+  writeFileSync(join(dir, 'new.md'), 'new\n');
+  gitAddAll(dir);
+  assert.deepEqual(gitNotStaged(dir, ['a.md', 'b.md', 'crlf.md', 'new.md', 'missing.md']), ['a.md']);
+  writeFileSync(join(dir, 'untracked.md'), '');
+  assert.deepEqual(gitNotStaged(dir, ['untracked.md']), ['untracked.md']);
 });
 
 test('gitHasCommits distinguishes an empty repository from a failure', (t) => {
@@ -131,6 +161,10 @@ test('gitOperationInProgress reports an unfinished rebase or merge', (t) => {
   assert.equal(gitOperationInProgress(dir), 'rebase');
   writeFileSync(join(dir, '.git', 'MERGE_HEAD'), '');
   assert.equal(gitOperationInProgress(dir), 'merge');
+
+  const sequencing = repo(t);
+  mkdirSync(join(sequencing, '.git', 'sequencer'));
+  assert.equal(gitOperationInProgress(sequencing), 'cherry-pick / revert');
 });
 
 test('gitHeadFile reads a file at HEAD relative to cwd, or undefined', (t) => {

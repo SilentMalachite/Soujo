@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nextCheck, nextSet, nextShow } from '../src/commands/next.js';
@@ -121,6 +122,17 @@ test('next check warns about a missing NEXT.md and a NEXT.md pointing to a finis
 test('next check warns when NEXT.md moved past a layer that was never closed', (t) => {
   const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'L3 io'), 'PLAN.md': `${PLAN}- [ ] L3 io — io\n` });
   assert.deepEqual(nextCheck(dir, false), ['soujo 警告: NEXT.md の次「L3 io」より前の「L2 state」が PLAN で未完了']);
+
+  const plan = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'plan'), 'PLAN.md': PLAN });
+  assert.deepEqual(nextCheck(plan, false), ['soujo 警告: NEXT.md の次「plan」より前の「L2 state」が PLAN で未完了']);
+});
+
+test('next check counts untracked files even when git hides them from status', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  commitAll(dir);
+  execFileSync('git', ['config', 'status.showUntrackedFiles', 'no'], { cwd: dir });
+  writeFileSync(join(dir, 'new.ts'), '');
+  assert.deepEqual(nextCheck(dir, false), ['soujo 警告: 未コミットの変更 1件']);
 });
 
 test('next check --hook returns a systemMessage JSON line', (t) => {
