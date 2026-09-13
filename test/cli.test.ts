@@ -2,11 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { temp } from './helpers.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 
+function soujoIn(cwd: string, ...args: string[]) {
+  return spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8' });
+}
+
 function soujo(...args: string[]) {
-  return spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
+  return soujoIn(process.cwd(), ...args);
 }
 
 test('unknown command prints one stderr line and exits 1', () => {
@@ -26,4 +31,34 @@ test('newlines in arguments do not break the one-line error', () => {
   const result = soujo('a\nb');
   assert.equal(result.status, 1);
   assert.match(result.stderr, /^soujo: [^\n]*\n$/);
+});
+
+test('init, log add, and plan next work through the CLI', (t) => {
+  const dir = temp(t);
+  const created = soujoIn(dir, 'init');
+  assert.equal(created.status, 0);
+  assert.equal(created.stdout.split('\n').filter(Boolean).length, 6);
+
+  const logged = soujoIn(dir, 'log', 'add', 'L1 scaffold', '--line', 'a', '--line', 'b');
+  assert.equal(logged.status, 0);
+  assert.match(logged.stdout, /^LOG\.md に追記: \d{4}-\d{2}-\d{2} L1 scaffold（2行）\n$/);
+
+  assert.deepEqual([soujoIn(dir, 'plan', 'next').stdout, soujoIn(dir, 'plan', 'list').stdout], [
+    'PLAN.md に層がない\n',
+    'PLAN.md に層がない\n',
+  ]);
+});
+
+test('argument errors are one Japanese line with exit 1', () => {
+  const cases: [string[], string][] = [
+    [['init', 'extra'], 'soujo: 使い方: soujo init\n'],
+    [['plan', 'list', '--all'], 'soujo: 不明なオプション: --all\n'],
+    [['log', 'add', 'L1', '--line'], 'soujo: オプションの値が不正: --line <value>\n'],
+    [['log', 'add', 'L1', 'scaffold', '--line', 'a'], 'soujo: 使い方: soujo log add "<層名>" --line <行> [--line <行>]\n'],
+    [['plan'], 'soujo: 不明なコマンド: plan\n'],
+  ];
+  for (const [args, stderr] of cases) {
+    const result = soujo(...args);
+    assert.deepEqual([result.status, result.stderr], [1, stderr], args.join(' '));
+  }
 });

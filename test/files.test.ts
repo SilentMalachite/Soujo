@@ -1,15 +1,19 @@
-import { test, type TestContext } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findStateDir, readState, requireStateDir, writeState } from '../src/files.js';
-
-function temp(t: TestContext): string {
-  const dir = mkdtempSync(join(tmpdir(), 'soujo-files-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return dir;
-}
+import {
+  createFile,
+  ensureStateDir,
+  findStateDir,
+  packageDir,
+  readState,
+  readTemplate,
+  requireState,
+  requireStateDir,
+  writeState,
+} from '../src/files.js';
+import { temp } from './helpers.js';
 
 test('findStateDir walks up to the nearest .soujo directory and skips .soujo files', (t) => {
   const root = temp(t);
@@ -55,4 +59,33 @@ test('writeState writes through a symlink and keeps it', (t) => {
 test('writeState reports a one-line error when the directory is missing', (t) => {
   const dir = join(temp(t), 'missing');
   assert.throws(() => writeState(dir, 'NEXT.md', 'x'), /^Error: NEXT\.md を書けない: [^\n]+$/);
+});
+
+test('requireState throws for a missing file', (t) => {
+  assert.throws(() => requireState(temp(t), 'PLAN.md'), /^Error: PLAN\.md がない（soujo init で作る）$/);
+});
+
+test('ensureStateDir creates .soujo/ once and fails in one line when a file is in the way', (t) => {
+  const root = temp(t);
+  assert.equal(ensureStateDir(root), join(root, '.soujo'));
+  assert.equal(ensureStateDir(root), join(root, '.soujo'));
+  const blocked = join(root, 'blocked');
+  mkdirSync(blocked);
+  writeFileSync(join(blocked, '.soujo'), '');
+  assert.throws(() => ensureStateDir(blocked), /^Error: \.soujo\/ を作れない: [^\n]+$/);
+});
+
+test('createFile creates only when nothing exists, including symlinks', (t) => {
+  const dir = temp(t);
+  assert.equal(createFile(join(dir, 'a.md'), 'first\n'), true);
+  assert.equal(createFile(join(dir, 'a.md'), 'second\n'), false);
+  assert.equal(readFileSync(join(dir, 'a.md'), 'utf8'), 'first\n');
+  symlinkSync('missing-target.md', join(dir, 'link.md'));
+  assert.equal(createFile(join(dir, 'link.md'), 'x'), false);
+});
+
+test('packageDir finds the soujo package root and readTemplate reads from templates/', () => {
+  const pkg = JSON.parse(readFileSync(join(packageDir(), 'package.json'), 'utf8')) as { name: string };
+  assert.equal(pkg.name, 'soujo');
+  assert.match(readTemplate('LOG.md'), /^# LOG/);
 });

@@ -1,10 +1,12 @@
 // Finding .soujo/ and reading/writing its files. Thin I/O layer: no parsing or validation here.
 
-import { existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const STATE_DIR = '.soujo';
-export type StateFile = 'SPEC.md' | 'PLAN.md' | 'LOG.md' | 'NEXT.md';
+export const STATE_FILES = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'] as const;
+export type StateFile = (typeof STATE_FILES)[number];
 
 function isDirectory(path: string): boolean {
   try {
@@ -42,6 +44,12 @@ export function readState(dir: string, file: StateFile): string | undefined {
   }
 }
 
+export function requireState(dir: string, file: StateFile): string {
+  const text = readState(dir, file);
+  if (text === undefined) throw new Error(`${file} がない（soujo init で作る）`);
+  return text;
+}
+
 /** Replaces the file via a temporary file and rename, so an interruption never leaves it half-written. Symlinks are kept. */
 export function writeState(dir: string, file: StateFile, text: string): void {
   const path = join(dir, file);
@@ -54,4 +62,40 @@ export function writeState(dir: string, file: StateFile, text: string): void {
     rmSync(temp, { force: true });
     throw new Error(`${file} を書けない: ${(error as Error).message}`);
   }
+}
+
+export function ensureStateDir(root: string): string {
+  const dir = join(root, STATE_DIR);
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (error) {
+    throw new Error(`${STATE_DIR}/ を作れない: ${(error as Error).message}`);
+  }
+  return dir;
+}
+
+/** Creates the file only when nothing exists at path. Returns false when it already exists. */
+export function createFile(path: string, text: string): boolean {
+  try {
+    writeFileSync(path, text, { flag: 'wx' });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw new Error(`${basename(path)} を作れない: ${(error as Error).message}`);
+  }
+}
+
+/** The soujo package root: the nearest directory with package.json above this module (dist/ or .test-dist/src/). */
+export function packageDir(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (;;) {
+    if (existsSync(join(dir, 'package.json'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error('soujo の package.json が見つからない');
+    dir = parent;
+  }
+}
+
+export function readTemplate(name: string): string {
+  return readFileSync(join(packageDir(), 'templates', name), 'utf8');
 }

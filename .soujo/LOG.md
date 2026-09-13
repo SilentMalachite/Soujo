@@ -18,3 +18,8 @@ CRLF の PLAN/NEXT も読め、markDone は改行コードを保つ。
 writeState は一時ファイル→rename で書き、symlink を保つ。読み書きの失敗は1行の日本語エラーに包む。
 git の失敗は stderr 先頭行（なければ stdout 末尾行）で「git <cmd> に失敗: …」。コミットなし・repo 外は undefined。
 テスト用 repo は user と commit.gpgsign=false をローカル設定する。
+
+## 2026-09-13 L4 init-plan-log
+templates/NEXT.md は「次: spec」の有効な NEXT。templates の CLAUDE.md/AGENTS.md はルートとの一致をテストで守る。
+packageDir は package.json を上へ探す（dist/ と .test-dist/src/ のどちらからも templates に届く）。
+コマンドは (args, cwd) を取る関数。parseArgs の英語エラーは cli.ts で1行の日本語に訳す。

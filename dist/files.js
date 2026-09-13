@@ -1,7 +1,9 @@
 // Finding .soujo/ and reading/writing its files. Thin I/O layer: no parsing or validation here.
-import { existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 export const STATE_DIR = '.soujo';
+export const STATE_FILES = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'];
 function isDirectory(path) {
     try {
         return statSync(path).isDirectory();
@@ -40,6 +42,12 @@ export function readState(dir, file) {
         throw new Error(`${file} を読めない: ${error.message}`);
     }
 }
+export function requireState(dir, file) {
+    const text = readState(dir, file);
+    if (text === undefined)
+        throw new Error(`${file} がない（soujo init で作る）`);
+    return text;
+}
 /** Replaces the file via a temporary file and rename, so an interruption never leaves it half-written. Symlinks are kept. */
 export function writeState(dir, file, text) {
     const path = join(dir, file);
@@ -53,4 +61,41 @@ export function writeState(dir, file, text) {
         rmSync(temp, { force: true });
         throw new Error(`${file} を書けない: ${error.message}`);
     }
+}
+export function ensureStateDir(root) {
+    const dir = join(root, STATE_DIR);
+    try {
+        mkdirSync(dir, { recursive: true });
+    }
+    catch (error) {
+        throw new Error(`${STATE_DIR}/ を作れない: ${error.message}`);
+    }
+    return dir;
+}
+/** Creates the file only when nothing exists at path. Returns false when it already exists. */
+export function createFile(path, text) {
+    try {
+        writeFileSync(path, text, { flag: 'wx' });
+        return true;
+    }
+    catch (error) {
+        if (error.code === 'EEXIST')
+            return false;
+        throw new Error(`${basename(path)} を作れない: ${error.message}`);
+    }
+}
+/** The soujo package root: the nearest directory with package.json above this module (dist/ or .test-dist/src/). */
+export function packageDir() {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (;;) {
+        if (existsSync(join(dir, 'package.json')))
+            return dir;
+        const parent = dirname(dir);
+        if (parent === dir)
+            throw new Error('soujo の package.json が見つからない');
+        dir = parent;
+    }
+}
+export function readTemplate(name) {
+    return readFileSync(join(packageDir(), 'templates', name), 'utf8');
 }
