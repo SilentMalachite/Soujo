@@ -2,6 +2,8 @@
 
 [English](README.md) | **日本語**
 
+[![CI](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml/badge.svg)](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml) [![TypeScript](https://img.shields.io/github/package-json/dependency-version/SilentMalachite/Soujo/dev/typescript?logo=typescript&logoColor=white&color=3178C6)](https://www.typescriptlang.org/)
+
 Claude Code と Codex で使う、いつ中断しても再開できる「仕様 → 計画 → 層」の進め方。状態はすべて `.soujo/` の4ファイルにあるので、会話履歴なしで続けられる。同じホストでも、もう一方のホストでも。
 
 発掘では地層（層）を順番（序）に1枚ずつ剥がし、剥がした層を記録する。記録があれば、誰でも発掘を引き継げる。

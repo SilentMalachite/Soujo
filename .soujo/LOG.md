@@ -186,3 +186,6 @@ actions/checkout v7.0.1・setup-node v7.0.0 を SHA で固定、permissions は 
 ## 2026-09-14 dependabot
 Dependabot を設定: github-actions と npm（devDependencies）を毎月、それぞれ1つの PR にまとめる。@types/node のメジャー更新は engines の下限に合わせて除外。
 リポジトリの Dependabot アラートとセキュリティ更新を有効化。CONTRIBUTING(+ja)・SPEC(+ja) §4 に追記。
+
+## 2026-09-14 readme-badges
+README(+ja) の言語切り替えの下に CI と TypeScript のバッジを追加。TypeScript は shields.io が GitHub 上の package.json の devDependency から版を読む（Dependabot の更新に追従）。

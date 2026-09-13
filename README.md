@@ -2,6 +2,8 @@
 
 **English** | [日本語](README.ja.md)
 
+[![CI](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml/badge.svg)](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml) [![TypeScript](https://img.shields.io/github/package-json/dependency-version/SilentMalachite/Soujo/dev/typescript?logo=typescript&logoColor=white&color=3178C6)](https://www.typescriptlang.org/)
+
 A spec → plan → layer workflow for Claude Code and Codex that survives any interruption. All state lives in four files under `.soujo/`, so work continues without conversation history — in the same host or the other one.
 
 In an excavation, strata (層) are removed one at a time in order (序), and each removed layer is recorded. With the records, anyone can continue the dig.
