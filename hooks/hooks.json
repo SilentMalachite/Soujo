@@ -1,0 +1,27 @@
+{
+  "description": "Soujo: SessionStart adds .soujo/NEXT.md to the context; Stop warns (never blocks) when the project is not resumable.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" next show --hook",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" next check --hook",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

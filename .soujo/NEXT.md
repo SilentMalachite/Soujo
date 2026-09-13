@@ -1,5 +1,5 @@
-次: L10 hosts
-前提: L9 skills 完了（skills/ 7本・agents/reviewer.md・test/skills.test.ts）
-確認: 両マニフェスト・両マーケットプレイス・hooks.json が揃い、claude plugin validate . と validate_plugin.py が通る
-注意: plugin.json(Codex) に hooks を書かない。soujo:reviewer の名前と review/resume 等の組み込み衝突を実機で確認
+次: L11 docs
+前提: L10 hosts 完了（両マニフェスト・両マーケットプレイス・hooks.json・test/hosts.test.ts）
+確認: README/CHANGELOG(+.ja.md)が揃い、npm link 後に soujo が PATH から呼べる
+注意: dist/cli.js に実行ビットがない（npm link で付くか確認）。Codex は導入時にリポジトリ全体（.git・node_modules・.soujo/）をキャッシュへ複製する
 effort: medium

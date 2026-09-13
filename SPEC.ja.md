@@ -220,6 +220,8 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - ライセンスは 0BSD（`soujo init` が作るファイルに著作権表示を要らなくするため）。
 - `dist/` はコミットする（フックが `dist/cli.js` を直接呼ぶ）。
 - Codex のスキル名は改名しない。Codex 0.154 で `$go` / `$plan` は衝突しなかった。
+- 両ホストともスキルは `soujo:<スキル>`（エージェントは `soujo:reviewer`）で並ぶ。`/soujo:resume` は Claude Code 組み込みの `/resume` とは別物で、Codex は `$resume` を `soujo:resume` に解決する。
+- `claude plugin validate .` は `--strict` なしで通す。ルートの CLAUDE.md への警告は意図通り（§4）。
 - 両マーケットプレイスともリポジトリ直下（`"./"`）を指し、どちらも動く。
 - SKILL.md に `disable-model-invocation` は書かない（Codex の validator が `true` を拒否。受け入れ基準7を優先）。
 - `soujo next check` は `次:` が PLAN で `[x]` 済みの層を指すときも警告する（クリーンな木でも受け入れ基準6を満たすため）。

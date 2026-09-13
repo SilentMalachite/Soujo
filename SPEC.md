@@ -219,6 +219,8 @@ Decided:
 - License: 0BSD, so that files created by `soujo init` need no copyright notice.
 - `dist/` is committed, because hooks call `dist/cli.js` directly.
 - No renames for Codex skill names: `$go` / `$plan` did not collide on Codex 0.154.
+- Both hosts list the skills as `soujo:<skill>` (and the agent as `soujo:reviewer`); `/soujo:resume` is not Claude Code's built-in `/resume`, and Codex resolves `$resume` to `soujo:resume`.
+- `claude plugin validate .` is run without `--strict`: the root CLAUDE.md warning is intended (§4).
 - Both marketplaces point at the repository root (`"./"`); both work.
 - `disable-model-invocation` is not written in SKILL.md (Codex's validator rejects `true`; criterion 7 takes precedence).
 - `soujo next check` also warns when `次:` points to a layer already `[x]` in PLAN, so criterion 6 holds even with a clean tree.

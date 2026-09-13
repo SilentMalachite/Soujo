@@ -1,0 +1,24 @@
+{
+  "name": "soujo",
+  "version": "0.1.0",
+  "description": "Resumable spec → plan → layer workflow shared by Claude Code and Codex",
+  "author": {
+    "name": "Silent Malachite",
+    "url": "https://github.com/SilentMalachite"
+  },
+  "homepage": "https://github.com/SilentMalachite/Soujo",
+  "repository": "https://github.com/SilentMalachite/Soujo",
+  "license": "0BSD",
+  "keywords": ["workflow", "spec", "plan", "resume", "claude-code"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Soujo",
+    "shortDescription": "Resumable spec → plan → layer workflow",
+    "longDescription": "Keeps the spec, the plan of 30-minute layers, the journal, and the next step in .soujo/, so work resumes after any interruption and continues across Claude Code and Codex. Skills: $spec, $plan, $go, $resume, $map, $review, $close.",
+    "developerName": "Silent Malachite",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/SilentMalachite/Soujo",
+    "defaultPrompt": ["$resume", "$go", "$spec"]
+  }
+}

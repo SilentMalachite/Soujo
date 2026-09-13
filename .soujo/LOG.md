@@ -87,3 +87,8 @@ test/skills.test.ts が7本の構成・frontmatter・節と行数・reviewer を
 L9 レビュー #1〜#53 を修正: 読むもの1行目は PATH の soujo を使い置き場所の .soujo/・dist/ を使わない旨に。go は soujo resume から入り、最後の層の後は 次: plan、--effort 必須、git に書けなければ権限を求めて再実行。
 review/map の範囲は最新 layer: コミットの親から作業ツリー（未追跡含む）で soujo:reviewer の表を加工せず出す。spec は答えるたびに書き1回1問、plan は層名の制約、close は一言がなければ進捗を渡す。
 next set は PLAN にない層（spec/plan 除く）を拒否、init は git 外で git init を促す。skills.test は CLI のコマンド・オプション・禁止語も検査。#10 #53 は変更なし、#14 は SPEC 未決へ。
+
+## 2026-09-13 L10 hosts
+両マニフェスト（name/version/description/license は package.json と一致）・両マーケットプレイス（"./"）・hooks.json（SessionStart: next show --hook / Stop: next check --hook）。
+claude plugin validate . と validate_plugin.py が通る。実機で hooks の発火と、/soujo:resume・$resume が組み込みと衝突せず soujo のスキルに解決されることを確認。
+test/hosts.test.ts がマニフェスト・マーケットプレイス・hooks の形とフック実行を検証。SPEC §14 に2行追記。
