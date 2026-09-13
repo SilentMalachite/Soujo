@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Entry point: parses arguments, runs the command, prints its lines to stdout, and turns any error into one stderr line with exit 1.
 import { parseArgs } from 'node:util';
+import { close } from './commands/close.js';
 import { init } from './commands/init.js';
 import { layerDone } from './commands/layer.js';
 import { logAdd } from './commands/log.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
+import { resume } from './commands/resume.js';
 function expectPositionals(positionals, count, usage) {
     if (positionals.length !== count)
         throw new Error(`使い方: soujo ${usage}`);
@@ -64,6 +66,12 @@ const COMMANDS = {
         });
         expectPositionals(positionals, 1, 'log add "<層名>" --line <行> [--line <行>]');
         return logAdd(cwd, positionals[0] ?? '', values.line ?? []);
+    },
+    resume: noArguments('resume', resume),
+    close: (args, cwd) => {
+        const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
+        expectPositionals(positionals, 0, 'close [--note <一言>]');
+        return close(cwd, values.note);
     },
 };
 // Own keys only, so that names like "constructor" or "__proto__" are unknown commands.

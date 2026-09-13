@@ -1,28 +1,12 @@
 // soujo layer done: checks the layer in PLAN.md, appends LOG.md, and commits everything as "layer: <layer>".
 import { dirname } from 'node:path';
-import { STATE_DIR, STATE_FILES, readState, removeLeftoverTemps, requireState, requireStateDir, writeState, } from '../files.js';
-import { gitAddedFiles, gitCommitAll, gitFindCommit, gitHeadFile, gitIgnored, gitLastCommit, gitOperationInProgress, gitStatus, gitToplevel, } from '../git.js';
+import { STATE_DIR, STATE_PATHS, readState, removeLeftoverTemps, requireState, requireStateDir, writeState, } from '../files.js';
+import { gitAddedFiles, gitCommitAll, gitFindCommit, gitHeadFile, gitLastCommit, gitRequireCommittable, } from '../git.js';
 import { appendLog, formatDate, lastLog, markDone, parseNext, parsePlan, validateNext } from '../state.js';
 const PLAN_PATH = `${STATE_DIR}/PLAN.md`;
-const RECORDED_PATHS = STATE_FILES.map((file) => `${STATE_DIR}/${file}`);
-const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
 const SHOWN_FILES = 5;
 function isChecked(plan, layer) {
     return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
-}
-function requireCommittableRepository(root) {
-    if (gitToplevel(root) === undefined)
-        throw new Error('git リポジトリではないのでコミットできない');
-    const operation = gitOperationInProgress(root);
-    if (operation !== undefined)
-        throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
-    const unmerged = gitStatus(root).filter((line) => UNMERGED.test(line)).length;
-    if (unmerged > 0)
-        throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
-    const ignored = gitIgnored(root, RECORDED_PATHS);
-    if (ignored.length > 0) {
-        throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
-    }
 }
 function requireNextStep(dir, layer) {
     const hint = '（先に soujo next set で次の一手を書く）';
@@ -71,7 +55,7 @@ function describeAdded(root) {
 export function layerDone(cwd, layer, note, now = new Date()) {
     const dir = requireStateDir(cwd);
     const root = dirname(dir);
-    requireCommittableRepository(root);
+    gitRequireCommittable(root, STATE_PATHS);
     const name = layer.trim();
     const plan = requireState(dir, 'PLAN.md');
     const item = parsePlan(plan).find((candidate) => candidate.layer === name);

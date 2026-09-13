@@ -115,8 +115,8 @@ effort: <low|medium|high|xhigh>
 | `soujo plan next` | 最初の未完了層と完了条件 | 2行 |
 | `soujo log add <層名> --line ...` | `LOG.md` に追記（1〜3行） | 1行 |
 | `soujo layer done <層名> [--note ...]` | PLAN にチェック → LOG 追記 → `git add -A` と `git commit -m "layer: <層名>"`。次のときは何も書かずに拒否する：層が PLAN にない・note が LOG の上限を破る／NEXT.md がない・無効・`次:` がまだこの層／merge・rebase・cherry-pick・revert の途中、競合が未解決、`.soujo/` のファイルが git に無視されている／コミット済み（`layer: <層名>` のコミットがある、または HEAD の PLAN でチェック済み）。チェックが作業ツリーにだけある（前回が途中で止まった）ときは、LOG の最後がこの層でなければ追記してコミットする。書いた後の失敗は記録済みの範囲を示し、原因を直して再実行すれば続きから進む | 1行（追加ファイルを最大5件添える） |
-| `soujo resume` | `NEXT.md`・`LOG.md` 末尾・`git log -1` からの状況説明＋再開コマンド。NEXT.md がない／無効なら PLAN の次の層を示す | 4行 |
-| `soujo close [--note ...]` | `NEXT.md` を検証（無効なら終了1）→ `--note` を LOG に「中断: ...」で記録 → 未コミットがあれば `wip: <層名>` でコミット → 再開方法 | 1〜2行 |
+| `soujo resume` | `次:`（NEXT.md）・`前回:`（LOG.md 末尾エントリの1行目）・`コミット:`（`git log -1`）・`再開:`（`/soujo:go`）。NEXT.md がない／無効なら PLAN の次の層を示し、`再開:` に理由と `soujo next set` を添える。次の層がなければ `/soujo:plan` | 4行 |
+| `soujo close [--note ...]` | `NEXT.md` を検証（ない・無効なら終了1）→ `--note` を LOG に「中断: ...」で記録（層は NEXT の `次:`）→ 未コミットがあれば `wip: <層名>` でコミット → 再開方法。書く前に、空・上限超えの note と、layer done と同じコミット不能条件を拒否する。LOG の最後が同じ層・同じ行なら追記しないので、コミット失敗後に同じコマンドを再実行するとコミットだけやり直す | 2行 |
 | `soujo map plan` | `PLAN.md` を縦の ASCII 図に（完了 `[x]`／次 `←次`、完了条件を縦線の横に） | 層数×2行 |
 | `soujo map code [dir]` | import を走査して Mermaid `graph LR` を出す。言語ごとの import パターンは `src/map.ts` の `LANGUAGES` に1行ずつ（初期は TS/JS）。`node_modules`・`dist`・ドットで始まるものは除外。未対応言語はディレクトリ木にフォールバック | Mermaid |
 

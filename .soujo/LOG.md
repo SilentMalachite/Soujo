@@ -57,3 +57,8 @@ test/dist.test.ts: dist/ が .test-dist/src と一致しなければ npm test �
 Codex レビュー #2 #10 #11: HEAD の PLAN でチェック済みなら作業ツリーの状態に関係なく拒否 / 再実行でも note を検証 / ignore 検査に SPEC.md を含める。
 #12 #13: layer done は書く前に writeState の一時ファイルの残骸を消す / コミット後の一覧取得失敗でも成功を出力。
 #9 #21 #24: LOG の見出し禁止を lastLog と同じ規則に / NEXT は末尾の改行1つだけ除いて行数を数える / LOG 追記は既存テキストを接頭辞のまま残す。
+
+## 2026-09-13 L7 resume-close
+resume: 次/前回/コミット/再開の4行。NEXT がない・無効なら PLAN の次の層と next set を示し、層が尽きたら plan。
+close: NEXT 検証→「中断: …」を NEXT の層で LOG へ→wip コミット。LOG の最後が同じなら追記せず再実行はコミットだけ。
+コミット前提の検査を gitRequireCommittable（git.ts）へ移し layer done と共有。

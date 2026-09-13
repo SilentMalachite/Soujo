@@ -89,6 +89,25 @@ export function gitIgnored(cwd, paths) {
         throw failure(args, result);
     return result.stdout.split('\n').filter((line) => line !== '');
 }
+const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
+/**
+ * Throws unless committing everything in cwd is safe: a repository, no unfinished merge/rebase/cherry-pick/revert,
+ * no unmerged files, and none of recorded (paths relative to cwd) ignored by git.
+ */
+export function gitRequireCommittable(cwd, recorded) {
+    if (gitToplevel(cwd) === undefined)
+        throw new Error('git リポジトリではないのでコミットできない');
+    const operation = gitOperationInProgress(cwd);
+    if (operation !== undefined)
+        throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
+    const unmerged = gitStatus(cwd).filter((line) => UNMERGED.test(line)).length;
+    if (unmerged > 0)
+        throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
+    const ignored = gitIgnored(cwd, recorded);
+    if (ignored.length > 0) {
+        throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
+    }
+}
 function parseCommit(line) {
     const tab = line.indexOf('\t');
     return tab === -1 ? undefined : { hash: line.slice(0, tab), subject: line.slice(tab + 1) };

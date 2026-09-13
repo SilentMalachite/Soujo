@@ -4,6 +4,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 export const STATE_DIR = '.soujo';
 export const STATE_FILES = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'];
+/** The state files relative to the project root. */
+export const STATE_PATHS = STATE_FILES.map((file) => `${STATE_DIR}/${file}`);
 function isDirectory(path) {
     try {
         return statSync(path).isDirectory();

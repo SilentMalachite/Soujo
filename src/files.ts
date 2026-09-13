@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url';
 export const STATE_DIR = '.soujo';
 export const STATE_FILES = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'] as const;
 export type StateFile = (typeof STATE_FILES)[number];
+/** The state files relative to the project root. */
+export const STATE_PATHS = STATE_FILES.map((file) => `${STATE_DIR}/${file}`);
 
 function isDirectory(path: string): boolean {
   try {
