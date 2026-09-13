@@ -152,7 +152,7 @@ The effort column is a guide for the human or host setting (§8); SKILL.md front
 | Subagent | `review` starts `agents/reviewer.md` once | Not used; `review` is done by the main agent |
 | Concurrency | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` documented in README | n/a |
 | Effort | Given in conversation per layer from `NEXT.md` | `codex -c model_reasoning_effort=<v>` or `model_reasoning_effort` in `~/.codex/config.toml` |
-| Where skills are read | A directory marketplace is read in place: changes apply from the next session | From the install cache `~/.codex/plugins/cache/soujo/`, a copy of the whole repository (`.git`, `node_modules`, `.soujo/` included); run `codex plugin add soujo@soujo` again to refresh |
+| Where skills are read | Installing copies the working tree (untracked files included, `.git` not) into `~/.claude/plugins/cache/soujo/`; `claude plugin update` skips an unchanged version, so reinstall to refresh. `claude --plugin-dir <path>` reads in place | From the install cache `~/.codex/plugins/cache/soujo/`, a copy of the whole repository (`.git`, `node_modules`, `.soujo/` included); run `codex plugin add soujo@soujo` again to refresh |
 | Commits | Allowed by normal permissions | The `workspace-write` sandbox cannot write `.git`; `layer done` / `close` need an approval (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
 | Validation | `claude plugin validate .` (marketplace) and `claude plugin validate .claude-plugin/plugin.json` (plugin, agents, hooks) | `validate_plugin.py` from the built-in `$plugin-creator` |
 

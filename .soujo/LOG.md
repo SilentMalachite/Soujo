@@ -97,3 +97,8 @@ test/hosts.test.ts がマニフェスト・マーケットプレイス・hooks �
 L10 レビュー #1〜#11 を修正: claude plugin validate . はマーケットプレイスだけを見るので、plugin.json（agents・hooks 込み）の検証を SPEC §8/§14 に追加。
 Codex 0.154 は hooks/hooks.json を見つけ、信頼後だけ実行（未信頼の exec では無動作）と SPEC §4/§8 に記録、信頼後の動作は未決へ。キャッシュがリポジトリ全体の複製である旨も §8 に。
 衝突確認は resume の実行のみと明記。両マニフェストの hooks 不在・marketplace の説明/カテゴリ一致をテスト、repo() で showUntrackedFiles を固定、defaultPrompt は $spec から。#11 は重複なしを確認し変更なし。
+
+## 2026-09-13 L11 docs
+README/CHANGELOG（+.ja.md）: 仕組み・導入（npm link、両ホストの marketplace add と install）・始め方・ホスト差・CLI 一覧。
+npm link は bin に実行ビットを付けて作業ツリーを変えるので、build が dist/cli.js を 755 にする。隔離 prefix で npm link 後に soujo が PATH から動くことを確認。
+Claude Code 2.1.270 も導入時に作業ツリーをキャッシュへ複製し同版の update は無視と判明、SPEC §8 を更新。docs.test が英日の対応・コマンド・リンク・版を検証。

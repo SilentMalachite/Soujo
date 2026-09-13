@@ -10,5 +10,5 @@
 - [x] L8 map — map plan の縦 ASCII 図と map code の Mermaid(TS/JS)・未対応言語のディレクトリ木がテストで通る
 - [x] L9 skills — skills/ 7本(frontmatter は name/description のみ・4節×各3行以内)と agents/reviewer.md が揃う
 - [x] L10 hosts — 両マニフェスト・両マーケットプレイス・hooks.json が揃い、claude plugin validate . と validate_plugin.py が通る
-- [ ] L11 docs — README/CHANGELOG(+.ja.md)が揃い、npm link 後に soujo が PATH から呼べる
+- [x] L11 docs — README/CHANGELOG(+.ja.md)が揃い、npm link 後に soujo が PATH から呼べる
 - [ ] L12 accept — 既存 Python プロジェクトの複製で Claude Code→Codex→Claude Code を通し、受け入れ基準1〜10を LOG に記録

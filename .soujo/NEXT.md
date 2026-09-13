@@ -1,5 +1,5 @@
-次: L11 docs
-前提: L10 hosts 完了（両マニフェスト・両マーケットプレイス・hooks.json・test/hosts.test.ts）
-確認: README/CHANGELOG(+.ja.md)が揃い、npm link 後に soujo が PATH から呼べる
-注意: dist/cli.js に実行ビットがない（npm link で付くか確認）。Codex は導入時にリポジトリ全体（.git・node_modules・.soujo/）をキャッシュへ複製する
-effort: medium
+次: L12 accept
+前提: L11 docs 完了（README/CHANGELOG と .ja.md・test/docs.test.ts・dist/cli.js を実行可能でビルド）
+確認: 既存 Python プロジェクトの複製で Claude Code→Codex→Claude Code を通し、受け入れ基準1〜10を LOG に記録
+注意: 実環境の npm link・claude plugin install・codex plugin add は未実施。Codex の hooks は信頼後の動作が未確認
+effort: high

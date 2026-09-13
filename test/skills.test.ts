@@ -1,14 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { packageDir } from '../src/files.js';
-import { EFFORTS } from '../src/state.js';
-import { temp } from './helpers.js';
+import { assertKnownCommand, commands, temp } from './helpers.js';
 
-const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 const SKILLS = ['close', 'go', 'map', 'plan', 'resume', 'review', 'spec'];
 const SECTIONS = ['読むもの', 'やること', 'soujo に頼むこと', '出力の形'];
 // SPEC §7: no "always read", "run the tests", or "double-check" instructions.
@@ -62,19 +58,6 @@ function sections(body: string): Map<string, string[]> {
   return found;
 }
 
-// `soujo …` spans as argv: optional brackets unwrapped, quotes removed, and <low|…> checked against EFFORTS.
-function commands(body: string): string[][] {
-  return [...body.matchAll(/`soujo ([^`]+)`/g)].map((match) =>
-    [...(match[1] ?? '').replace(/[[\]]/g, '').matchAll(/'([^']*)'|(\S+)/g)].map(([token, quoted]) => {
-      if (quoted !== undefined) return quoted;
-      const choices = /^<([\w|]+)>$/.exec(token)?.[1];
-      if (choices === undefined) return token;
-      assert.deepEqual(choices.split('|'), [...EFFORTS]);
-      return EFFORTS[0];
-    }),
-  );
-}
-
 test('skills/ has exactly the seven skills and agents/ only reviewer.md', () => {
   assert.deepEqual(entries('skills', true), SKILLS);
   assert.deepEqual(entries('agents', false), ['reviewer.md']);
@@ -104,8 +87,7 @@ test('every soujo command in the skills is a known command with known options', 
   const cwd = temp(t);
   for (const name of SKILLS) {
     for (const argv of commands(split(join(packageDir(), 'skills', name, 'SKILL.md')).body)) {
-      const result = spawnSync(process.execPath, [CLI, ...argv], { cwd, encoding: 'utf8' });
-      assert.doesNotMatch(result.stderr, /不明なコマンド|不明なオプション|オプションの値/, `${name}: soujo ${argv.join(' ')}`);
+      assertKnownCommand(argv, cwd, name);
     }
   }
 });

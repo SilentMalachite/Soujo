@@ -1,9 +1,14 @@
 import type { TestContext } from 'node:test';
-import { execFileSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { StateFile } from '../src/files.js';
+import { EFFORTS } from '../src/state.js';
+
+const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 
 /** A temporary directory removed after the test. */
 export function temp(t: TestContext): string {
@@ -35,4 +40,23 @@ export function project(dir: string, files: Partial<Record<StateFile, string>> =
   mkdirSync(join(dir, '.soujo'), { recursive: true });
   for (const [file, text] of Object.entries(files)) writeFileSync(join(dir, '.soujo', file), text);
   return dir;
+}
+
+/** `soujo …` spans as argv: table-escaped pipes and optional brackets unwrapped, quotes removed, and <low|…> checked against EFFORTS. */
+export function commands(text: string): string[][] {
+  return [...text.matchAll(/`soujo ([^`]+)`/g)].map((match) =>
+    [...(match[1] ?? '').replace(/\\\|/g, '|').replace(/[[\]]/g, '').matchAll(/'([^']*)'|(\S+)/g)].map(([token, quoted]) => {
+      if (quoted !== undefined) return quoted;
+      const choices = /^<([\w|]+)>$/.exec(token)?.[1];
+      if (choices === undefined) return token;
+      assert.deepEqual(choices.split('|'), [...EFFORTS]);
+      return EFFORTS[0];
+    }),
+  );
+}
+
+/** Runs the CLI with argv in cwd and fails when the command, an option, or an option value is not recognized. */
+export function assertKnownCommand(argv: string[], cwd: string, label: string): void {
+  const result = spawnSync(process.execPath, [CLI, ...argv], { cwd, encoding: 'utf8' });
+  assert.doesNotMatch(result.stderr, /不明なコマンド|不明なオプション|オプションの値/, `${label}: soujo ${argv.join(' ')}`);
 }
