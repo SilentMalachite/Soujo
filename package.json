@@ -1,0 +1,21 @@
+{
+  "name": "soujo",
+  "version": "0.1.0",
+  "description": "Resumable spec → plan → layer workflow shared by Claude Code and Codex",
+  "type": "module",
+  "bin": {
+    "soujo": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js"
+  },
+  "license": "0BSD",
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^7.0.2"
+  }
+}

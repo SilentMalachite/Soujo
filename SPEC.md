@@ -1,0 +1,235 @@
+# SPEC — Soujo (層序): a plugin shared by Claude Code and Codex (TypeScript)
+
+**English** | [日本語](SPEC.ja.md)
+
+This English version is canonical. `.soujo/SPEC.md` in this repository is a symlink to this file.
+
+## 0. In one sentence
+
+Take Spec-kit's "spec → plan → implement" and Superpowers' "turn practice into skills", and strip them down to something that **does not rely on working memory, can be resumed after any interruption, and does not get in the way of the model's autonomy**.
+The core is a single TypeScript CLI, `soujo`. Claude Code (Opus 5) and Codex (GPT-6 Astra) share the same `skills/` and the same `.soujo/` records; the differences are confined to manifests and instruction files.
+
+Name: in an excavation, strata (層) are removed one at a time in order (序), and every removed layer is recorded in the site journal and drawings. A removed layer cannot be put back, but with the records anyone can continue the dig.
+
+## 1. Problem
+
+| Existing | Good | Doesn't fit |
+|---|---|---|
+| Spec-kit | Discipline of fixing the spec first | Many long documents; state across phases and files must be tracked in your head |
+| Superpowers | Makes plan → verify → execute a routine | Many skills, hard to see which one fired; the verify step duplicates the self-verification Opus 5 / Astra already do |
+| Plain Claude Code / Codex | Freedom | Steps and decisions get buried in the conversation; after an interruption you cannot recall where you were |
+| Using both hosts | Each model's strengths | Skills, instruction files, and records get duplicated; unclear which copy is current |
+
+## 2. Design principles (trait → principle → implementation)
+
+The design targets a user with the following traits.
+
+| Trait | Principle | Implementation |
+|---|---|---|
+| Cannot hold many things in mind at once | Put all state in files | Four files in `.soujo/`; conversations are disposable |
+| (same) | One screen, one question, one step | One question at a time; `NEXT.md` is at most 5 lines; a layer takes at most 30 minutes |
+| Understands through structure, contrast, and analogy | Explain with tables, diagrams, and comparisons first | `soujo map` draws structure; choices are shown as comparison tables |
+| High reading comprehension | Don't simplify; be short and dense | Response rules in CLAUDE.md / AGENTS.md |
+| Sessions end without warning | Always keep a resumable state | 1 layer = 1 commit; `soujo next check` detects unresumable states |
+| Small usage quota | Keep consumption low | No verification/re-check instructions; work that needs no judgment goes to the CLI |
+| Uses two hosts | Keep records and logic model-agnostic | Logic lives in the TypeScript CLI; SKILL.md is shared; host differences are limited to manifests and instruction files |
+
+## 3. User stories
+
+1. `/soujo:spec` (`$spec` in Codex) produces `SPEC.md` through a one-question-at-a-time dialogue.
+2. `/soujo:plan` produces `PLAN.md`, a list of "layers" of at most 30 minutes each, each with a one-line completion condition.
+3. `/soujo:go` implements, tests, and commits the next layer, and updates `LOG.md` and `NEXT.md`.
+4. After a few days away, `/soujo:resume` prints a short status and you can continue right away.
+5. A repository advanced to L3 in Claude Code is opened in Codex, and `$resume` → `$go` continues with L4. The reverse also works.
+6. `/soujo:map` draws the current structure. `/soujo:review` lists every finding.
+
+## 4. Layout (one repository, both hosts)
+
+```
+Soujo/
+├── .claude-plugin/plugin.json        # Claude Code manifest
+├── .claude-plugin/marketplace.json   # Claude Code marketplace (source "./")
+├── .codex-plugin/plugin.json         # Codex manifest (no hooks field)
+├── .agents/plugins/marketplace.json  # Codex marketplace (source.path "./")
+├── skills/                           # shared by both hosts; commands/ is not used
+│   ├── spec/  plan/  go/  resume/  map/  review/  close/   (SKILL.md each)
+├── agents/reviewer.md                # Claude Code subagent
+├── hooks/hooks.json                  # Claude Code only (SessionStart / Stop)
+├── src/
+│   ├── cli.ts        argument parsing and output
+│   ├── state.ts      parsing, formatting, validation of .soujo/ (pure functions)
+│   ├── files.ts      finding .soujo/ and reading/writing it (thin I/O layer)
+│   ├── git.ts        git calls (thin layer)
+│   ├── map.ts        ASCII / Mermaid diagram generation (pure functions)
+│   └── commands/     one file per command
+├── test/                             # node:test (no dependencies)
+├── dist/                             # tsc output; committed because hooks call it directly
+├── templates/                        # copied into target projects by `soujo init`
+│   ├── CLAUDE.md (Opus 5)  AGENTS.md (Astra)
+│   └── SPEC.md  PLAN.md  LOG.md  NEXT.md
+├── CLAUDE.md  AGENTS.md              # instructions for this repository (identical to templates)
+├── README.md  SPEC.md  CHANGELOG.md  LICENSE  (+ .ja.md translations)
+└── package.json  tsconfig.json  tsconfig.test.json
+```
+
+Policies:
+- **All logic lives in `src/`.** SKILL.md only says when to ask `soujo` for what; no judgment or formatting logic in SKILL.md.
+- CLAUDE.md / AGENTS.md at the plugin root are not loaded as context by either host. `soujo init` copies them from `templates/` into the target project.
+- SKILL.md frontmatter has only `name` and `description`. `disable-model-invocation` is not used, because Codex's `validate_plugin.py` rejects `true`.
+- Runtime-facing text (CLI output, skills, templates, CLAUDE.md / AGENTS.md) is Japanese. User documentation is English with Japanese translations.
+
+## 5. State files `.soujo/`
+
+| File | Role | Limit | Written by |
+|---|---|---|---|
+| `SPEC.md` | What to build: goals, non-goals, acceptance criteria, technical decisions | ~100 lines | `spec` skill |
+| `PLAN.md` | List of layers: `- [ ] <layer> — <completion condition>` | 1 line per layer | `plan` skill; checked by `soujo layer done` |
+| `LOG.md` | Append-only journal: `## YYYY-MM-DD <layer>` followed by up to 3 lines | 3 lines per entry | `soujo log add` / `layer done` / `close --note` |
+| `NEXT.md` | The next step. **This is all you need to read to resume** | 5 lines | `soujo next set` |
+
+Format of `NEXT.md` (validated by the CLI; keys are literal Japanese, `:` or `：` accepted):
+
+```
+次: <layer>
+前提: <what just finished / dependencies>
+確認: <how to tell this layer is done>
+注意: <open issues or pitfalls; "なし" if none>
+effort: <low|medium|high|xhigh>
+```
+
+## 6. CLI `soujo`
+
+- Node 20+, ESM, **zero runtime dependencies** (`node:*` only). devDependencies are only `typescript` and `@types/node`.
+- Output is short and in Japanese; normally at most 5 lines on stdout. Errors are one line on stderr with exit code 1.
+- Behaves the same on any host. No host detection; only `--hook` switches to a Claude Code hook-friendly output.
+- `.soujo/` is searched upward from the current directory.
+
+| Command | Behavior | Output |
+|---|---|---|
+| `soujo init` | Creates `.soujo/` from templates, plus CLAUDE.md / AGENTS.md if missing. Uses the git top level when inside a repository. Never overwrites existing files | Created files, then one line listing skipped ones |
+| `soujo next show [--hook]` | Prints `NEXT.md`, or `NEXT.md なし`. With `--hook`, prints nothing when `NEXT.md` is missing | 5 lines |
+| `soujo next set --layer --premise --check [--caution] [--effort]` | Rewrites `NEXT.md`. Defaults: caution `なし`, effort `medium`. Values must be one line | 1 line |
+| `soujo next check [--hook]` | Warns when `NEXT.md` is missing, invalid, points to a layer already `[x]` in PLAN, or there are uncommitted changes. Silent outside Soujo projects. `--hook` returns `{"systemMessage": "..."}`. **Exit code is always 0** | 0–1 line |
+| `soujo plan list` | Layers and their state | 1 line per layer |
+| `soujo plan next` | First unfinished layer and its completion condition | 2 lines |
+| `soujo log add <layer> --line ...` | Appends to `LOG.md` (1–3 lines) | 1 line |
+| `soujo layer done <layer> [--note ...]` | Checks PLAN → appends LOG → `git add -A` and `git commit -m "layer: <layer>"`. Writes nothing on invalid input. If a previous run stopped before committing, retries only the commit; refuses a layer already committed | 1 line |
+| `soujo resume` | Status from `NEXT.md`, the last `LOG.md` entry and `git log -1`, plus the resume command. Falls back to PLAN's next layer when `NEXT.md` is missing or invalid | 4 lines |
+| `soujo close [--note ...]` | Validates `NEXT.md` (exit 1 if invalid) → logs `--note` as `中断: ...` → commits uncommitted changes as `wip: <layer>` → prints how to resume | 1–2 lines |
+| `soujo map plan` | Vertical ASCII diagram of `PLAN.md` (`[x]` done, `←次` next, completion condition on the rail) | 2 lines per layer |
+| `soujo map code [dir]` | Scans imports and prints Mermaid `graph LR`. Import patterns are one row per language in `LANGUAGES` in `src/map.ts` (TS/JS initially). Skips `node_modules`, `dist`, and dot-entries. Falls back to a directory tree for unsupported languages | Mermaid |
+
+Public pure functions of `state.ts` (each has tests):
+`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `nextLayer` / `markDone` / `appendLog` / `lastLog` / `formatDate`.
+
+## 7. Skills (`skills/`, shared by both hosts)
+
+Common rules: `description` is one sentence with a narrow trigger (Astra truncates descriptions when there are many skills). The body has four sections — "what to read → what to do → what to ask `soujo` → output shape" — with at most 3 lines each. The first "what to read" line says that `.soujo/`, `soujo`, and git belong to the current project, not to the skill's install location. No "always read X", "run the tests", or "double-check" instructions (both models do that on their own).
+
+| Skill | Reads | Does | CLI | Output | effort |
+|---|---|---|---|---|---|
+| `spec` | Existing `SPEC.md`; config files when proposing technical options | One question at a time, at most 7, each with numbered candidates. The stack is decided by asking; no defaults | `soujo init` → `soujo next set` (next: plan) | `SPEC.md` and one skeleton table | high |
+| `plan` | `SPEC.md` | Split into layers of ≤30 minutes, in dependency order, at most 12 | `soujo next set` → `soujo map plan` | `PLAN.md` and the diagram | high |
+| `go` | `NEXT.md` → `SPEC.md` → the layer in PLAN | Implement until the completion condition holds. **Write the next `NEXT.md` first, then `layer done`.** Switches to spec/plan when NEXT points there | `soujo next set` → `soujo layer done` | One-sentence result + changed files | from `NEXT.md` |
+| `resume` | — | Return the CLI output as is | `soujo resume` | 4 lines | low |
+| `map` | `git diff` only for `diff` | `plan` / `code <dir>` show the CLI diagram verbatim; `diff` is drawn as Before/After by the model | `soujo map` | Diagram + ≤5 lines | medium |
+| `review` | Diff of the latest layer | **Report every finding** as `# / location / what / why / fix`; one `reviewer` subagent where available | — | Table | medium |
+| `close` | — | Pass the one-line note to `--note` | `soujo close` | 1–2 lines | low |
+
+`go` writes `NEXT.md` before `layer done` so that the commit includes the next `NEXT.md`. This keeps `next check` passing with "clean tree + valid NEXT".
+
+## 8. Host differences
+
+| Item | Claude Code (Opus 5) | Codex (GPT-6 Astra) |
+|---|---|---|
+| Manifest | `.claude-plugin/plugin.json` | `.codex-plugin/plugin.json` |
+| Marketplace | `.claude-plugin/marketplace.json` | `.agents/plugins/marketplace.json` |
+| Invocation | `/soujo:go` | `$go` |
+| Instruction file | `CLAUDE.md` (Opus 5 version) | `AGENTS.md` (Astra version, **separate wording, not a copy**) |
+| Hooks | `hooks/hooks.json`: SessionStart runs `next show --hook`, Stop runs `next check --hook` | Manifests cannot declare hooks. Replaced by the `close` skill and "run `soujo close` before stopping" in AGENTS.md |
+| Subagent | `review` starts `agents/reviewer.md` once | Not used; `review` is done by the main agent |
+| Concurrency | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` documented in README | n/a |
+| Effort | Given in conversation per layer from `NEXT.md` | `codex -c model_reasoning_effort=<v>` or `model_reasoning_effort` in `~/.codex/config.toml` |
+| Where skills are read | A directory marketplace is read in place: changes apply from the next session | From the install cache `~/.codex/plugins/cache/soujo/`; run `codex plugin add soujo@soujo` again to refresh |
+| Commits | Allowed by normal permissions | The `workspace-write` sandbox cannot write `.git`; `layer done` / `close` need an approval (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
+| Validation | `claude plugin validate .` | `validate_plugin.py` from the built-in `$plugin-creator` |
+
+## 9. Fitting Opus 5 (CLAUDE.md)
+
+| Tendency | Handling |
+|---|---|
+| Completes without stopping when the spec is complete | Fix the spec first with `spec`; `go` runs without confirmations |
+| Default responses are long | Brevity rules; the CLI enforces line limits of `NEXT.md` / `LOG.md` |
+| Narrates a lot | Specify frequency and shape of reports (one sentence first, only on changes, one sentence at the end) |
+| Verifies and corrects itself | No verification or re-check instructions |
+| Tends to widen scope | "Finish within the requested scope"; completion conditions fix the scope of a layer |
+| Starts subagents readily | None except for review |
+| Keeps accuracy at low effort | resume/close are low; go uses the per-layer value |
+| Really reduces output when told "only the important ones" | Reviews report everything; the human filters |
+
+## 10. Fitting GPT-6 Astra (AGENTS.md)
+
+Follows OpenAI's "Rethinking skills and prompts for GPT-6 Astra" (2026-09-11).
+
+| Tendency | Handling |
+|---|---|
+| Truncates descriptions and picks the wrong skill when there are many | Seven skills, one-sentence descriptions; don't mix with other skill collections |
+| "Always read X" wastes context | No "always read" in AGENTS.md; reading is conditional inside each skill |
+| Tests and verifies on its own | No test/verification instructions |
+| Returns after the first implementation and stops early | **Define done first**: the completion condition is where stopping is allowed; "continue until it holds" is explicit |
+| Takes strong boundary wording literally and stops too often | Phrase as permissions: "implementation, tests, and commits in this repository are allowed" |
+| Asks asynchronously while continuing when a decision matters | Only the response rule: one question with numbered options |
+| Effort is `model_reasoning_effort` | A human copies `effort:` from `NEXT.md` into config or `-c` |
+
+## 11. Non-goals
+
+- Parallel development by multiple people or agents.
+- Full Spec-kit compatibility (constitution, research documents, etc.).
+- Searching or summarizing conversation history. Records live only in `.soujo/`.
+- Choosing the target project's language or framework. The plugin has no default stack and reads `SPEC.md` and repository config.
+- A third host such as Gemini CLI or Cursor (possible later through shared SKILL.md, out of scope now).
+- An interactive CLI UI. `soujo` takes arguments and exits.
+
+## 12. Acceptance criteria
+
+All ten were verified on 2026-09-13 in layer L12 (a clone of an existing Python project, Claude Code → Codex → Claude Code). See `.soujo/LOG.md`.
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | `resume` → `go` works with only the four `.soujo/` files and no conversation history | ✓ |
+| 2 | **Switching Claude Code → Codex → Claude Code in the same repository keeps the `.soujo/` records continuous** | ✓ |
+| 3 | `spec` always asks one question at a time and produces `SPEC.md` within 7 questions | ✓ (6 questions) |
+| 4 | One `go` implements and commits one layer and updates `PLAN.md` / `LOG.md` / `NEXT.md` | ✓ |
+| 5 | When `NEXT.md` exceeds 5 lines, `soujo close` refuses and `soujo next check` warns | ✓ |
+| 6 | Claude Code: ending without updating `NEXT.md` triggers a Stop hook warning (not a block) | ✓ |
+| 7 | Codex: `validate_plugin.py` from `$plugin-creator` passes | ✓ |
+| 8 | `review` output is a table and findings are not filtered | ✓ |
+| 9 | `npm test` passes; each public function of `state.ts` has at least one test | ✓ |
+| 10 | The CLI has zero runtime dependencies and `soujo` is on PATH after `npm i -g` or `npm link` | ✓ |
+
+## 13. Implementation
+
+Implemented in 12 layers of at most 30 minutes each, in dependency order; the list and completion conditions are in `.soujo/PLAN.md`. Compared with the original 10 phases, next and resume/close were split, skill authoring and host verification were split, and `map` was moved before the skills (the `plan` skill calls `soujo map plan`).
+
+## 14. Decisions and open issues
+
+Decided:
+- License: 0BSD, so that files created by `soujo init` need no copyright notice.
+- `dist/` is committed, because hooks call `dist/cli.js` directly.
+- No renames for Codex skill names: `$go` / `$plan` did not collide on Codex 0.154.
+- Both marketplaces point at the repository root (`"./"`); both work.
+- `disable-model-invocation` is not written in SKILL.md (Codex's validator rejects `true`; criterion 7 takes precedence).
+- `soujo next check` also warns when `次:` points to a layer already `[x]` in PLAN, so criterion 6 holds even with a clean tree.
+- `soujo next show --hook` stays silent without `NEXT.md`, so projects that don't use Soujo get no extra context.
+- Codex 0.154 has no `--reasoning-effort` flag; effort is passed with `-c model_reasoning_effort=<v>`.
+- Layer names in this repository are ASCII so that `layer: <layer>` commit messages stay English.
+
+Open:
+- Rotating `LOG.md` when it grows (`soujo log rotate` moving months into `LOG-YYYY-MM.md`).
+- Adding a Stop equivalent for Codex if manifests start supporting hooks.
+- `soujo --help`: both hosts tried it and got an error.
+- Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
+- The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer.
+- `NEXT.md` for "all layers done" still carries an `effort:` value.
+- `layer done` could refuse while `NEXT.md` still points to the layer being closed.
+- Codex context size: one `$go` used ~690K input tokens (mostly cached), largely from global Codex context.
