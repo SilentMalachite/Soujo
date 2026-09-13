@@ -1,5 +1,6 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { layerDone } from '../src/commands/layer.js';
@@ -27,7 +28,7 @@ test('layer done checks PLAN, appends LOG, and commits everything as "layer: <la
   const dir = workingProject(t);
   const [line] = layerDone(dir, ' L2 state ', '一行目\n二行目', NOW);
   const commit = gitLastCommit(dir);
-  assert.equal(line, `層「L2 state」を完了: ${commit?.hash} layer: L2 state`);
+  assert.equal(line, `層「L2 state」を完了: ${commit?.hash} layer: L2 state（追加: state.ts）`);
   assert.equal(commit?.subject, 'layer: L2 state');
   assert.equal(read(dir, 'PLAN.md'), PLAN.replace('- [ ] L2 state', '- [x] L2 state'));
   assert.equal(read(dir, 'LOG.md'), `${LOG}\n## 2026-09-13 L2 state\n一行目\n二行目\n`);
@@ -78,7 +79,7 @@ test('after a failed commit, re-running retries only the commit without a second
   rmSync(lock);
 
   const [line] = layerDone(dir, 'L2 state', 'ignored on retry', NOW);
-  assert.equal(line, `層「L2 state」のコミットをやり直した: ${gitLastCommit(dir)?.hash} layer: L2 state`);
+  assert.equal(line, `層「L2 state」のコミットをやり直した: ${gitLastCommit(dir)?.hash} layer: L2 state（追加: state.ts）`);
   assert.equal(read(dir, 'LOG.md'), logAfterFailure);
   assert.deepEqual(gitStatus(dir), []);
 });
@@ -89,6 +90,56 @@ test('if interrupted after checking PLAN but before LOG, re-running appends LOG 
   const [line] = layerDone(dir, 'L2 state', 'note', NOW);
   assert.match(line ?? '', /のコミットをやり直した/);
   assert.equal(read(dir, 'LOG.md'), `${LOG}\n## 2026-09-13 L2 state\nnote\n`);
+});
+
+test('a layer checked in a commit with another subject is refused, not treated as interrupted', (t) => {
+  const dir = project(repo(t), { 'PLAN.md': PLAN, 'LOG.md': LOG });
+  commitAll(dir, 'feat: squashed early layers');
+  writeFileSync(join(dir, 'secret.env'), 'TOKEN=x\n');
+  assert.throws(
+    () => layerDone(dir, 'L1 scaffold', undefined, NOW),
+    /^Error: 層「L1 scaffold」は PLAN のチェックごとコミット済み（件名が「layer: L1 scaffold」ではない）$/,
+  );
+  assert.equal(read(dir, 'LOG.md'), LOG);
+  assert.deepEqual(gitStatus(dir), ['?? secret.env']);
+});
+
+test('layer done refuses during an unfinished merge and with unmerged files', (t) => {
+  const git = (dir: string, ...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  const conflicted = (): string => {
+    const dir = workingProject(t);
+    rmSync(join(dir, 'state.ts'));
+    writeFileSync(join(dir, 'f.txt'), 'base\n');
+    commitAll(dir, 'base');
+    return dir;
+  };
+
+  const merging = conflicted();
+  git(merging, 'checkout', '-q', '-b', 'side');
+  writeFileSync(join(merging, 'f.txt'), 'side\n');
+  commitAll(merging, 'side');
+  git(merging, 'checkout', '-q', '-');
+  writeFileSync(join(merging, 'f.txt'), 'main\n');
+  commitAll(merging, 'main');
+  assert.throws(() => git(merging, 'merge', '-q', 'side'));
+  assert.throws(() => layerDone(merging, 'L2 state', undefined, NOW), /git の merge が途中なのでコミットしない/);
+  assert.equal(read(merging, 'PLAN.md'), PLAN);
+
+  const stashed = conflicted();
+  writeFileSync(join(stashed, 'f.txt'), 'stash\n');
+  git(stashed, 'stash', '-q');
+  writeFileSync(join(stashed, 'f.txt'), 'main\n');
+  commitAll(stashed, 'main');
+  assert.throws(() => git(stashed, 'stash', 'pop', '-q'));
+  assert.throws(() => layerDone(stashed, 'L2 state', undefined, NOW), /競合が未解決のファイルが 1件ある/);
+  assert.equal(read(stashed, 'PLAN.md'), PLAN);
+});
+
+test('layer done lists at most five added files', (t) => {
+  const dir = workingProject(t);
+  for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) writeFileSync(join(dir, `${name}.ts`), '');
+  const [line] = layerDone(dir, 'L2 state', undefined, NOW);
+  assert.match(line ?? '', /（追加: a\.ts, b\.ts, c\.ts, d\.ts, e\.ts ほか2件）$/);
 });
 
 test('layer done works as the first commit of a repository', (t) => {

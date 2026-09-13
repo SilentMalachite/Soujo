@@ -3,7 +3,18 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { gitAddAll, gitCommit, gitFindCommit, gitLastCommit, gitStatus, gitToplevel } from '../src/git.js';
+import {
+  gitAddAll,
+  gitAddedFiles,
+  gitCommit,
+  gitFindCommit,
+  gitHasCommits,
+  gitHeadFile,
+  gitLastCommit,
+  gitOperationInProgress,
+  gitStatus,
+  gitToplevel,
+} from '../src/git.js';
 import { repo, temp } from './helpers.js';
 
 test('gitToplevel finds the repository root from a subdirectory, or undefined outside', (t) => {
@@ -34,6 +45,53 @@ test('gitStatus handles output larger than 1 MB', (t) => {
   const name = 'x'.repeat(200);
   for (let index = 0; index < 6000; index++) writeFileSync(join(dir, 'many', `${name}${index}`), '');
   assert.equal(gitStatus(dir).length, 6000);
+});
+
+test('gitHasCommits distinguishes an empty repository from a failure', (t) => {
+  const dir = repo(t);
+  assert.equal(gitHasCommits(dir), false);
+  assert.equal(gitFindCommit(dir, 'layer: L1'), undefined);
+  writeFileSync(join(dir, 'a.txt'), 'a\n');
+  gitAddAll(dir);
+  gitCommit(dir, 'first');
+  assert.equal(gitHasCommits(dir), true);
+  assert.throws(() => gitHasCommits(temp(t)), /^Error: git rev-parse に失敗: [^\n]+$/);
+});
+
+test('gitOperationInProgress reports an unfinished rebase or merge', (t) => {
+  const dir = repo(t);
+  assert.equal(gitOperationInProgress(dir), undefined);
+  mkdirSync(join(dir, '.git', 'rebase-merge'));
+  assert.equal(gitOperationInProgress(dir), 'rebase');
+  writeFileSync(join(dir, '.git', 'MERGE_HEAD'), '');
+  assert.equal(gitOperationInProgress(dir), 'merge');
+});
+
+test('gitHeadFile reads a file at HEAD relative to cwd, or undefined', (t) => {
+  const dir = repo(t);
+  mkdirSync(join(dir, 'sub', '.soujo'), { recursive: true });
+  assert.equal(gitHeadFile(join(dir, 'sub'), '.soujo/PLAN.md'), undefined);
+  writeFileSync(join(dir, 'sub', '.soujo', 'PLAN.md'), 'committed\n');
+  writeFileSync(join(dir, 'other.txt'), '');
+  gitAddAll(dir);
+  gitCommit(dir, 'first');
+  writeFileSync(join(dir, 'sub', '.soujo', 'PLAN.md'), 'working tree\n');
+  assert.equal(gitHeadFile(join(dir, 'sub'), '.soujo/PLAN.md'), 'committed\n');
+  assert.equal(gitHeadFile(join(dir, 'sub'), '.soujo/LOG.md'), undefined);
+});
+
+test('gitAddedFiles lists files added by HEAD, including the root commit', (t) => {
+  const dir = repo(t);
+  writeFileSync(join(dir, 'a.txt'), 'a\n');
+  gitAddAll(dir);
+  gitCommit(dir, 'root');
+  assert.deepEqual(gitAddedFiles(dir), ['a.txt']);
+  writeFileSync(join(dir, 'a.txt'), 'changed\n');
+  mkdirSync(join(dir, '日本語'));
+  writeFileSync(join(dir, '日本語', 'b.txt'), '');
+  gitAddAll(dir);
+  gitCommit(dir, 'second');
+  assert.deepEqual(gitAddedFiles(dir), ['日本語/b.txt']);
 });
 
 test('gitFindCommit matches the whole subject only', (t) => {

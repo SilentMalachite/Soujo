@@ -86,7 +86,7 @@ test('layer done works through the CLI and refuses a second run', (t) => {
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [ ] L1 scaffold — build\n');
   const done = soujoIn(dir, 'layer', 'done', 'L1 scaffold', '--note', 'a');
   assert.equal(done.status, 0, done.stderr);
-  assert.match(done.stdout, /^層「L1 scaffold」を完了: [0-9a-f]+ layer: L1 scaffold\n$/);
+  assert.match(done.stdout, /^層「L1 scaffold」を完了: [0-9a-f]+ layer: L1 scaffold（追加: .+ ほか\d+件）\n$/);
   const again = soujoIn(dir, 'layer', 'done', 'L1 scaffold');
   assert.equal(again.status, 1);
   assert.match(again.stderr, /^soujo: 層「L1 scaffold」はコミット済み（[0-9a-f]+）\n$/);

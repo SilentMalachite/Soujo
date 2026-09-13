@@ -1,20 +1,50 @@
 // soujo layer done: checks the layer in PLAN.md, appends LOG.md, and commits everything as "layer: <layer>".
 
 import { dirname } from 'node:path';
-import { readState, requireState, requireStateDir, writeState } from '../files.js';
-import { gitAddAll, gitCommit, gitFindCommit, gitLastCommit, gitToplevel } from '../git.js';
+import { STATE_DIR, readState, requireState, requireStateDir, writeState } from '../files.js';
+import {
+  gitAddAll,
+  gitAddedFiles,
+  gitCommit,
+  gitFindCommit,
+  gitHeadFile,
+  gitLastCommit,
+  gitOperationInProgress,
+  gitStatus,
+  gitToplevel,
+} from '../git.js';
 import { appendLog, formatDate, lastLog, markDone, parsePlan } from '../state.js';
+
+const PLAN_PATH = `${STATE_DIR}/PLAN.md`;
+const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
+const SHOWN_FILES = 5;
+
+function isChecked(plan: string | undefined, layer: string): boolean {
+  return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
+}
+
+function describeAdded(files: string[]): string {
+  if (files.length === 0) return '';
+  const rest = files.length > SHOWN_FILES ? ` ほか${files.length - SHOWN_FILES}件` : '';
+  return `（追加: ${files.slice(0, SHOWN_FILES).join(', ')}${rest}）`;
+}
 
 /**
  * States, decided before anything is written:
- * - committed ("layer: <layer>" exists)      → refuse
- * - PLAN unchecked                           → check PLAN, append LOG, commit
- * - PLAN checked, not committed (interrupted) → append LOG only if the last entry is not this layer, then commit
+ * - a merge/rebase is unfinished or files are unmerged       → refuse
+ * - committed ("layer: <layer>" exists)                      → refuse
+ * - checked in PLAN at HEAD (committed under another subject) → refuse
+ * - unchecked in PLAN                                        → check PLAN, append LOG, commit
+ * - checked only in the working tree (interrupted run)       → append LOG only if the last entry is not this layer, then commit
  */
 export function layerDone(cwd: string, layer: string, note?: string, now: Date = new Date()): string[] {
   const dir = requireStateDir(cwd);
   const root = dirname(dir);
   if (gitToplevel(root) === undefined) throw new Error('git リポジトリではないのでコミットできない');
+  const operation = gitOperationInProgress(root);
+  if (operation !== undefined) throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
+  const unmerged = gitStatus(root).filter((line) => UNMERGED.test(line)).length;
+  if (unmerged > 0) throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
 
   const name = layer.trim();
   const plan = requireState(dir, 'PLAN.md');
@@ -22,8 +52,11 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   if (item === undefined) throw new Error(`PLAN.md に層「${name}」がない`);
 
   const subject = `layer: ${name}`;
-  const committed = gitLastCommit(root) === undefined ? undefined : gitFindCommit(root, subject);
+  const committed = gitFindCommit(root, subject);
   if (committed !== undefined) throw new Error(`層「${name}」はコミット済み（${committed.hash}）`);
+  if (item.done && isChecked(gitHeadFile(root, PLAN_PATH), name)) {
+    throw new Error(`層「${name}」は PLAN のチェックごとコミット済み（件名が「${subject}」ではない）`);
+  }
 
   const log = readState(dir, 'LOG.md') ?? '';
   const logged = item.done && lastLog(log)?.layer === name;
@@ -42,5 +75,6 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   }
 
   const hash = gitLastCommit(root)?.hash ?? '?';
-  return [item.done ? `層「${name}」のコミットをやり直した: ${hash} ${subject}` : `層「${name}」を完了: ${hash} ${subject}`];
+  const result = item.done ? `層「${name}」のコミットをやり直した` : `層「${name}」を完了`;
+  return [`${result}: ${hash} ${subject}${describeAdded(gitAddedFiles(root))}`];
 }
