@@ -161,3 +161,7 @@ removeLeftoverTemps は一時ファイル名の symlink も消し、プロジェ
 Codex 全体レビュー #2〜4・#7〜9: layer done は PLAN/LOG/NEXT がステージされていなければコミットせず、LOG の再利用は HEAD にない完了エントリだけ（中断は除く）。
 requireCommittable は symlink の先の外部・.git・無視と sequencer/ を拒否。次: plan は全層の後ろとみなし、git status は -unormal 固定。
 SPEC(+ja) §6・§14 に明記。
+
+## 2026-09-14 codex-review-map
+Codex 全体レビュー #10〜12: map code の TS/JS 解析で、JSX の </・後置 ++/-- の後の / を除算、if/while/for/with の条件の ) の後の / を正規表現とみなす。
+文字列とテンプレートのエスケープ（\x・\u・\u{}・行継続）を復号し、不正なもの・連結など固定値でない import/require の引数は線にしない。SPEC(+ja) §6 に明記。

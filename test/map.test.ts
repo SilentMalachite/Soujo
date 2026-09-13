@@ -148,6 +148,40 @@ test('TS/JS imports ignore comments, strings, templates with substitutions, rege
   assert.deepEqual(imports(text), ['./j.js', './m.js']);
 });
 
+test('TS/JS imports tell a division and a JSX closing tag from a regex, and a regex after a condition from a division', () => {
+  const text = [
+    "const view = <div>hello</div>; import('./after-jsx.js');",
+    "const self = <br />; import('./after-self-closing.js');",
+    "const x = a++ / b; import('./after-increment.js');",
+    "const y = c-- / d; import('./after-decrement.js');",
+    "const z = (a) / 2; import('./after-paren.js');",
+    "if (ok) /import('.\\/fake-if.js')/.test(s);",
+    "while (more) /require('.\\/fake-while.js')/g.exec(s);",
+    "} else if (a) /from '.\\/fake-else-if.js'/.test(s);",
+    "obj.if(a) / 2; import('./after-member.js');",
+  ].join('\n');
+  assert.deepEqual(imports(text), ['./after-jsx.js', './after-self-closing.js', './after-increment.js', './after-decrement.js', './after-paren.js', './after-member.js']);
+});
+
+test('TS/JS imports decode escapes and skip specifiers without a whole fixed value', () => {
+  const b = '\\';
+  const text = [
+    `import('./${b}u0061.js');`,
+    `import('./${b}x62.js');`,
+    `import('./${b}u{63}.js');`,
+    `import('./d${b}\n.js');`,
+    `import(\`./${b}u0065.js\`);`,
+    `import "./quote${b}".js";`,
+    `import('./${b}u00zz.js');`,
+    `import('./${b}1.js');`,
+    `import('./${b}u{110000}.js');`,
+    "import('./prefix' + name);",
+    "require('./prefix' + name);",
+    "import('./with-options.js', { with: { type: 'json' } });",
+  ].join('\n');
+  assert.deepEqual(imports(text), ['./a.js', './b.js', './c.js', './d.js', './e.js', './quote".js', './with-options.js']);
+});
+
 test('TS/JS resolution swaps extensions the TypeScript way, finds index files, and ignores case', () => {
   assert.deepEqual(
     edges({

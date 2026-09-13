@@ -87,52 +87,88 @@ export function scanNotes(scan, limits = MAP_LIMITS) {
 }
 // Words after which "/" starts a regular expression instead of a division.
 const REGEX_AFTER = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
+// Words whose "(" opens a statement's condition.
+const CONDITION_BEFORE = new Set(['if', 'while', 'for', 'with']);
+const SINGLE_ESCAPES = new Map([['b', '\b'], ['f', '\f'], ['n', '\n'], ['r', '\r'], ['t', '\t'], ['v', '\v']]);
+// LINE SEPARATOR and PARAGRAPH SEPARATOR, which a backslash turns into a line continuation like a line break.
+const SEPARATORS = new Set([0x2028, 0x2029]);
 function isWordChar(char) {
     return /[\w$]/.test(char) || char > '\u007f';
 }
-function regexAllowed(previous) {
+// A token that ends an operand, so that "++" or "--" after it is postfix.
+function endsOperand(token) {
+    if (token?.kind === 'word')
+        return !REGEX_AFTER.has(token.value);
+    return token?.kind === 'string' || token?.kind === 'other' || isPunct(token, ')') || isPunct(token, ']');
+}
+function regexAllowed(tokens) {
+    const previous = tokens.at(-1);
     if (previous === undefined)
         return true;
-    if (previous.kind === 'punct')
-        return !')]}'.includes(previous.value);
-    return previous.kind === 'word' && REGEX_AFTER.has(previous.value);
+    if (previous.kind === 'word')
+        return REGEX_AFTER.has(previous.value);
+    if (previous.kind !== 'punct')
+        return false;
+    if (previous.value === ')')
+        return previous.condition === true;
+    // "</" closes a JSX element.
+    if (']}<'.includes(previous.value))
+        return false;
+    // "a++ / b" divides.
+    if ('+-'.includes(previous.value) && isPunct(tokens.at(-2), previous.value))
+        return !endsOperand(tokens.at(-3));
+    return true;
+}
+// The escape sequence at text[start] (a backslash): its value, or undefined when module code does not allow it, so the literal has no fixed value.
+function scanEscape(text, start) {
+    const char = text[start + 1] ?? '';
+    if (char === '\r')
+        return { next: text[start + 2] === '\n' ? start + 3 : start + 2, value: '' };
+    if (char === '\n' || SEPARATORS.has(char.charCodeAt(0)))
+        return { next: start + 2, value: '' };
+    if (char === 'x' || char === 'u') {
+        const rest = text.slice(start + 2, start + 10);
+        const match = (char === 'x' ? /^[0-9a-fA-F]{2}/ : /^(?:[0-9a-fA-F]{4}|\{[0-9a-fA-F]{1,6}\})/).exec(rest);
+        const code = match === null ? Number.NaN : parseInt(match[0].replace(/[{}]/g, ''), 16);
+        if (match === null || !(code <= 0x10ffff))
+            return { next: start + 2, value: undefined };
+        return { next: start + 2 + match[0].length, value: String.fromCodePoint(code) };
+    }
+    // Only a "0" not followed by a digit; legacy octal escapes and "8" / "9" are not allowed.
+    if (/[0-9]/.test(char))
+        return { next: start + 2, value: char === '0' && !/[0-9]/.test(text[start + 2] ?? '') ? '\0' : undefined };
+    return { next: start + 2, value: SINGLE_ESCAPES.get(char) ?? char };
+}
+// Literal text from start up to where stop holds, with escapes decoded; content is undefined after an escape without a value.
+function scanLiteral(text, start, stop) {
+    let content = '';
+    let index = start;
+    while (index < text.length && !stop(index)) {
+        if (text[index] === '\\') {
+            const escape = scanEscape(text, index);
+            content = content === undefined || escape.value === undefined ? undefined : `${content}${escape.value}`;
+            index = escape.next;
+        }
+        else {
+            if (content !== undefined)
+                content += text[index];
+            index += 1;
+        }
+    }
+    return { next: Math.min(index, text.length), content };
 }
 // A '...' or "..." literal from its opening quote; an unterminated one ends at the line break.
 function scanQuoted(text, start) {
     const quote = text[start];
-    let content = '';
-    for (let index = start + 1; index < text.length; index += 1) {
-        const char = text[index] ?? '';
-        if (char === '\\') {
-            content += text[index + 1] ?? '';
-            index += 1;
-        }
-        else if (char === quote)
-            return { next: index + 1, content };
-        else if (char === '\n')
-            return { next: index, content };
-        else
-            content += char;
-    }
-    return { next: text.length, content };
+    const literal = scanLiteral(text, start + 1, (index) => text[index] === quote || text[index] === '\n');
+    return { next: text[literal.next] === quote ? literal.next + 1 : literal.next, content: literal.content };
 }
 // Template text from start (after "`" or a substitution's "}") up to its closing "`" or the next "${".
 function scanTemplate(text, start) {
-    let content = '';
-    for (let index = start; index < text.length; index += 1) {
-        const char = text[index] ?? '';
-        if (char === '\\') {
-            content += text[index + 1] ?? '';
-            index += 1;
-        }
-        else if (char === '`')
-            return { next: index + 1, content, substitution: false };
-        else if (char === '$' && text[index + 1] === '{')
-            return { next: index + 2, content, substitution: true };
-        else
-            content += char;
-    }
-    return { next: text.length, content, substitution: false };
+    const literal = scanLiteral(text, start, (index) => text[index] === '`' || (text[index] === '$' && text[index + 1] === '{'));
+    const substitution = text[literal.next] === '$';
+    const end = literal.next >= text.length ? text.length : literal.next + (substitution ? 2 : 1);
+    return { next: end, content: literal.content, substitution };
 }
 // A regular expression literal from its opening "/"; its flags are read as a word afterwards.
 function scanRegex(text, start) {
@@ -156,9 +192,11 @@ function scanRegex(text, start) {
 function scriptTokens(text) {
     const tokens = [];
     const substitutions = []; // brace depth at which each open "${" closes
+    const conditions = []; // for each open "(", whether it opens a statement's condition
     let depth = 0;
     let index = 0;
     const after = (found, length) => (found === -1 ? text.length : found + length);
+    const fixed = (content) => (content === undefined ? { kind: 'other', value: '' } : { kind: 'string', value: content });
     while (index < text.length) {
         const char = text[index] ?? '';
         const following = text[index + 1];
@@ -170,7 +208,7 @@ function scriptTokens(text) {
             index = after(text.indexOf('*/', index + 2), 2);
         else if (char === "'" || char === '"') {
             const literal = scanQuoted(text, index);
-            tokens.push({ kind: 'string', value: literal.content });
+            tokens.push(fixed(literal.content));
             index = literal.next;
         }
         else if (char === '`' || (char === '}' && substitutions.at(-1) === depth)) {
@@ -179,12 +217,12 @@ function scriptTokens(text) {
             const template = scanTemplate(text, index + 1);
             // Only a template without substitutions has a fixed value; its later parts add no token.
             if (char === '`')
-                tokens.push(template.substitution ? { kind: 'other', value: '' } : { kind: 'string', value: template.content });
+                tokens.push(fixed(template.substitution ? undefined : template.content));
             if (template.substitution)
                 substitutions.push(depth);
             index = template.next;
         }
-        else if (char === '/' && regexAllowed(tokens.at(-1))) {
+        else if (char === '/' && regexAllowed(tokens)) {
             index = scanRegex(text, index);
             tokens.push({ kind: 'other', value: '' });
         }
@@ -196,11 +234,18 @@ function scriptTokens(text) {
             index = end;
         }
         else {
+            const token = { kind: 'punct', value: char };
             if (char === '{')
                 depth += 1;
             else if (char === '}')
                 depth -= 1;
-            tokens.push({ kind: 'punct', value: char });
+            else if (char === '(') {
+                const previous = tokens.at(-1);
+                conditions.push(previous?.kind === 'word' && CONDITION_BEFORE.has(previous.value) && !isPunct(tokens.at(-2), '.'));
+            }
+            else if (char === ')')
+                token.condition = conditions.pop() === true;
+            tokens.push(token);
             index += 1;
         }
     }
@@ -209,7 +254,8 @@ function scriptTokens(text) {
 function isPunct(token, value) {
     return token?.kind === 'punct' && token.value === value;
 }
-// Specifiers of `from "x"`, `import "x"`, `import("x")`, and `require("x")`, skipping member calls such as `obj.import("x")`.
+// Specifiers of `from "x"`, `import "x"`, `import("x")`, and `require("x")`, skipping member calls such as `obj.import("x")`
+// and arguments that are not a whole fixed string, such as `import("./x" + name)`.
 function scriptImports(text) {
     const tokens = scriptTokens(text);
     const specifiers = [];
@@ -217,7 +263,8 @@ function scriptImports(text) {
         if (token.kind !== 'word' || isPunct(tokens[index - 1], '.'))
             return;
         const next = tokens[index + 1];
-        const argument = isPunct(next, '(') ? tokens[index + 2] : undefined;
+        const whole = isPunct(tokens[index + 3], ')') || isPunct(tokens[index + 3], ',');
+        const argument = isPunct(next, '(') && whole ? tokens[index + 2] : undefined;
         if ((token.value === 'from' || token.value === 'import') && next?.kind === 'string')
             specifiers.push(next.value);
         else if ((token.value === 'import' || token.value === 'require') && argument?.kind === 'string')
