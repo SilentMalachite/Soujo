@@ -113,7 +113,7 @@ effort: <low|medium|high|xhigh>
 | `soujo plan list` | Layers and their state | 1 line per layer |
 | `soujo plan next` | First unfinished layer and its completion condition | 2 lines |
 | `soujo log add <layer> --line ...` | Appends to `LOG.md` (1–3 lines) | 1 line |
-| `soujo layer done <layer> [--note ...]` | Checks PLAN → appends LOG → `git add -A` and `git commit -m "layer: <layer>"`. Writes nothing on invalid input. If a previous run stopped before committing, retries only the commit; refuses a layer already committed | 1 line |
+| `soujo layer done <layer> [--note ...]` | Checks PLAN → appends LOG → `git add -A` and `git commit -m "layer: <layer>"`. Writes nothing on invalid input, including a missing or invalid `NEXT.md` or one whose `次:` is still this layer. If a previous run stopped before committing, retries only the commit; refuses a layer already committed | 1 line |
 | `soujo resume` | Status from `NEXT.md`, the last `LOG.md` entry and `git log -1`, plus the resume command. Falls back to PLAN's next layer when `NEXT.md` is missing or invalid | 4 lines |
 | `soujo close [--note ...]` | Validates `NEXT.md` (exit 1 if invalid) → logs `--note` as `中断: ...` → commits uncommitted changes as `wip: <layer>` → prints how to resume | 1–2 lines |
 | `soujo map plan` | Vertical ASCII diagram of `PLAN.md` (`[x]` done, `←次` next, completion condition on the rail) | 2 lines per layer |
@@ -221,6 +221,7 @@ Decided:
 - `disable-model-invocation` is not written in SKILL.md (Codex's validator rejects `true`; criterion 7 takes precedence).
 - `soujo next check` also warns when `次:` points to a layer already `[x]` in PLAN, so criterion 6 holds even with a clean tree.
 - `soujo next show --hook` stays silent without `NEXT.md`, so projects that don't use Soujo get no extra context.
+- `soujo layer done` refuses when `NEXT.md` is missing, invalid, or still points to the layer being closed, so every layer commit carries the next step.
 - Codex 0.154 has no `--reasoning-effort` flag; effort is passed with `-c model_reasoning_effort=<v>`.
 - Layer names in this repository are ASCII so that `layer: <layer>` commit messages stay English.
 
@@ -231,5 +232,4 @@ Open:
 - Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
 - The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer.
 - `NEXT.md` for "all layers done" still carries an `effort:` value.
-- `layer done` could refuse while `NEXT.md` still points to the layer being closed.
 - Codex context size: one `$go` used ~690K input tokens (mostly cached), largely from global Codex context.

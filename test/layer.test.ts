@@ -11,6 +11,8 @@ import { commitAll, project, repo, temp } from './helpers.js';
 const NOW = new Date(2026, 8, 13, 12, 0);
 const PLAN = '# PLAN\n\n- [x] L1 scaffold — build\n- [ ] L2 state — test\n- [ ] L10 later — c\n';
 const LOG = '# LOG\n\n## 2026-09-12 L1 scaffold\nold\n';
+const NEXT = '次: L3 io\n前提: p\n確認: c\n注意: なし\neffort: medium\n';
+const STATE = { 'PLAN.md': PLAN, 'LOG.md': LOG, 'NEXT.md': NEXT };
 
 function read(dir: string, file: string): string {
   return readFileSync(join(dir, '.soujo', file), 'utf8');
@@ -18,7 +20,7 @@ function read(dir: string, file: string): string {
 
 /** A committed Soujo project with one uncommitted source change. */
 function workingProject(t: TestContext): string {
-  const dir = project(repo(t), { 'PLAN.md': PLAN, 'LOG.md': LOG });
+  const dir = project(repo(t), STATE);
   commitAll(dir, 'layer: L1 scaffold');
   writeFileSync(join(dir, 'state.ts'), 'export {};\n');
   return dir;
@@ -50,9 +52,28 @@ test('layer done writes nothing on invalid input', (t) => {
   assert.throws(() => layerDone(dir, 'L2 state', '## 2026-09-14 fake', NOW), /## /);
   assert.deepEqual(before(), snapshot);
 
-  const outsideGit = project(temp(t), { 'PLAN.md': PLAN, 'LOG.md': LOG });
+  const outsideGit = project(temp(t), STATE);
   assert.throws(() => layerDone(outsideGit, 'L2 state', undefined, NOW), /git リポジトリではない/);
   assert.equal(read(outsideGit, 'PLAN.md'), PLAN);
+});
+
+test('layer done refuses without a usable NEXT.md and writes nothing', (t) => {
+  const dir = workingProject(t);
+  const nextPath = join(dir, '.soujo', 'NEXT.md');
+  const hint = '（先に soujo next set で次の一手を書く）';
+  const unchanged = () => assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'LOG.md')], [PLAN, LOG]);
+
+  rmSync(nextPath);
+  assert.throws(() => layerDone(dir, 'L2 state', 'n', NOW), new RegExp(`^Error: NEXT\\.md がない${hint}$`));
+  unchanged();
+
+  writeFileSync(nextPath, `${NEXT}補足: x\n`);
+  assert.throws(() => layerDone(dir, 'L2 state', 'n', NOW), /^Error: NEXT\.md が無効: NEXT\.md が5行を超えている（6行）、/);
+  unchanged();
+
+  writeFileSync(nextPath, NEXT.replace('L3 io', 'L2 state'));
+  assert.throws(() => layerDone(dir, 'L2 state', 'n', NOW), new RegExp(`^Error: NEXT\\.md の次がまだ「L2 state」${hint}$`));
+  unchanged();
 });
 
 test('layer done refuses a layer that is already committed and writes nothing', (t) => {
@@ -93,7 +114,7 @@ test('if interrupted after checking PLAN but before LOG, re-running appends LOG 
 });
 
 test('a layer checked in a commit with another subject is refused, not treated as interrupted', (t) => {
-  const dir = project(repo(t), { 'PLAN.md': PLAN, 'LOG.md': LOG });
+  const dir = project(repo(t), STATE);
   commitAll(dir, 'feat: squashed early layers');
   writeFileSync(join(dir, 'secret.env'), 'TOKEN=x\n');
   assert.throws(
@@ -143,7 +164,7 @@ test('layer done lists at most five added files', (t) => {
 });
 
 test('layer done works as the first commit of a repository', (t) => {
-  const dir = project(repo(t), { 'PLAN.md': PLAN, 'LOG.md': LOG });
+  const dir = project(repo(t), STATE);
   layerDone(dir, 'L2 state', undefined, NOW);
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
 });

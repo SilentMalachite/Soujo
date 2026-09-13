@@ -114,7 +114,7 @@ effort: <low|medium|high|xhigh>
 | `soujo plan list` | 層の一覧と完了状態 | 層数分 |
 | `soujo plan next` | 最初の未完了層と完了条件 | 2行 |
 | `soujo log add <層名> --line ...` | `LOG.md` に追記（1〜3行） | 1行 |
-| `soujo layer done <層名> [--note ...]` | PLAN にチェック → LOG 追記 → `git add -A` と `git commit -m "layer: <層名>"`。入力が不正なら何も書かない。前回がコミット前に止まっていればコミットだけやり直し、コミット済みの層は拒否する | 1行 |
+| `soujo layer done <層名> [--note ...]` | PLAN にチェック → LOG 追記 → `git add -A` と `git commit -m "layer: <層名>"`。入力が不正なら何も書かない（NEXT.md がない・無効・`次:` がまだこの層、も不正に含む）。前回がコミット前に止まっていればコミットだけやり直し、コミット済みの層は拒否する | 1行 |
 | `soujo resume` | `NEXT.md`・`LOG.md` 末尾・`git log -1` からの状況説明＋再開コマンド。NEXT.md がない／無効なら PLAN の次の層を示す | 4行 |
 | `soujo close [--note ...]` | `NEXT.md` を検証（無効なら終了1）→ `--note` を LOG に「中断: ...」で記録 → 未コミットがあれば `wip: <層名>` でコミット → 再開方法 | 1〜2行 |
 | `soujo map plan` | `PLAN.md` を縦の ASCII 図に（完了 `[x]`／次 `←次`、完了条件を縦線の横に） | 層数×2行 |
@@ -222,6 +222,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - SKILL.md に `disable-model-invocation` は書かない（Codex の validator が `true` を拒否。受け入れ基準7を優先）。
 - `soujo next check` は `次:` が PLAN で `[x]` 済みの層を指すときも警告する（クリーンな木でも受け入れ基準6を満たすため）。
 - `soujo next show --hook` は NEXT.md がなければ無音（Soujo を使わないプロジェクトの文脈を汚さない）。
+- `soujo layer done` は NEXT.md がない・無効・まだ締める層を指しているときに拒否する（層のコミットに必ず次の一手を含めるため）。
 - Codex 0.154 に `--reasoning-effort` はない。effort は `-c model_reasoning_effort=<v>` で渡す。
 - このリポジトリの層名は ASCII（`layer: <層名>` のコミットメッセージを英語に保つ）。
 
@@ -232,5 +233,4 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - モデルがスキルの置き場所へ `cd` したり、そこの `.soujo/` を読もうとすることがある。ホスト側の保護で止まり、スキルにも警告を入れたが、CLI 側のガードは未対応。
 - `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち。
 - 全層完了時の `NEXT.md` にも `effort:` が残る。
-- NEXT.md がまだ締める層を指しているとき、`layer done` が拒否する案。
 - Codex の文脈量：`$go` 1回で入力約69万トークン（大半キャッシュ。主に Codex 全体の文脈）。

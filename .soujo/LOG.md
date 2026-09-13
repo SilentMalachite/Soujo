@@ -43,3 +43,7 @@ add/commit 失敗は「PLAN と LOG は記録済み。再実行でコミット�
 L6 レビュー #1〜#4 を修正: HEAD の PLAN でチェック済みなら別件名でコミット済みとして拒否（やり直しは作業ツリーだけチェック済みのとき）。
 merge/rebase/cherry-pick/revert の途中・競合未解決なら拒否。コミット有無は rev-parse --verify で判定し git 失敗は投げる（spawnSync 化）。
 layer done の出力に追加ファイルを最大5件添える（ほかN件）。
+
+## 2026-09-13 next-guard
+L6 レビュー #5 を修正: layer done は NEXT.md がない・無効・次がまだ締める層のとき、何も書かずに拒否する（先に next set を促す）。
+SPEC §6 の layer done 行と §14 を更新（未決から決定へ移動）。

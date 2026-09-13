@@ -13,7 +13,7 @@ import {
   gitStatus,
   gitToplevel,
 } from '../git.js';
-import { appendLog, formatDate, lastLog, markDone, parsePlan } from '../state.js';
+import { appendLog, formatDate, lastLog, markDone, parseNext, parsePlan, validateNext } from '../state.js';
 
 const PLAN_PATH = `${STATE_DIR}/PLAN.md`;
 const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
@@ -21,6 +21,15 @@ const SHOWN_FILES = 5;
 
 function isChecked(plan: string | undefined, layer: string): boolean {
   return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
+}
+
+function requireNextStep(dir: string, layer: string): void {
+  const hint = '（先に soujo next set で次の一手を書く）';
+  const text = readState(dir, 'NEXT.md');
+  if (text === undefined) throw new Error(`NEXT.md がない${hint}`);
+  const problems = validateNext(text);
+  if (problems.length > 0) throw new Error(`NEXT.md が無効: ${problems.join('、')}${hint}`);
+  if (parseNext(text)?.layer === layer) throw new Error(`NEXT.md の次がまだ「${layer}」${hint}`);
 }
 
 function describeAdded(files: string[]): string {
@@ -34,7 +43,8 @@ function describeAdded(files: string[]): string {
  * - a merge/rebase is unfinished or files are unmerged       → refuse
  * - committed ("layer: <layer>" exists)                      → refuse
  * - checked in PLAN at HEAD (committed under another subject) → refuse
- * - unchecked in PLAN                                        → check PLAN, append LOG, commit
+ * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
+ * - unchecked in PLAN                                       → check PLAN, append LOG, commit
  * - checked only in the working tree (interrupted run)       → append LOG only if the last entry is not this layer, then commit
  */
 export function layerDone(cwd: string, layer: string, note?: string, now: Date = new Date()): string[] {
@@ -57,6 +67,7 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   if (item.done && isChecked(gitHeadFile(root, PLAN_PATH), name)) {
     throw new Error(`層「${name}」は PLAN のチェックごとコミット済み（件名が「${subject}」ではない）`);
   }
+  requireNextStep(dir, name);
 
   const log = readState(dir, 'LOG.md') ?? '';
   const logged = item.done && lastLog(log)?.layer === name;
