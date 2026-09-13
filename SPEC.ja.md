@@ -101,15 +101,16 @@ effort: <low|medium|high|xhigh>
 ## 6. CLI `soujo`
 
 - Node 20+、ESM、**実行時依存ゼロ**（`node:*` のみ）。devDependencies は `typescript` と `@types/node` だけ。
-- 出力は常に短く、日本語。標準出力は原則5行以内。エラーは標準エラーに1行、終了コード1。
+- 出力は常に短く、日本語。標準出力は原則5行以内（`--help` と `map` は超える）。エラーは標準エラーに1行、終了コード1。
 - どのホストから呼ばれても同じ動作。ホスト判定はしない（`--hook` だけが Claude Code のフック向けの出力に切り替える）。
 - `.soujo/` はカレントディレクトリから親へ辿って探し、git のトップレベル（`.git` のあるディレクトリ）で止める。
 
 | コマンド | 動作 | 出力 |
 |---|---|---|
+| `soujo --help` / `soujo <コマンド> --help` | 使い方の行を標準出力に出して終了0：最初の引数なら全コマンド、コマンドの後ならそのコマンドの1行、2語コマンドの1語目（`next`・`plan`・`layer`・`log`・`map`）の後ならその語で始まるコマンド。`-h` も同じ。`--` より前の単独の引数だけが対象（`--note=--help` や `--` の後は普通の引数）で、ほかの引数より先に判定するので、何も検査・実行しない（`--hook` 付きの `next show` / `next check` でも）。各行はそのコマンドの使い方エラーと同じ `soujo …` の文字列。不明なコマンドは従来どおりエラーで、コマンドなし・不明なコマンドのエラーは `soujo --help` を案内する | 1コマンド1行 |
 | `soujo init` | templates から `.soujo/` を作り、CLAUDE.md / AGENTS.md がなければ複製する。git 管理下ならトップレベルに作る。既存ファイルは上書きしない | 作成したファイル＋作らなかったファイルの1行。git 管理外なら `git init` が要る旨の1行 |
 | `soujo next show [--hook]` | `NEXT.md` を表示。なければ「NEXT.md なし」。`--hook` 時は NEXT.md がなければ何も出さない | 5行 |
-| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否 | 1行 |
+| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。層 `spec` / `plan`（前後の空白を除いて比べる）の effort は `high`（§7）：ほかの `--effort` は拒否して何も書かず、エラーは `--effort` を外すよう示す。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否 | 1行 |
 | `soujo next check [--hook]` | NEXT.md がない・無効・PLAN で `[x]` 済みの層か未チェックの層より後ろを指す、またはプロジェクト内に未コミット変更があれば警告。Soujo を使っていないプロジェクトでは無音。`--hook` 時は `{"systemMessage": "..."}`。**終了コードは常に0** | 0〜1行 |
 | `soujo plan list` | 層の一覧と完了状態 | 層数分 |
 | `soujo plan next` | 最初の未完了層と完了条件 | 2行 |
@@ -216,7 +217,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 ## 13. 実装
 
-依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。
+依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。受け入れ後の L13・L14 は、§14 の未決だった2件（決定へ移した）を実装する：`soujo --help` と、`次: spec` / `次: plan` の effort。
 
 ## 14. 決定事項と未決事項
 
@@ -237,14 +238,14 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - このリポジトリの層名は ASCII（`layer: <層名>` のコミットメッセージを英語に保つ）。
 - 全層完了後の `NEXT.md` は `次: plan`。`plan` は SPEC に未実装が残っていなければ層を足さずに終える。
 - `soujo next set` は PLAN にない層（`spec` / `plan` を除く）を拒否する。層名の写し間違いが `layer done` まで気づかれないのを防ぐため。
+- `soujo --help` と `soujo <コマンド> --help` は使い方の行を出し、ほかは何も実行しない（L13）。両ホストが `soujo --help` を試してエラーになったため。また `--help` を付けた書き込みコマンドは、いま不明なオプションとして拒否して何も書かないのと同じく、何も書かないままにするため。
+- `soujo next set` は `次: spec` / `次: plan` に `effort: high`（§7 のそのスキルの effort）を書き、ほかの値を拒否する（L14）。最後の層の後の `NEXT.md` に場当たりの effort が残らないため。ほかの手段で書かれた `NEXT.md` は検査しない。
 
 未決：
 - `LOG.md` が長くなったときの巻き取り（月ごとに `LOG-YYYY-MM.md` へ退避する `soujo log rotate`）。
 - Codex 0.154 はユーザーが信頼すると `hooks/hooks.json` を実行する（`~/.codex/config.toml` の `[hooks.state]`）。そこで `${CLAUDE_PLUGIN_ROOT}` が展開されるか、`systemMessage` が表示されるかは未確認。
-- `soujo --help`：両ホストで試されてエラーになった。
 - モデルがスキルの置き場所へ `cd` したり、そこの `.soujo/` を読もうとすることがある。ホスト側の保護で止まり、スキルにも警告を入れたが、CLI 側のガードは未対応。
 - `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち（L12 では再現せず）。
-- 全層完了時の `NEXT.md` にも `effort:` が残る。
 - `spec` / `plan` はコミットしない。最初の `layer done` までは `.soujo/` の変更が未コミットで、Stop フックが毎回警告する。
 - Codex の文脈量：`$go` 1回で入力約30万〜69万トークン（大半キャッシュ。主に Codex 全体の文脈）。L12 では無関係なグローバルスキルも読み、Codex のメモリファイルを検索した。
 - Claude Code の `review` は `soujo:reviewer` の指摘を順に全部残したが、返った表を加工せずに出さなかった（§7）：パスを短くし、セルを言い換え、句をいくつか落とし、前置きの1文を足した。

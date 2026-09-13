@@ -12,3 +12,5 @@
 - [x] L10 hosts — 両マニフェスト・両マーケットプレイス・hooks.json が揃い、claude plugin validate . と validate_plugin.py が通る
 - [x] L11 docs — README/CHANGELOG(+.ja.md)が揃い、npm link 後に soujo が PATH から呼べる
 - [x] L12 accept — 既存 Python プロジェクトの複製で Claude Code→Codex→Claude Code を通し、受け入れ基準1〜10を LOG に記録
+- [ ] L13 help — SPEC §6 の --help 行（全コマンド・1コマンド・2語コマンドの1語目・-h・-- の後と --x=--help は対象外・--hook 付きでも使い方・書き込みコマンドでも何も書かない・エラーの案内）がテストで通り、README・CHANGELOG(+.ja) に載る
+- [ ] L14 effort — next set --layer spec/plan（前後の空白付きを含む）が effort 省略で high を書き、ほかの effort を何も書かずに拒否することがテストで通り、spec・go スキルの plan 行きの next set が --effort を付けない（go の節は3行のまま）

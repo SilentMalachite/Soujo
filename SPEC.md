@@ -100,15 +100,16 @@ effort: <low|medium|high|xhigh>
 ## 6. CLI `soujo`
 
 - Node 20+, ESM, **zero runtime dependencies** (`node:*` only). devDependencies are only `typescript` and `@types/node`.
-- Output is short and in Japanese; normally at most 5 lines on stdout. Errors are one line on stderr with exit code 1.
+- Output is short and in Japanese; normally at most 5 lines on stdout (`--help` and `map` print more). Errors are one line on stderr with exit code 1.
 - Behaves the same on any host. No host detection; only `--hook` switches to a Claude Code hook-friendly output.
 - `.soujo/` is searched upward from the current directory, stopping at the git top level (a directory containing `.git`).
 
 | Command | Behavior | Output |
 |---|---|---|
+| `soujo --help` / `soujo <command> --help` | Prints usage lines on stdout and exits 0: as the first argument, every command; after a command, that command's line; after the first word of two-word commands (`next`, `plan`, `layer`, `log`, `map`), the commands starting with it. `-h` is the same. Only an argument of its own before `--` counts (`--note=--help` and arguments after `--` are ordinary), and it is checked before any other argument, so nothing is validated or run, even for `next show` / `next check` with `--hook`. Each line is the `soujo …` text of that command's usage error. An unknown command stays an error; the errors for a missing or unknown command point to `soujo --help` | 1 line per command |
 | `soujo init` | Creates `.soujo/` from templates, plus CLAUDE.md / AGENTS.md if missing. Uses the git top level when inside a repository. Never overwrites existing files | Created files, then one line listing skipped ones, and a line saying `git init` is needed outside a repository |
 | `soujo next show [--hook]` | Prints `NEXT.md`, or `NEXT.md なし`. With `--hook`, prints nothing when `NEXT.md` is missing | 5 lines |
-| `soujo next set --layer --premise --check [--caution] [--effort]` | Rewrites `NEXT.md`. Defaults: caution `なし`, effort `medium`. Values must be one line. When PLAN has layers, a layer not in PLAN (other than `spec` / `plan`) is refused and nothing is written | 1 line |
+| `soujo next set --layer --premise --check [--caution] [--effort]` | Rewrites `NEXT.md`. Defaults: caution `なし`, effort `medium`. For the layers `spec` / `plan` (compared after trimming) the effort is `high` (§7): another `--effort` is refused, nothing is written, and the error says to omit `--effort`. Values must be one line. When PLAN has layers, a layer not in PLAN (other than `spec` / `plan`) is refused and nothing is written | 1 line |
 | `soujo next check [--hook]` | Warns when `NEXT.md` is missing, invalid, points to a layer already `[x]` in PLAN or past an unchecked one, or there are uncommitted changes in the project. Silent outside Soujo projects. `--hook` returns `{"systemMessage": "..."}`. **Exit code is always 0** | 0–1 line |
 | `soujo plan list` | Layers and their state | 1 line per layer |
 | `soujo plan next` | First unfinished layer and its completion condition | 2 lines |
@@ -215,7 +216,7 @@ All ten were verified on 2026-09-13 in layer L12, with `soujo` from `npm link` a
 
 ## 13. Implementation
 
-Implemented in 12 layers of at most 30 minutes each, in dependency order; the list and completion conditions are in `.soujo/PLAN.md`. Compared with the original 10 phases, next and resume/close were split, skill authoring and host verification were split, and `map` was moved before the skills (the `plan` skill calls `soujo map plan`).
+Implemented in 12 layers of at most 30 minutes each, in dependency order; the list and completion conditions are in `.soujo/PLAN.md`. Compared with the original 10 phases, next and resume/close were split, skill authoring and host verification were split, and `map` was moved before the skills (the `plan` skill calls `soujo map plan`). After acceptance, L13 and L14 implement two former open issues of §14, now decided: `soujo --help` and the effort of `次: spec` / `次: plan`.
 
 ## 14. Decisions and open issues
 
@@ -236,14 +237,14 @@ Decided:
 - Layer names in this repository are ASCII so that `layer: <layer>` commit messages stay English.
 - After the last layer `NEXT.md` says `次: plan`; `plan` ends without adding layers when nothing in SPEC is left.
 - `soujo next set` refuses layers missing from PLAN (other than `spec` / `plan`), so a mistyped layer name is not noticed only at `layer done`.
+- `soujo --help` and `soujo <command> --help` print usage lines and run nothing else (L13): both hosts tried `soujo --help` and got an error, and write commands given `--help` must keep writing nothing, as they do now by rejecting it as an unknown option.
+- `soujo next set` writes `effort: high` for `次: spec` / `次: plan`, the effort of those skills in §7, and refuses other values (L14), so `NEXT.md` after the last layer no longer carries an arbitrary effort. `NEXT.md` written by other means is not checked for it.
 
 Open:
 - Rotating `LOG.md` when it grows (`soujo log rotate` moving months into `LOG-YYYY-MM.md`).
 - Codex 0.154 runs `hooks/hooks.json` once the user trusts it (`[hooks.state]` in `~/.codex/config.toml`); whether `${CLAUDE_PLUGIN_ROOT}` expands there and `systemMessage` is shown is unverified.
-- `soujo --help`: both hosts tried it and got an error.
 - Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
 - The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer (not reproduced in L12).
-- `NEXT.md` for "all layers done" still carries an `effort:` value.
 - `spec` / `plan` do not commit. Until the first `layer done`, `.soujo/` changes stay uncommitted and the Stop hook warns every time.
 - Codex context size: one `$go` used ~295K–690K input tokens (mostly cached), largely from global Codex context; in L12 it also read an unrelated global skill and searched the Codex memory file.
 - `review` in Claude Code kept every finding of `soujo:reviewer` in order but did not show the returned table unedited (§7): it shortened paths, reworded cells, dropped a few phrases, and added a leading sentence.

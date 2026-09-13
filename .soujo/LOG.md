@@ -117,3 +117,8 @@ README: review の範囲・effort は会話で設定・map は図・--hook・--l
 L12 レビュー #1〜#25 を修正: Claude Code はローカルのマーケットプレイスをその場で読む（init の path と、足したスキルが入れ直しなしで出ることで確認）ので SPEC §8・README を訂正。
 §12 に手順と前提（既存 AGENTS.md・権限指定・spec は --resume で4往復）、基準6のクリーンな木の経路を追記。validate_plugin.py は終了0、soujo は本リポジトリの dist/cli.js を指す。
 §14 に review の加工・reviewer の絶対パス・許可リストでの拒否・範囲外の変更を追加。#20 は公開リポジトリなので変更なし、#21 #22 は LOG が追記専用のため本エントリで補う。
+
+## 2026-09-13 plan
+§14 の未決からユーザーが CLI の小修正だけを選び、L13 help（soujo --help）と L14 effort（next set が spec/plan に high を書きほかを拒否）を PLAN に追加。ほかの未決は層にしない。
+SPEC §6 に --help の行と next set の effort 規則、§13 に L13/L14、§14 は2件を未決から決定へ（英日）。
+レビュー #1〜#19 を修正: --help の判定位置・1語目・--hook との優先・stdout と終了0・使い方の出所・拒否時の無書込と案内を明記し、完了条件と NEXT の注意を具体化。#20（plan の effort の理由）は変更なし。
