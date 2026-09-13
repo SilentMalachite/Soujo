@@ -35,4 +35,4 @@ claude --plugin-dir .   # try the plugin from the working tree without installin
 
 ## Pull requests
 
-Keep one topic per pull request, describe the behavior before and after, and list how you tested it. The maintainer adds user-visible changes to [CHANGELOG.md](CHANGELOG.md) when releasing.
+Keep one topic per pull request, describe the behavior before and after, and list how you tested it. CI runs `npm test` on Node 20, 22, 24, and 26 on Ubuntu and on Node 24 on macOS for every pull request and every push to `main`; it has to pass. The maintainer adds user-visible changes to [CHANGELOG.md](CHANGELOG.md) when releasing.

@@ -70,7 +70,7 @@ Soujo/
 │   └── SPEC.md  PLAN.md  LOG.md  NEXT.md
 ├── CLAUDE.md  AGENTS.md              # このリポジトリ自身の指示（templates と同一内容）
 ├── README.md  SPEC.md  CHANGELOG.md  CONTRIBUTING.md  SECURITY.md  CODE_OF_CONDUCT.md  LICENSE  （＋ .ja.md の日本語訳）
-├── .github/                          # Issue フォームとプルリクエストのテンプレート
+├── .github/                          # Issue フォーム、プルリクエストのテンプレート、CI（npm test）
 └── package.json  tsconfig.json  tsconfig.test.json
 ```
 

@@ -178,3 +178,7 @@ README(+ja) の導入・更新・開発、SPEC(+ja) §4・§8・§14、CHANGELOG
 0.1.0 をリリース（2026-09-14）: CHANGELOG(+ja) を英語正本の Added 形式にし、日付とリリースへのリンクを付けた。
 CONTRIBUTING・SECURITY・CODE_OF_CONDUCT（各 +ja）、.github の Issue フォーム2種・config・PR テンプレートを追加。docs.test で英日の構成を比較。
 README(+ja) の開発節と SPEC(+ja) §4 に追記。SECURITY は GitHub の非公開の脆弱性報告を窓口にする。
+
+## 2026-09-14 ci
+GitHub Actions の CI を追加: push（main）と PR で npm ci → npm test。Ubuntu の Node 20・22・24・26 と macOS の Node 24。
+actions/checkout v7.0.1・setup-node v7.0.0 を SHA で固定、permissions は contents: read。CONTRIBUTING(+ja)・SPEC(+ja) §4 に追記。
