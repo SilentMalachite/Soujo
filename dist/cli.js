@@ -71,14 +71,6 @@ const COMMANDS = {
     },
     'plan list': noArguments('plan list', planList),
     'plan next': noArguments('plan next', planNext),
-    'layer done': {
-        usage: 'layer done "<層名>" [--note <1〜3行>]',
-        run: (args, cwd, usage) => {
-            const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
-            expectPositionals(positionals, 1, usage);
-            return layerDone(cwd, positionals[0] ?? '', values.note);
-        },
-    },
     'log add': {
         usage: 'log add "<層名>" --line <行> [--line <行>]',
         run: (args, cwd, usage) => {
@@ -89,6 +81,14 @@ const COMMANDS = {
             });
             expectPositionals(positionals, 1, usage);
             return logAdd(cwd, positionals[0] ?? '', values.line ?? []);
+        },
+    },
+    'layer done': {
+        usage: 'layer done "<層名>" [--note <1〜3行>]',
+        run: (args, cwd, usage) => {
+            const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
+            expectPositionals(positionals, 1, usage);
+            return layerDone(cwd, positionals[0] ?? '', values.note);
         },
     },
     resume: noArguments('resume', resume),
@@ -116,7 +116,8 @@ function lookup(key) {
 }
 function resolve(argv) {
     const [first, second] = argv;
-    if (first === undefined)
+    // "soujo 'plan list'" as one argument is not a command.
+    if (first === undefined || first.includes(' '))
         return undefined;
     if (second !== undefined) {
         const command = lookup(`${first} ${second}`);
@@ -142,12 +143,23 @@ function usageLines(include) {
 // Usage lines for "soujo --help", "soujo <command> --help", or "soujo <first word> --help", or undefined.
 // Decided before any other argument, so that asking for help never validates or runs a command.
 function help(argv, found) {
-    if (isHelp(argv[0]))
+    const [first] = argv;
+    if (isHelp(first))
         return usageLines(() => true);
     if (found)
         return asksHelp(found.args) ? [`soujo ${found.command.usage}`] : undefined;
-    const group = usageLines((key) => key.startsWith(`${argv[0]} `));
+    if (first === undefined)
+        return undefined;
+    // An unknown word after the first word is ignored: "soujo next foo --help" still lists the next commands.
+    const group = usageLines((key) => key.startsWith(`${first} `));
     return group.length > 0 && asksHelp(argv.slice(1)) ? group : undefined;
+}
+// The unknown command as typed: both words when the first word starts two-word commands.
+function unknownCommand(argv) {
+    const [first = '', second] = argv;
+    const grouped = Object.keys(COMMANDS).some((key) => key.startsWith(`${first} `));
+    const name = grouped && second !== undefined && !second.startsWith('-') ? `${first} ${second}` : first;
+    return `不明なコマンド「${name}」${HELP_HINT}`;
 }
 function describe(error) {
     if (!(error instanceof Error))
@@ -177,7 +189,7 @@ function main(argv) {
         const found = resolve(argv);
         const lines = help(argv, found) ?? found?.command.run(found.args, process.cwd(), found.command.usage);
         if (lines === undefined) {
-            throw new Error(argv[0] === undefined ? `コマンドがありません${HELP_HINT}` : `不明なコマンド: ${argv[0]}${HELP_HINT}`);
+            throw new Error(argv.length === 0 ? `コマンドがありません${HELP_HINT}` : unknownCommand(argv));
         }
         // Values from files can carry CR or other controls; each returned line stays one terminal line.
         if (lines.length > 0)

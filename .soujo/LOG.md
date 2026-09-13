@@ -127,3 +127,8 @@ SPEC §6 に --help の行と next set の effort 規則、§13 に L13/L14、§
 soujo --help / -h は全コマンド、<コマンド> --help はその1行、2語コマンドの1語目ならその語のコマンドを stdout に出して終了0。
 help はほかの引数より先に判定（-- の後と --x=--help は対象外）し、使い方はコマンド表の usage 1か所から help とエラーの両方に出す。
 コマンドなし・不明なコマンドのエラーに（soujo --help で一覧）。書き込みコマンドに付けても何も書かないことをテスト。README・CHANGELOG(+.ja) に追記。
+
+## 2026-09-14 review-fix-l13
+L13 レビュー #1〜#19 を修正: help の順を SPEC・README に合わせ log add → layer done に。不明なコマンドは打たれた名前を「」で示し（2語目も含む）、空白入りの1引数はコマンドにしない。
+SPEC に next check は使い方エラーなし・1語目の後の不明な語は無視を明記。テストは期待行の完全一致、-- の後の -h、--note=--help、--help=x、空文字、Object.prototype 名＋--help を追加し重複を整理。
+README・CHANGELOG(+.ja) に1語目での一覧とエラーの案内。NEXT の注意を nextSet の処理順に。L13 の LOG は「エラーに（soujo --help で一覧）を付けた」の意（#19）。

@@ -12,7 +12,7 @@ import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
 import { printable } from './state.js';
 
-// usage is what follows "soujo " in both the --help line and the usage error.
+// usage is what follows "soujo " in the --help line and in the usage error; run gets it too, so each entry spells it once.
 interface Command {
   usage: string;
   run: (args: string[], cwd: string, usage: string) => string[];
@@ -81,14 +81,6 @@ const COMMANDS: Record<string, Command> = {
   },
   'plan list': noArguments('plan list', planList),
   'plan next': noArguments('plan next', planNext),
-  'layer done': {
-    usage: 'layer done "<層名>" [--note <1〜3行>]',
-    run: (args, cwd, usage) => {
-      const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
-      expectPositionals(positionals, 1, usage);
-      return layerDone(cwd, positionals[0] ?? '', values.note);
-    },
-  },
   'log add': {
     usage: 'log add "<層名>" --line <行> [--line <行>]',
     run: (args, cwd, usage) => {
@@ -99,6 +91,14 @@ const COMMANDS: Record<string, Command> = {
       });
       expectPositionals(positionals, 1, usage);
       return logAdd(cwd, positionals[0] ?? '', values.line ?? []);
+    },
+  },
+  'layer done': {
+    usage: 'layer done "<層名>" [--note <1〜3行>]',
+    run: (args, cwd, usage) => {
+      const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
+      expectPositionals(positionals, 1, usage);
+      return layerDone(cwd, positionals[0] ?? '', values.note);
     },
   },
   resume: noArguments('resume', resume),
@@ -128,7 +128,8 @@ function lookup(key: string): Command | undefined {
 
 function resolve(argv: string[]): { command: Command; args: string[] } | undefined {
   const [first, second] = argv;
-  if (first === undefined) return undefined;
+  // "soujo 'plan list'" as one argument is not a command.
+  if (first === undefined || first.includes(' ')) return undefined;
   if (second !== undefined) {
     const command = lookup(`${first} ${second}`);
     if (command) return { command, args: argv.slice(2) };
@@ -156,10 +157,21 @@ function usageLines(include: (key: string) => boolean): string[] {
 // Usage lines for "soujo --help", "soujo <command> --help", or "soujo <first word> --help", or undefined.
 // Decided before any other argument, so that asking for help never validates or runs a command.
 function help(argv: string[], found: ReturnType<typeof resolve>): string[] | undefined {
-  if (isHelp(argv[0])) return usageLines(() => true);
+  const [first] = argv;
+  if (isHelp(first)) return usageLines(() => true);
   if (found) return asksHelp(found.args) ? [`soujo ${found.command.usage}`] : undefined;
-  const group = usageLines((key) => key.startsWith(`${argv[0]} `));
+  if (first === undefined) return undefined;
+  // An unknown word after the first word is ignored: "soujo next foo --help" still lists the next commands.
+  const group = usageLines((key) => key.startsWith(`${first} `));
   return group.length > 0 && asksHelp(argv.slice(1)) ? group : undefined;
+}
+
+// The unknown command as typed: both words when the first word starts two-word commands.
+function unknownCommand(argv: string[]): string {
+  const [first = '', second] = argv;
+  const grouped = Object.keys(COMMANDS).some((key) => key.startsWith(`${first} `));
+  const name = grouped && second !== undefined && !second.startsWith('-') ? `${first} ${second}` : first;
+  return `不明なコマンド「${name}」${HELP_HINT}`;
 }
 
 function describe(error: unknown): string {
@@ -189,7 +201,7 @@ function main(argv: string[]): number {
     const found = resolve(argv);
     const lines = help(argv, found) ?? found?.command.run(found.args, process.cwd(), found.command.usage);
     if (lines === undefined) {
-      throw new Error(argv[0] === undefined ? `コマンドがありません${HELP_HINT}` : `不明なコマンド: ${argv[0]}${HELP_HINT}`);
+      throw new Error(argv.length === 0 ? `コマンドがありません${HELP_HINT}` : unknownCommand(argv));
     }
     // Values from files can carry CR or other controls; each returned line stays one terminal line.
     if (lines.length > 0) process.stdout.write(`${lines.map(printable).join('\n')}\n`);

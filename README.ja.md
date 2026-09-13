@@ -89,7 +89,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 
 | コマンド | 動作 |
 |---|---|
-| `soujo --help` / `soujo next set --help` | 全コマンド / 1コマンドの使い方の行（`next`・`plan`・`layer`・`log`・`map` の後にも付けられる）。ほかは何も実行しない |
+| `soujo --help` / `soujo next set --help` | 全コマンド / 1コマンドの使い方の行。`next`・`plan`・`log`・`layer`・`map` の1語だけに付けるとその語で始まるコマンドの行。ほかは何も実行しない |
 | `soujo init` | `.soujo/`（と CLAUDE.md / AGENTS.md）を上書きせずに作る |
 | `soujo next show [--hook]` | `NEXT.md` を出す。`--hook` は SessionStart フック用 |
 | `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える |
