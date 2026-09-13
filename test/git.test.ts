@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { gitAddAll, gitCommit, gitLastCommit, gitStatus, gitToplevel } from '../src/git.js';
+import { gitAddAll, gitCommit, gitFindCommit, gitLastCommit, gitStatus, gitToplevel } from '../src/git.js';
 import { repo, temp } from './helpers.js';
 
 test('gitToplevel finds the repository root from a subdirectory, or undefined outside', (t) => {
@@ -34,6 +34,17 @@ test('gitStatus handles output larger than 1 MB', (t) => {
   const name = 'x'.repeat(200);
   for (let index = 0; index < 6000; index++) writeFileSync(join(dir, 'many', `${name}${index}`), '');
   assert.equal(gitStatus(dir).length, 6000);
+});
+
+test('gitFindCommit matches the whole subject only', (t) => {
+  const dir = repo(t);
+  for (const subject of ['layer: L10 later', 'fix: mention layer: L1 in passing']) {
+    writeFileSync(join(dir, `${subject.length}.txt`), subject);
+    gitAddAll(dir);
+    gitCommit(dir, subject);
+  }
+  assert.equal(gitFindCommit(dir, 'layer: L1'), undefined);
+  assert.equal(gitFindCommit(dir, 'layer: L10 later')?.subject, 'layer: L10 later');
 });
 
 test('gitCommit with nothing to commit throws a one-line error', (t) => {

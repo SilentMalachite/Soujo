@@ -2,6 +2,7 @@
 // Entry point: parses arguments, runs the command, prints its lines to stdout, and turns any error into one stderr line with exit 1.
 import { parseArgs } from 'node:util';
 import { init } from './commands/init.js';
+import { layerDone } from './commands/layer.js';
 import { logAdd } from './commands/log.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
@@ -50,6 +51,11 @@ const COMMANDS = {
     },
     'plan list': noArguments('plan list', planList),
     'plan next': noArguments('plan next', planNext),
+    'layer done': (args, cwd) => {
+        const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
+        expectPositionals(positionals, 1, 'layer done "<層名>" [--note <1〜3行>]');
+        return layerDone(cwd, positionals[0] ?? '', values.note);
+    },
     'log add': (args, cwd) => {
         const { positionals, values } = parseArgs({
             args,

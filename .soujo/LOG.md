@@ -33,3 +33,8 @@ next show --hook はプロジェクト外・NEXT.md なし・読めないとき�
 レビュー #1〜#6 を修正: コマンド表は自身のキーだけ引く / .soujo/ 探索は .git のある階層で止める（SPEC §6 も更新）。
 build・test は出力先を消してから tsc / git 呼び出しの maxBuffer を 256MB に。
 PLAN の区切りは — に加え – -- - の独立トークンも認める / 末尾空白と区切り判定を線形時間に（trimEnd・トークン分割）。
+
+## 2026-09-13 L6 layer-done
+状態は書く前に決める: 件名完全一致でコミット済み→拒否 / PLAN 未チェック→PLAN・LOG・commit / チェック済み未コミット→LOG は最後が同じ層なら足さず commit。
+add/commit 失敗は「PLAN と LOG は記録済み。再実行でコミットだけやり直す」を付けて投げる。
+この層から soujo CLI 自身で締める。

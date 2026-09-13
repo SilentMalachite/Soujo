@@ -35,14 +35,27 @@ export function gitAddAll(cwd) {
 export function gitCommit(cwd, message) {
     git(cwd, ['commit', '-q', '-m', message]);
 }
+const COMMIT_FORMAT = '--format=%h%x09%s';
+function parseCommit(line) {
+    const tab = line.indexOf('\t');
+    return tab === -1 ? undefined : { hash: line.slice(0, tab), subject: line.slice(tab + 1) };
+}
 /** The latest commit, or undefined when there is none (or no repository). */
 export function gitLastCommit(cwd) {
     try {
-        const line = git(cwd, ['log', '-1', '--format=%h%x09%s']).trim();
-        const tab = line.indexOf('\t');
-        return tab === -1 ? undefined : { hash: line.slice(0, tab), subject: line.slice(tab + 1) };
+        return parseCommit(git(cwd, ['log', '-1', COMMIT_FORMAT]).trim());
     }
     catch {
         return undefined;
     }
+}
+/** The latest commit whose subject is exactly subject. Requires at least one commit; git failures throw. */
+export function gitFindCommit(cwd, subject) {
+    const output = git(cwd, ['log', COMMIT_FORMAT, '--fixed-strings', `--grep=${subject}`]);
+    for (const line of output.split('\n')) {
+        const commit = parseCommit(line);
+        if (commit?.subject === subject)
+            return commit;
+    }
+    return undefined;
 }

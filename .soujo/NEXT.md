@@ -1,5 +1,5 @@
-次: L6 layer-done
-前提: L5 next 完了（next show/set/check。check は常に終了0、問題は「soujo 警告: a / b」の1行）
-確認: layer done が PLAN→LOG→commit を行い、不正入力で無書込・コミットだけ再試行・コミット済み拒否がテストで通る
-注意: この層は手で締める最後の層（PLAN チェックと commit）。NEXT は next set、LOG は log add を使う
+次: L7 resume-close
+前提: L6 layer-done 完了（以降は soujo next set → soujo layer done で締める）
+確認: resume が4行を出し、close が NEXT 無効で終了1・中断ログ・wip コミットを行うことがテストで通る
+注意: close の中断ログは「中断: …」。resume は NEXT が無い／無効なら PLAN の次の層へフォールバック
 effort: medium

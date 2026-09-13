@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { temp } from './helpers.js';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { repo, temp } from './helpers.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 
@@ -76,6 +78,18 @@ test('next set, show, and check work through the CLI; check exits 0 even with ba
     const result = soujoIn(outside, ...args);
     assert.deepEqual([result.status, result.stdout, result.stderr], [0, '', ''], args.join(' '));
   }
+});
+
+test('layer done works through the CLI and refuses a second run', (t) => {
+  const dir = repo(t);
+  soujoIn(dir, 'init');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [ ] L1 scaffold — build\n');
+  const done = soujoIn(dir, 'layer', 'done', 'L1 scaffold', '--note', 'a');
+  assert.equal(done.status, 0, done.stderr);
+  assert.match(done.stdout, /^層「L1 scaffold」を完了: [0-9a-f]+ layer: L1 scaffold\n$/);
+  const again = soujoIn(dir, 'layer', 'done', 'L1 scaffold');
+  assert.equal(again.status, 1);
+  assert.match(again.stderr, /^soujo: 層「L1 scaffold」はコミット済み（[0-9a-f]+）\n$/);
 });
 
 test('argument errors are one Japanese line with exit 1', () => {
