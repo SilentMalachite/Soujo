@@ -65,6 +65,37 @@ test('validateNext reports every problem', () => {
   assert.ok(validateNext(NEXT.replace('注意: なし', 'メモ')).includes('4行目を読めない: メモ'));
 });
 
+test('validateNext counts trailing blank lines toward the limit, with LF and CRLF', () => {
+  for (const text of [`${NEXT}\n\n\n`, `${NEXT}\n\n\n`.replaceAll('\n', '\r\n')]) {
+    const problems = validateNext(text);
+    assert.ok(problems.includes('NEXT.md が5行を超えている（8行）'), JSON.stringify(problems));
+    assert.ok(problems.includes('6行目が空行'));
+  }
+  assert.deepEqual(validateNext(NEXT.slice(0, -1)), []);
+  assert.deepEqual(validateNext(' \n\n'), ['NEXT.md が空']);
+});
+
+test('appendLog keeps the existing text as an exact prefix', () => {
+  const entry = { date: '2026-09-13', layer: 'L1', lines: ['a'] };
+  const block = '## 2026-09-13 L1\na\n';
+  const cases: [string, string][] = [
+    ['x  ', 'x  \n\n'],
+    ['x\n', 'x\n\n'],
+    ['x\n\n\n', 'x\n\n\n'],
+    ['x\r\n', 'x\r\n\n'],
+    ['x\r\n\r\n', 'x\r\n\r\n'],
+  ];
+  for (const [text, prefix] of cases) assert.equal(appendLog(text, entry), `${prefix}${block}`, JSON.stringify(text));
+});
+
+test('appendLog refuses any line lastLog would read as a heading, and only those', () => {
+  const entry = { date: '2026-09-13', layer: 'L1', lines: ['a'] };
+  assert.throws(() => appendLog('', { ...entry, lines: ['##\t2026-09-14 fake'] }), /見出しの形/);
+  assert.throws(() => appendLog('', { ...entry, lines: ['##   2026-09-14   fake'] }), /見出しの形/);
+  const log = appendLog('', { ...entry, lines: ['## メモ', '#2026-09-14 x'] });
+  assert.deepEqual(lastLog(log), { date: '2026-09-13', layer: 'L1', lines: ['## メモ', '#2026-09-14 x'] });
+});
+
 test('parsePlan reads checklist items and splits at the first separator', () => {
   assert.deepEqual(parsePlan(PLAN), [
     { layer: 'L1 scaffold', condition: 'build が通る', done: true },

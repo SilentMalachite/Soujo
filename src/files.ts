@@ -1,6 +1,16 @@
 // Finding .soujo/ and reading/writing its files. Thin I/O layer: no parsing or validation here.
 
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,10 +64,20 @@ export function requireState(dir: string, file: StateFile): string {
   return text;
 }
 
+function targetOf(path: string): string {
+  return existsSync(path) ? realpathSync(path) : path;
+}
+
+// writeState's temporary file for target: ".<name>.<pid>.tmp" next to it.
+function isTempOf(target: string, name: string): boolean {
+  const prefix = `.${basename(target)}.`;
+  return name.startsWith(prefix) && /^\d+\.tmp$/.test(name.slice(prefix.length));
+}
+
 /** Replaces the file via a temporary file and rename, so an interruption never leaves it half-written. Symlinks are kept. */
 export function writeState(dir: string, file: StateFile, text: string): void {
   const path = join(dir, file);
-  const target = existsSync(path) ? realpathSync(path) : path;
+  const target = targetOf(path);
   const temp = join(dirname(target), `.${basename(target)}.${process.pid}.tmp`);
   try {
     writeFileSync(temp, text);
@@ -69,6 +89,22 @@ export function writeState(dir: string, file: StateFile, text: string): void {
       // Cleanup is best effort; report the original failure.
     }
     throw new Error(`${file} を書けない: ${(error as Error).message}`);
+  }
+}
+
+/** Deletes temporary files that a killed writeState left behind, so that `git add -A` never commits them. */
+export function removeLeftoverTemps(dir: string): void {
+  for (const file of STATE_FILES) {
+    const target = targetOf(join(dir, file));
+    let entries;
+    try {
+      entries = readdirSync(dirname(target), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isFile() && isTempOf(target, entry.name)) rmSync(join(dirname(target), entry.name), { force: true });
+    }
   }
 }
 

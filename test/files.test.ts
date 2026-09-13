@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   createFile,
@@ -9,6 +9,7 @@ import {
   packageDir,
   readState,
   readTemplate,
+  removeLeftoverTemps,
   requireState,
   requireStateDir,
   writeState,
@@ -73,6 +74,23 @@ test('writeState writes through a symlink and keeps it', (t) => {
 test('writeState reports a one-line error when the directory is missing', (t) => {
   const dir = join(temp(t), 'missing');
   assert.throws(() => writeState(dir, 'NEXT.md', 'x'), /^Error: NEXT\.md を書けない: [^\n]+$/);
+});
+
+test('removeLeftoverTemps deletes only writeState temporary files, next to symlink targets too', (t) => {
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(dir);
+  writeFileSync(join(root, 'PLAN.real.md'), '');
+  symlinkSync('../PLAN.real.md', join(dir, 'PLAN.md'));
+  const leftovers = [join(dir, '.LOG.md.123.tmp'), join(dir, '.NEXT.md.9.tmp'), join(root, '.PLAN.real.md.456.tmp')];
+  const kept = [join(dir, '.LOG.md.tmp'), join(dir, '.LOG.md.12a.tmp'), join(dir, 'notes.tmp'), join(root, '.PLAN.md.456.tmp')];
+  for (const path of [...leftovers, ...kept]) writeFileSync(path, '');
+  mkdirSync(join(dir, '.SPEC.md.7.tmp'));
+
+  removeLeftoverTemps(dir);
+  assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
+  assert.deepEqual(kept.filter((path) => !existsSync(path)), []);
+  assert.ok(existsSync(join(dir, '.SPEC.md.7.tmp')));
 });
 
 test('requireState throws for a missing file', (t) => {

@@ -53,9 +53,18 @@ function isEffort(value: string): value is Effort {
   return (EFFORTS as readonly string[]).includes(value);
 }
 
+// Only the final line break is dropped, so trailing blank lines count toward the line limit.
 function contentLines(text: string): string[] {
-  const body = text.trimEnd();
-  return body === '' ? [] : body.split(/\r?\n/);
+  const body = text.endsWith('\r\n') ? text.slice(0, -2) : text.endsWith('\n') ? text.slice(0, -1) : text;
+  return body.trim() === '' ? [] : body.split(/\r?\n/);
+}
+
+// What to put between existing LOG text and a new entry: a line break if missing, then one blank line.
+function logSeparator(text: string): string {
+  if (text === '') return '';
+  if (!text.endsWith('\n')) return '\n\n';
+  const withoutLastBreak = text.slice(0, text.endsWith('\r\n') ? -2 : -1);
+  return withoutLastBreak.endsWith('\n') ? '' : '\n';
 }
 
 function readNext(text: string): { values: Map<string, string>; problems: string[] } {
@@ -174,11 +183,11 @@ export function appendLog(text: string, entry: LogEntry): string {
   if (lines.length > LOG_MAX_LINES) {
     throw new Error(`LOG は1エントリ${LOG_MAX_LINES}行まで（${lines.length}行）`);
   }
-  if (lines.some((line) => line.startsWith('## '))) throw new Error('LOG の行を「## 」で始めない');
+  // The same rule lastLog uses to find entries, so no line can turn into a heading.
+  if (lines.some((line) => LOG_HEADER.test(line))) throw new Error('LOG の行を見出しの形（## YYYY-MM-DD 層名）にしない');
 
   const block = `${[`## ${entry.date} ${layer}`, ...lines].join('\n')}\n`;
-  const body = text.trimEnd();
-  return body === '' ? block : `${body}\n\n${block}`;
+  return `${text}${logSeparator(text)}${block}`;
 }
 
 /** The last `## YYYY-MM-DD <layer>` entry of LOG.md with its non-blank lines. */

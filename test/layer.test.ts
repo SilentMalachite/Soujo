@@ -1,7 +1,7 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { layerDone } from '../src/commands/layer.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
@@ -122,15 +122,17 @@ test('a failed LOG write says PLAN is recorded, and re-running resumes from LOG'
 });
 
 test('layer done refuses when .soujo/ files are git-ignored, and reports when git picks up nothing', (t) => {
-  const ignoring = repo(t);
-  writeFileSync(join(ignoring, '.gitignore'), '.soujo/LOG.md\n');
-  commitAll(ignoring, 'ignore LOG before it is tracked');
-  project(ignoring, STATE);
-  assert.throws(
-    () => layerDone(ignoring, 'L2 state', undefined, NOW),
-    /^Error: \.soujo\/LOG\.md が git に無視されていて記録がコミットに残らない/,
-  );
-  assert.equal(read(ignoring, 'PLAN.md'), PLAN);
+  for (const ignoredFile of ['.soujo/LOG.md', '.soujo/SPEC.md']) {
+    const ignoring = repo(t);
+    writeFileSync(join(ignoring, '.gitignore'), `${ignoredFile}\n`);
+    commitAll(ignoring, 'ignore before it is tracked');
+    project(ignoring, { ...STATE, 'SPEC.md': '# SPEC\n' });
+    assert.throws(
+      () => layerDone(ignoring, 'L2 state', undefined, NOW),
+      new RegExp(`^Error: ${ignoredFile.replaceAll('.', '\\.')} が git に無視されていて記録がコミットに残らない`),
+    );
+    assert.equal(read(ignoring, 'PLAN.md'), PLAN);
+  }
 
   const skipping = workingProject(t);
   rmSync(join(skipping, 'state.ts'));
@@ -158,6 +160,46 @@ test('a layer checked in a commit with another subject is refused, not treated a
   );
   assert.equal(read(dir, 'LOG.md'), LOG);
   assert.deepEqual(gitStatus(dir), ['?? secret.env']);
+
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN.replace('- [x] L1 scaffold', '- [ ] L1 scaffold'));
+  assert.throws(() => layerDone(dir, 'L1 scaffold', undefined, NOW), /は PLAN のチェックごとコミット済み/);
+  assert.equal(read(dir, 'LOG.md'), LOG);
+});
+
+test('a re-run still refuses an invalid note before committing', (t) => {
+  const dir = workingProject(t);
+  const lock = join(dir, '.git', 'index.lock');
+  writeFileSync(lock, '');
+  assert.throws(() => layerDone(dir, 'L2 state', 'note', NOW), /git add に失敗/);
+  rmSync(lock);
+  const before = [read(dir, 'LOG.md'), gitLastCommit(dir)?.hash];
+  assert.throws(() => layerDone(dir, 'L2 state', 'a\nb\nc\nd', NOW), /3行まで（4行）/);
+  assert.deepEqual([read(dir, 'LOG.md'), gitLastCommit(dir)?.hash], before);
+});
+
+test('leftover temporary files from a killed write are removed, not committed', (t) => {
+  const dir = workingProject(t);
+  writeFileSync(join(dir, '.soujo', '.PLAN.md.99999.tmp'), 'half');
+  const [line] = layerDone(dir, 'L2 state', undefined, NOW);
+  assert.match(line ?? '', /（追加: state\.ts）$/);
+  assert.equal(existsSync(join(dir, '.soujo', '.PLAN.md.99999.tmp')), false);
+  assert.deepEqual(gitStatus(dir), []);
+});
+
+test('a failure while listing added files still reports the successful commit', { skip: process.platform === 'win32' }, (t) => {
+  const dir = workingProject(t);
+  const bin = temp(t);
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\n[ "$1" = diff-tree ] && exit 1\nexec "${realGit}" "$@"\n`, { mode: 0o755 });
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}:${path}`;
+  try {
+    const [line] = layerDone(dir, 'L2 state', undefined, NOW);
+    assert.match(line ?? '', /^層「L2 state」を完了: [0-9a-f]+ layer: L2 state（追加ファイルの一覧は取得できなかった）$/);
+  } finally {
+    process.env.PATH = path;
+  }
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
 });
 
 test('layer done refuses during an unfinished merge and with unmerged files', (t) => {

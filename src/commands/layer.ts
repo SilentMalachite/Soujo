@@ -1,7 +1,15 @@
 // soujo layer done: checks the layer in PLAN.md, appends LOG.md, and commits everything as "layer: <layer>".
 
 import { dirname } from 'node:path';
-import { STATE_DIR, readState, requireState, requireStateDir, writeState } from '../files.js';
+import {
+  STATE_DIR,
+  STATE_FILES,
+  readState,
+  removeLeftoverTemps,
+  requireState,
+  requireStateDir,
+  writeState,
+} from '../files.js';
 import {
   gitAddedFiles,
   gitCommitAll,
@@ -16,7 +24,7 @@ import {
 import { appendLog, formatDate, lastLog, markDone, parseNext, parsePlan, validateNext } from '../state.js';
 
 const PLAN_PATH = `${STATE_DIR}/PLAN.md`;
-const RECORDED_PATHS = ['PLAN.md', 'LOG.md', 'NEXT.md'].map((file) => `${STATE_DIR}/${file}`);
+const RECORDED_PATHS = STATE_FILES.map((file) => `${STATE_DIR}/${file}`);
 const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
 const SHOWN_FILES = 5;
 
@@ -54,7 +62,14 @@ function resumable<T>(step: () => T, recorded: string): T {
   }
 }
 
-function describeAdded(files: string[]): string {
+// Display only: the commit already succeeded, so a failure here must not turn the result into an error.
+function describeAdded(root: string): string {
+  let files: string[];
+  try {
+    files = gitAddedFiles(root);
+  } catch {
+    return '（追加ファイルの一覧は取得できなかった）';
+  }
   if (files.length === 0) return '';
   const rest = files.length > SHOWN_FILES ? ` ほか${files.length - SHOWN_FILES}件` : '';
   return `（追加: ${files.slice(0, SHOWN_FILES).join(', ')}${rest}）`;
@@ -64,7 +79,7 @@ function describeAdded(files: string[]): string {
  * States, decided before anything is written:
  * - not committable (no repository, unfinished merge/rebase, unmerged files, ignored .soujo/ files) → refuse
  * - committed ("layer: <layer>" exists)                       → refuse
- * - checked in PLAN at HEAD (committed under another subject) → refuse
+ * - checked in PLAN at HEAD (committed under another subject), even if unchecked again in the working tree → refuse
  * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
  * - unchecked in PLAN                                         → check PLAN, append LOG, commit
  * - checked only in the working tree (interrupted run)        → append LOG only if the last entry is not this layer, then commit
@@ -83,7 +98,7 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   const subject = `layer: ${name}`;
   const committed = gitFindCommit(root, subject);
   if (committed !== undefined) throw new Error(`層「${name}」はコミット済み（${committed.hash}）`);
-  if (item.done && isChecked(gitHeadFile(root, PLAN_PATH), name)) {
+  if (isChecked(gitHeadFile(root, PLAN_PATH), name)) {
     throw new Error(`層「${name}」は PLAN のチェックごとコミット済み（件名が「${subject}」ではない）`);
   }
   requireNextStep(dir, name);
@@ -91,10 +106,11 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   const log = readState(dir, 'LOG.md') ?? '';
   const logged = item.done && lastLog(log)?.layer === name;
   const newPlan = item.done ? undefined : markDone(plan, name);
-  const newLog = logged
-    ? undefined
-    : appendLog(log, { date: formatDate(now), layer: name, lines: note === undefined ? [] : [note] });
+  // Built even when the existing entry is reused, so an invalid note is refused on a re-run too.
+  const appended = appendLog(log, { date: formatDate(now), layer: name, lines: note === undefined ? [] : [note] });
+  const newLog = logged ? undefined : appended;
 
+  removeLeftoverTemps(dir);
   if (newPlan !== undefined) writeState(dir, 'PLAN.md', newPlan);
   if (newLog !== undefined) {
     resumable(() => writeState(dir, 'LOG.md', newLog), 'PLAN は記録済み。原因を直して再実行すれば LOG 追記からやり直す');
@@ -107,5 +123,5 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
 
   const hash = gitLastCommit(root)?.hash ?? '?';
   const result = item.done ? `層「${name}」のコミットをやり直した` : `層「${name}」を完了`;
-  return [`${result}: ${hash} ${subject}${describeAdded(gitAddedFiles(root))}`];
+  return [`${result}: ${hash} ${subject}${describeAdded(root)}`];
 }
