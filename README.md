@@ -122,7 +122,7 @@ claude --plugin-dir .   # try the plugin from the working tree without installin
 
 To use the working tree instead of the GitHub install, run in it `npm link`, `claude plugin marketplace add ./`, and `codex plugin marketplace add ./`, then install the plugins as above (remove the GitHub marketplaces first: both are named `soujo`). Write `./`, not `.`: Claude Code rejects `.`. Both hosts save the clone's absolute path. Claude Code sessions read the plugin from the clone in place; Codex needs `codex plugin add soujo@soujo` again after each change.
 
-Contributor rules are in [CLAUDE.md](CLAUDE.md) (Claude Code) and [AGENTS.md](AGENTS.md) (Codex); their wording differs on purpose. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+How to contribute is in [CONTRIBUTING.md](CONTRIBUTING.md), and the rules for agents in [CLAUDE.md](CLAUDE.md) (Claude Code) and [AGENTS.md](AGENTS.md) (Codex); their wording differs on purpose. Changes are listed in [CHANGELOG.md](CHANGELOG.md). Report security problems as [SECURITY.md](SECURITY.md) describes.
 
 ## License
 

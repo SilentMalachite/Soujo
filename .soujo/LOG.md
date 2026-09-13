@@ -173,3 +173,8 @@ Codex 全体レビュー #13: resume の 次:・前回:・再開: の層名も60
 GitHub から直接導入: CLI は npm install -g <アーカイブ URL>（github: 形式は npm 10 で一時複製へのリンクになり再導入で失敗）、プラグインは両ホストとも marketplace add SilentMalachite/Soujo。
 .claude-plugin/plugin.json から version を外しコミットを版にした（ローカル導入で版が短い SHA になるのを確認）。Codex は version を保つ。
 README(+ja) の導入・更新・開発、SPEC(+ja) §4・§8・§14、CHANGELOG(+ja)、hosts.test を更新。
+
+## 2026-09-14 release-0.1.0
+0.1.0 をリリース（2026-09-14）: CHANGELOG(+ja) を英語正本の Added 形式にし、日付とリリースへのリンクを付けた。
+CONTRIBUTING・SECURITY・CODE_OF_CONDUCT（各 +ja）、.github の Issue フォーム2種・config・PR テンプレートを追加。docs.test で英日の構成を比較。
+README(+ja) の開発節と SPEC(+ja) §4 に追記。SECURITY は GitHub の非公開の脆弱性報告を窓口にする。

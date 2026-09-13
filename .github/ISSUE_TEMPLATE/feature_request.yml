@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a change to Soujo's behavior or to SPEC.md.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or Japanese is fine (日本語でも構いません). SPEC.md §11 lists what Soujo does not aim to do.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What gets in the way today, and in which host.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The behavior you want, and the SPEC.md sections it changes.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

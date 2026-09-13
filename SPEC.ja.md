@@ -69,7 +69,8 @@ Soujo/
 │   ├── CLAUDE.md（Opus 5 版）  AGENTS.md（Astra 版）
 │   └── SPEC.md  PLAN.md  LOG.md  NEXT.md
 ├── CLAUDE.md  AGENTS.md              # このリポジトリ自身の指示（templates と同一内容）
-├── README.md  SPEC.md  CHANGELOG.md  LICENSE  （＋ .ja.md の日本語訳）
+├── README.md  SPEC.md  CHANGELOG.md  CONTRIBUTING.md  SECURITY.md  CODE_OF_CONDUCT.md  LICENSE  （＋ .ja.md の日本語訳）
+├── .github/                          # Issue フォームとプルリクエストのテンプレート
 └── package.json  tsconfig.json  tsconfig.test.json
 ```
 

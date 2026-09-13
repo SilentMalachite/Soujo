@@ -68,7 +68,8 @@ Soujo/
 │   ├── CLAUDE.md (Opus 5)  AGENTS.md (Astra)
 │   └── SPEC.md  PLAN.md  LOG.md  NEXT.md
 ├── CLAUDE.md  AGENTS.md              # instructions for this repository (identical to templates)
-├── README.md  SPEC.md  CHANGELOG.md  LICENSE  (+ .ja.md translations)
+├── README.md  SPEC.md  CHANGELOG.md  CONTRIBUTING.md  SECURITY.md  CODE_OF_CONDUCT.md  LICENSE  (+ .ja.md translations)
+├── .github/                          # issue forms and the pull request template
 └── package.json  tsconfig.json  tsconfig.test.json
 ```
 
@@ -76,7 +77,7 @@ Policies:
 - **All logic lives in `src/`.** SKILL.md only says when to ask `soujo` for what; no judgment or formatting logic in SKILL.md.
 - CLAUDE.md / AGENTS.md at the plugin root are not loaded as context by either host. `soujo init` copies them from `templates/` into the target project.
 - SKILL.md frontmatter has only `name` and `description`. `disable-model-invocation` is not used, because Codex's `validate_plugin.py` rejects `true`.
-- Runtime-facing text (CLI output, skills, templates, CLAUDE.md / AGENTS.md) is Japanese. User documentation is English with Japanese translations.
+- Runtime-facing text (CLI output, skills, templates, CLAUDE.md / AGENTS.md) is Japanese. User documentation is English, which is canonical, with Japanese translations.
 
 ## 5. State files `.soujo/`
 

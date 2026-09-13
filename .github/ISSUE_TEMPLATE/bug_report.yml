@@ -1,0 +1,50 @@
+name: Bug report
+description: The CLI, a skill, or a hook does not behave as SPEC.md says.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or Japanese is fine (日本語でも構いません). Report security problems privately instead: see SECURITY.md.
+        Do not paste credentials, session links, or private project content.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: Name the SPEC.md section when you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. soujo init in a new git repository
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The error line, and the four lines of `soujo resume` when they help.
+      render: text
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options:
+        - Claude Code
+        - Codex
+        - Both
+        - CLI only
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `npm ls -g soujo`, the host version (`claude --version` or `codex --version`), `node --version`, and your OS.
+      render: text
+    validations:
+      required: true

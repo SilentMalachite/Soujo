@@ -6,7 +6,7 @@ import { packageDir } from '../src/files.js';
 import { assertKnownCommand, commands, temp } from './helpers.js';
 
 // User documentation is English with a Japanese translation next to it (SPEC §4).
-const DOCS = ['README', 'CHANGELOG'];
+const DOCS = ['README', 'CHANGELOG', 'CONTRIBUTING', 'SECURITY', 'CODE_OF_CONDUCT'];
 const PAGES = DOCS.flatMap((doc) => [`${doc}.md`, `${doc}.ja.md`]);
 
 function read(name: string): string {
