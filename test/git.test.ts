@@ -7,9 +7,12 @@ import {
   gitAddAll,
   gitAddedFiles,
   gitCommit,
+  gitCommitAll,
   gitFindCommit,
   gitHasCommits,
+  gitHasStagedChanges,
   gitHeadFile,
+  gitIgnored,
   gitLastCommit,
   gitOperationInProgress,
   gitStatus,
@@ -56,6 +59,30 @@ test('gitHasCommits distinguishes an empty repository from a failure', (t) => {
   gitCommit(dir, 'first');
   assert.equal(gitHasCommits(dir), true);
   assert.throws(() => gitHasCommits(temp(t)), /^Error: git rev-parse に失敗: [^\n]+$/);
+});
+
+test('gitHasStagedChanges and gitCommitAll work before and after the first commit', (t) => {
+  const dir = repo(t);
+  assert.equal(gitHasStagedChanges(dir), false);
+  assert.equal(gitCommitAll(dir, 'nothing'), false);
+  assert.equal(gitHasCommits(dir), false);
+
+  writeFileSync(join(dir, 'a.txt'), 'a\n');
+  assert.equal(gitCommitAll(dir, 'first'), true);
+  assert.equal(gitLastCommit(dir)?.subject, 'first');
+  assert.equal(gitHasStagedChanges(dir), false);
+  assert.equal(gitCommitAll(dir, 'clean'), false);
+  assert.equal(gitLastCommit(dir)?.subject, 'first');
+});
+
+test('gitIgnored reports ignored paths but not tracked files', (t) => {
+  const dir = repo(t);
+  mkdirSync(join(dir, '.soujo'));
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), '');
+  gitCommitAll(dir, 'track PLAN');
+  writeFileSync(join(dir, '.gitignore'), '.soujo/\n');
+  assert.deepEqual(gitIgnored(dir, ['.soujo/PLAN.md', '.soujo/LOG.md', 'other.txt']), ['.soujo/LOG.md']);
+  assert.throws(() => gitIgnored(temp(t), ['x']), /^Error: git check-ignore に失敗: /);
 });
 
 test('gitOperationInProgress reports an unfinished rebase or merge', (t) => {

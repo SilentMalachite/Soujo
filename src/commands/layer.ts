@@ -3,11 +3,11 @@
 import { dirname } from 'node:path';
 import { STATE_DIR, readState, requireState, requireStateDir, writeState } from '../files.js';
 import {
-  gitAddAll,
   gitAddedFiles,
-  gitCommit,
+  gitCommitAll,
   gitFindCommit,
   gitHeadFile,
+  gitIgnored,
   gitLastCommit,
   gitOperationInProgress,
   gitStatus,
@@ -16,11 +16,24 @@ import {
 import { appendLog, formatDate, lastLog, markDone, parseNext, parsePlan, validateNext } from '../state.js';
 
 const PLAN_PATH = `${STATE_DIR}/PLAN.md`;
+const RECORDED_PATHS = ['PLAN.md', 'LOG.md', 'NEXT.md'].map((file) => `${STATE_DIR}/${file}`);
 const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
 const SHOWN_FILES = 5;
 
 function isChecked(plan: string | undefined, layer: string): boolean {
   return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
+}
+
+function requireCommittableRepository(root: string): void {
+  if (gitToplevel(root) === undefined) throw new Error('git リポジトリではないのでコミットできない');
+  const operation = gitOperationInProgress(root);
+  if (operation !== undefined) throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
+  const unmerged = gitStatus(root).filter((line) => UNMERGED.test(line)).length;
+  if (unmerged > 0) throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
+  const ignored = gitIgnored(root, RECORDED_PATHS);
+  if (ignored.length > 0) {
+    throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
+  }
 }
 
 function requireNextStep(dir: string, layer: string): void {
@@ -32,6 +45,15 @@ function requireNextStep(dir: string, layer: string): void {
   if (parseNext(text)?.layer === layer) throw new Error(`NEXT.md の次がまだ「${layer}」${hint}`);
 }
 
+/** Runs step and adds what is already recorded and how to resume to its error message. */
+function resumable<T>(step: () => T, recorded: string): T {
+  try {
+    return step();
+  } catch (error) {
+    throw new Error(`${(error as Error).message}（${recorded}）`);
+  }
+}
+
 function describeAdded(files: string[]): string {
   if (files.length === 0) return '';
   const rest = files.length > SHOWN_FILES ? ` ほか${files.length - SHOWN_FILES}件` : '';
@@ -40,21 +62,18 @@ function describeAdded(files: string[]): string {
 
 /**
  * States, decided before anything is written:
- * - a merge/rebase is unfinished or files are unmerged       → refuse
- * - committed ("layer: <layer>" exists)                      → refuse
+ * - not committable (no repository, unfinished merge/rebase, unmerged files, ignored .soujo/ files) → refuse
+ * - committed ("layer: <layer>" exists)                       → refuse
  * - checked in PLAN at HEAD (committed under another subject) → refuse
  * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
- * - unchecked in PLAN                                       → check PLAN, append LOG, commit
- * - checked only in the working tree (interrupted run)       → append LOG only if the last entry is not this layer, then commit
+ * - unchecked in PLAN                                         → check PLAN, append LOG, commit
+ * - checked only in the working tree (interrupted run)        → append LOG only if the last entry is not this layer, then commit
+ * After the first write, every failure says what is recorded, so that fixing the cause and re-running resumes.
  */
 export function layerDone(cwd: string, layer: string, note?: string, now: Date = new Date()): string[] {
   const dir = requireStateDir(cwd);
   const root = dirname(dir);
-  if (gitToplevel(root) === undefined) throw new Error('git リポジトリではないのでコミットできない');
-  const operation = gitOperationInProgress(root);
-  if (operation !== undefined) throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
-  const unmerged = gitStatus(root).filter((line) => UNMERGED.test(line)).length;
-  if (unmerged > 0) throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
+  requireCommittableRepository(root);
 
   const name = layer.trim();
   const plan = requireState(dir, 'PLAN.md');
@@ -77,13 +96,14 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
     : appendLog(log, { date: formatDate(now), layer: name, lines: note === undefined ? [] : [note] });
 
   if (newPlan !== undefined) writeState(dir, 'PLAN.md', newPlan);
-  if (newLog !== undefined) writeState(dir, 'LOG.md', newLog);
-  try {
-    gitAddAll(root);
-    gitCommit(root, subject);
-  } catch (error) {
-    throw new Error(`${(error as Error).message}（PLAN と LOG は記録済み。再実行でコミットだけやり直す）`);
+  if (newLog !== undefined) {
+    resumable(() => writeState(dir, 'LOG.md', newLog), 'PLAN は記録済み。原因を直して再実行すれば LOG 追記からやり直す');
   }
+  const done = resumable(
+    () => gitCommitAll(root, subject),
+    'PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す',
+  );
+  if (!done) throw new Error('コミットする変更がない（PLAN と LOG の変更を git が拾っていない。skip-worktree などを確認）');
 
   const hash = gitLastCommit(root)?.hash ?? '?';
   const result = item.done ? `層「${name}」のコミットをやり直した` : `層「${name}」を完了`;

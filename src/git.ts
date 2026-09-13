@@ -37,6 +37,13 @@ function git(cwd: string, args: string[]): string {
   return result.stdout;
 }
 
+/** For commands that answer yes/no with exit code 0 or 1; anything else throws. */
+function exitCode(cwd: string, args: string[]): 0 | 1 {
+  const result = run(cwd, args);
+  if (result.error === undefined && (result.status === 0 || result.status === 1)) return result.status;
+  throw failure(args, result);
+}
+
 /** Repository top level, or undefined outside a git repository. */
 export function gitToplevel(cwd: string): string | undefined {
   try {
@@ -48,11 +55,7 @@ export function gitToplevel(cwd: string): string | undefined {
 
 /** Whether HEAD points to a commit. Throws outside a repository or when git itself fails. */
 export function gitHasCommits(cwd: string): boolean {
-  const args = ['rev-parse', '--verify', '--quiet', 'HEAD'];
-  const result = run(cwd, args);
-  if (result.error === undefined && result.status === 1 && result.stderr.trim() === '') return false;
-  if (result.error !== undefined || result.status !== 0) throw failure(args, result);
-  return true;
+  return exitCode(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD']) === 0;
 }
 
 /** `git status --porcelain` lines; empty when the tree is clean. Untracked files are included. */
@@ -80,6 +83,28 @@ export function gitAddAll(cwd: string): void {
 
 export function gitCommit(cwd: string, message: string): void {
   git(cwd, ['commit', '-q', '-m', message]);
+}
+
+/** Whether the index has anything to commit (compared with HEAD, or with nothing before the first commit). */
+export function gitHasStagedChanges(cwd: string): boolean {
+  return exitCode(cwd, ['diff', '--cached', '--quiet']) === 1;
+}
+
+/** Stages everything and commits it. Returns false, without committing, when nothing ends up staged. */
+export function gitCommitAll(cwd: string, message: string): boolean {
+  gitAddAll(cwd);
+  if (!gitHasStagedChanges(cwd)) return false;
+  gitCommit(cwd, message);
+  return true;
+}
+
+/** The paths (relative to cwd) that git ignores. Tracked files are never reported. */
+export function gitIgnored(cwd: string, paths: string[]): string[] {
+  const args = ['check-ignore', '--', ...paths];
+  const result = run(cwd, args);
+  if (result.error === undefined && result.status === 1) return [];
+  if (result.error !== undefined || result.status !== 0) throw failure(args, result);
+  return result.stdout.split('\n').filter((line) => line !== '');
 }
 
 function parseCommit(line: string): Commit | undefined {

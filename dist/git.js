@@ -25,6 +25,13 @@ function git(cwd, args) {
         throw failure(args, result);
     return result.stdout;
 }
+/** For commands that answer yes/no with exit code 0 or 1; anything else throws. */
+function exitCode(cwd, args) {
+    const result = run(cwd, args);
+    if (result.error === undefined && (result.status === 0 || result.status === 1))
+        return result.status;
+    throw failure(args, result);
+}
 /** Repository top level, or undefined outside a git repository. */
 export function gitToplevel(cwd) {
     try {
@@ -36,13 +43,7 @@ export function gitToplevel(cwd) {
 }
 /** Whether HEAD points to a commit. Throws outside a repository or when git itself fails. */
 export function gitHasCommits(cwd) {
-    const args = ['rev-parse', '--verify', '--quiet', 'HEAD'];
-    const result = run(cwd, args);
-    if (result.error === undefined && result.status === 1 && result.stderr.trim() === '')
-        return false;
-    if (result.error !== undefined || result.status !== 0)
-        throw failure(args, result);
-    return true;
+    return exitCode(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD']) === 0;
 }
 /** `git status --porcelain` lines; empty when the tree is clean. Untracked files are included. */
 export function gitStatus(cwd) {
@@ -65,6 +66,28 @@ export function gitAddAll(cwd) {
 }
 export function gitCommit(cwd, message) {
     git(cwd, ['commit', '-q', '-m', message]);
+}
+/** Whether the index has anything to commit (compared with HEAD, or with nothing before the first commit). */
+export function gitHasStagedChanges(cwd) {
+    return exitCode(cwd, ['diff', '--cached', '--quiet']) === 1;
+}
+/** Stages everything and commits it. Returns false, without committing, when nothing ends up staged. */
+export function gitCommitAll(cwd, message) {
+    gitAddAll(cwd);
+    if (!gitHasStagedChanges(cwd))
+        return false;
+    gitCommit(cwd, message);
+    return true;
+}
+/** The paths (relative to cwd) that git ignores. Tracked files are never reported. */
+export function gitIgnored(cwd, paths) {
+    const args = ['check-ignore', '--', ...paths];
+    const result = run(cwd, args);
+    if (result.error === undefined && result.status === 1)
+        return [];
+    if (result.error !== undefined || result.status !== 0)
+        throw failure(args, result);
+    return result.stdout.split('\n').filter((line) => line !== '');
 }
 function parseCommit(line) {
     const tab = line.indexOf('\t');

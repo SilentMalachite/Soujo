@@ -1,7 +1,7 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { layerDone } from '../src/commands/layer.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
@@ -93,7 +93,7 @@ test('after a failed commit, re-running retries only the commit without a second
   writeFileSync(lock, '');
   assert.throws(
     () => layerDone(dir, 'L2 state', 'note', NOW),
-    /^Error: git add に失敗: .*（PLAN と LOG は記録済み。再実行でコミットだけやり直す）$/,
+    /^Error: git add に失敗: .*（PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す）$/,
   );
   const logAfterFailure = read(dir, 'LOG.md');
   assert.match(read(dir, 'PLAN.md'), /- \[x\] L2 state/);
@@ -103,6 +103,41 @@ test('after a failed commit, re-running retries only the commit without a second
   assert.equal(line, `層「L2 state」のコミットをやり直した: ${gitLastCommit(dir)?.hash} layer: L2 state（追加: state.ts）`);
   assert.equal(read(dir, 'LOG.md'), logAfterFailure);
   assert.deepEqual(gitStatus(dir), []);
+});
+
+test('a failed LOG write says PLAN is recorded, and re-running resumes from LOG', (t) => {
+  const dir = workingProject(t);
+  const blocker = join(dir, '.soujo', `.LOG.md.${process.pid}.tmp`);
+  mkdirSync(blocker);
+  assert.throws(
+    () => layerDone(dir, 'L2 state', 'note', NOW),
+    /^Error: LOG\.md を書けない: .*（PLAN は記録済み。原因を直して再実行すれば LOG 追記からやり直す）$/,
+  );
+  assert.match(read(dir, 'PLAN.md'), /- \[x\] L2 state/);
+  assert.equal(read(dir, 'LOG.md'), LOG);
+  rmSync(blocker, { recursive: true });
+
+  assert.match(layerDone(dir, 'L2 state', 'note', NOW)[0] ?? '', /のコミットをやり直した/);
+  assert.equal(read(dir, 'LOG.md'), `${LOG}\n## 2026-09-13 L2 state\nnote\n`);
+});
+
+test('layer done refuses when .soujo/ files are git-ignored, and reports when git picks up nothing', (t) => {
+  const ignoring = repo(t);
+  writeFileSync(join(ignoring, '.gitignore'), '.soujo/LOG.md\n');
+  commitAll(ignoring, 'ignore LOG before it is tracked');
+  project(ignoring, STATE);
+  assert.throws(
+    () => layerDone(ignoring, 'L2 state', undefined, NOW),
+    /^Error: \.soujo\/LOG\.md が git に無視されていて記録がコミットに残らない/,
+  );
+  assert.equal(read(ignoring, 'PLAN.md'), PLAN);
+
+  const skipping = workingProject(t);
+  rmSync(join(skipping, 'state.ts'));
+  execFileSync('git', ['update-index', '--skip-worktree', '.soujo/PLAN.md', '.soujo/LOG.md'], { cwd: skipping });
+  const before = gitLastCommit(skipping)?.hash;
+  assert.throws(() => layerDone(skipping, 'L2 state', undefined, NOW), /^Error: コミットする変更がない（/);
+  assert.equal(gitLastCommit(skipping)?.hash, before);
 });
 
 test('if interrupted after checking PLAN but before LOG, re-running appends LOG once and commits', (t) => {

@@ -63,7 +63,12 @@ export function writeState(dir, file, text) {
         renameSync(temp, target);
     }
     catch (error) {
-        rmSync(temp, { force: true });
+        try {
+            rmSync(temp, { force: true });
+        }
+        catch {
+            // Cleanup is best effort; report the original failure.
+        }
         throw new Error(`${file} を書けない: ${error.message}`);
     }
 }
