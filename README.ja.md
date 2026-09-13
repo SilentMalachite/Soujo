@@ -41,34 +41,40 @@ Claude Code と Codex で使う、いつ中断しても再開できる「仕様 
 
 ## 導入
 
+すべて GitHub から直接入れる。複製（clone）は要らない。
+
 1. `soujo` CLI。両ホストで必須：スキルは PATH の `soujo` を呼ぶ（プラグイン内の `dist/cli.js` を使うのはフックだけ）。実行時依存はなく `dist/` もコミット済みなので、ビルドは要らない：
 
    ```sh
-   git clone https://github.com/SilentMalachite/Soujo.git
-   cd Soujo
-   npm link          # または: npm i -g .
+   npm install -g https://github.com/SilentMalachite/Soujo/archive/refs/heads/main.tar.gz
    command -v soujo
    ```
 
-手順2・3は同じ `Soujo` ディレクトリで実行する。両ホストとも `./` をその複製の絶対パスとして保存するので、複製は動かさない。`.` ではなく `./` と書く（Claude Code は `.` を受け付けない）。
+   `github:SilentMalachite/Soujo` ではなくこのアーカイブの URL を使う。npm 10 はその形を、あとで消す一時的な複製へのリンクとして入れ、入れ直すと失敗する。
 
 2. Claude Code：
 
    ```sh
-   claude plugin marketplace add ./
+   claude plugin marketplace add SilentMalachite/Soujo
    claude plugin install soujo@soujo
    ```
-
-   セッションは複製そのものからプラグインを読むので、取り込んだ変更は入れ直さなくても新しいセッションに届く（導入時に Claude Code のプラグインキャッシュへの複製も作られる）。
 
 3. Codex：
 
    ```sh
-   codex plugin marketplace add ./
+   codex plugin marketplace add SilentMalachite/Soujo
    codex plugin add soujo@soujo
    ```
 
-   Codex も導入時のキャッシュからスキルを読む。変更を取り込んだら `codex plugin add soujo@soujo` をもう一度。
+更新は次を実行して新しいセッションを始める。スキルは同じコミットの CLI を前提にするので、CLI とプラグインは一緒に更新する：
+
+```sh
+npm install -g https://github.com/SilentMalachite/Soujo/archive/refs/heads/main.tar.gz
+claude plugin marketplace update soujo && claude plugin update soujo@soujo
+codex plugin marketplace upgrade soujo && codex plugin add soujo@soujo
+```
+
+Claude Code のプラグインは `version` を書いていないので、新しいコミットがそのまま更新になる。Codex は `codex plugin add` のたびに導入キャッシュへ複製し直す。
 
 ## 始め方
 
@@ -106,11 +112,15 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 ## 開発
 
 ```sh
+git clone https://github.com/SilentMalachite/Soujo.git
+cd Soujo
 npm install
 npm run build   # フックが dist/cli.js を呼ぶので dist/ はコミットする
 npm test        # node:test。dist/ が古いときも落ちる
 claude --plugin-dir .   # 導入せずに作業ツリーのプラグインを試す
 ```
+
+GitHub からの導入の代わりに作業ツリーを使うなら、そこで `npm link`・`claude plugin marketplace add ./`・`codex plugin marketplace add ./` を実行し、上と同じくプラグインを入れる（どちらも名前が `soujo` なので、先に GitHub のマーケットプレイスを外す）。`.` ではなく `./` と書く（Claude Code は `.` を受け付けない）。両ホストとも複製の絶対パスを保存する。Claude Code のセッションは複製からその場でプラグインを読み、Codex は変更のたびに `codex plugin add soujo@soujo` をもう一度。
 
 開発の規約は [CLAUDE.md](CLAUDE.md)（Claude Code）と [AGENTS.md](AGENTS.md)（Codex）。文面が違うのは意図的。変更履歴は [CHANGELOG.ja.md](CHANGELOG.ja.md)。
 

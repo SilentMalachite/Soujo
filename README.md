@@ -41,34 +41,40 @@ Runtime text (CLI output, skills, templates) is Japanese.
 
 ## Install
 
+Everything installs straight from GitHub; no clone is needed.
+
 1. The `soujo` CLI, required by both hosts: skills call `soujo` from PATH (only the hooks use the plugin's own `dist/cli.js`). It has no runtime dependencies and `dist/` is committed, so there is no build step:
 
    ```sh
-   git clone https://github.com/SilentMalachite/Soujo.git
-   cd Soujo
-   npm link          # or: npm i -g .
+   npm install -g https://github.com/SilentMalachite/Soujo/archive/refs/heads/main.tar.gz
    command -v soujo
    ```
 
-Steps 2 and 3 run in the same `Soujo` directory. Both hosts save `./` as that clone's absolute path, so keep the clone where it is. Write `./`, not `.`: Claude Code rejects `.`.
+   Use this archive URL, not `github:SilentMalachite/Soujo`: npm 10 installs that form as a link to a temporary clone it then deletes, and fails when installing it again.
 
 2. Claude Code:
 
    ```sh
-   claude plugin marketplace add ./
+   claude plugin marketplace add SilentMalachite/Soujo
    claude plugin install soujo@soujo
    ```
-
-   Sessions load the plugin from the clone itself, so pulled changes reach new sessions without reinstalling (installing also copies it into Claude Code's plugin cache).
 
 3. Codex:
 
    ```sh
-   codex plugin marketplace add ./
+   codex plugin marketplace add SilentMalachite/Soujo
    codex plugin add soujo@soujo
    ```
 
-   Codex also reads skills from its install cache. After pulling changes, run `codex plugin add soujo@soujo` again.
+To update, run these and start a new session. Update the CLI and the plugin together, since skills rely on the CLI of the same commit:
+
+```sh
+npm install -g https://github.com/SilentMalachite/Soujo/archive/refs/heads/main.tar.gz
+claude plugin marketplace update soujo && claude plugin update soujo@soujo
+codex plugin marketplace upgrade soujo && codex plugin add soujo@soujo
+```
+
+The Claude Code plugin declares no `version`, so each new commit counts as an update. Codex copies the plugin into its install cache again on every `codex plugin add`.
 
 ## Start
 
@@ -106,11 +112,15 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 ## Development
 
 ```sh
+git clone https://github.com/SilentMalachite/Soujo.git
+cd Soujo
 npm install
 npm run build   # dist/ is committed because hooks call dist/cli.js
 npm test        # node:test; also fails when dist/ is stale
 claude --plugin-dir .   # try the plugin from the working tree without installing
 ```
+
+To use the working tree instead of the GitHub install, run in it `npm link`, `claude plugin marketplace add ./`, and `codex plugin marketplace add ./`, then install the plugins as above (remove the GitHub marketplaces first: both are named `soujo`). Write `./`, not `.`: Claude Code rejects `.`. Both hosts save the clone's absolute path. Claude Code sessions read the plugin from the clone in place; Codex needs `codex plugin add soujo@soujo` again after each change.
 
 Contributor rules are in [CLAUDE.md](CLAUDE.md) (Claude Code) and [AGENTS.md](AGENTS.md) (Codex); their wording differs on purpose. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 

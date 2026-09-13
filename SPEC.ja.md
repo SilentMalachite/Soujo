@@ -48,7 +48,7 @@ Spec-kit の「仕様→計画→実装」と Superpowers の「作法をスキ�
 
 ```
 Soujo/
-├── .claude-plugin/plugin.json        # Claude Code 用マニフェスト
+├── .claude-plugin/plugin.json        # Claude Code 用マニフェスト（version なし：コミットが版になる）
 ├── .claude-plugin/marketplace.json   # Claude Code 用マーケットプレイス（source "./"）
 ├── .codex-plugin/plugin.json         # Codex 用マニフェスト（hooks フィールドは持たない）
 ├── .agents/plugins/marketplace.json  # Codex 用マーケットプレイス（source.path "./"）
@@ -155,7 +155,8 @@ effort 列は人やホストの設定で使う目安（§8）。SKILL.md の fro
 | サブエージェント | `review` が `agents/reviewer.md` を1体だけ起動 | 使わない。`review` は本体が直接行う |
 | 同時起動の上限 | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` を README に記載 | 該当なし |
 | effort の指定 | 層ごとに `NEXT.md` の値を会話で指示 | `codex -c model_reasoning_effort=<v>` か `~/.codex/config.toml` の `model_reasoning_effort` |
-| スキルの読み込み元 | ローカルディレクトリのマーケットプレイスはその場で読む：セッションはプラグインをそのディレクトリで並べ、スキルをそこから読み、そこへ足したスキルも入れ直さずに見える。導入時の作業ツリー（未追跡・git 無視のファイルを含み、`.git` は除く）の `~/.claude/plugins/cache/soujo/` への複製は行われ、`claude plugin update` はバージョンが同じなら何もしない。`claude --plugin-dir <path>` もその場で読む | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`（`.git`・`node_modules`・`.soujo/` を含むリポジトリ全体の複製）。更新は `codex plugin add soujo@soujo` をもう一度 |
+| GitHub からの導入 | `claude plugin marketplace add SilentMalachite/Soujo` がリポジトリを複製する。`plugin.json` に `version` がないのでコミットが版になり、`claude plugin marketplace update soujo` と `claude plugin update soujo@soujo` で新しいコミットが入る | `codex plugin marketplace add SilentMalachite/Soujo` が Git のスナップショットを持つ。`codex plugin marketplace upgrade soujo` で取り直し、`codex plugin add soujo@soujo` でキャッシュへ複製し直す |
+| スキルの読み込み元 | ローカルディレクトリのマーケットプレイスはその場で読む：セッションはプラグインをそのディレクトリで並べ、スキルをそこから読み、そこへ足したスキルも入れ直さずに見える。導入時の作業ツリー（未追跡・git 無視のファイルを含み、`.git` は除く）の `~/.claude/plugins/cache/soujo/` への複製は行われ、`claude plugin update` は版（コミット）が同じなら何もしない。`claude --plugin-dir <path>` もその場で読む | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`（`.git`・`node_modules`・`.soujo/` を含むリポジトリ全体の複製）。更新は `codex plugin add soujo@soujo` をもう一度 |
 | コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`layer done` / `close` は承認が要る（`codex exec` なら `--add-dir "$PWD/.git"`）。再実行でコミットだけやり直る |
 | 検証の方法 | `claude plugin validate .`（マーケットプレイス）と `claude plugin validate .claude-plugin/plugin.json`（プラグイン・agents・hooks） | 組み込みの `$plugin-creator` が持つ `validate_plugin.py` |
 
@@ -244,6 +245,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - `次: plan` はすべての層より後ろとみなす。`next set --layer plan` と最後の `layer done` の間で止まって残った未チェックの層を、警告し、`resume` で示し、`close` の対象にするため。`next set` の前で止まった `plan` も同じく示されるが、最初の層へ `soujo next set` すれば直る。
 - `layer done` はコミット前に PLAN・LOG・NEXT が書いたとおりにステージされたかを確かめる。それらを欠いたままコミットすると、再実行がコミット済みとして拒否されるため。
 - git の状態はユーザーの設定によらず同じに読む：未追跡のファイルは `status.showUntrackedFiles` によらず数え、残った `sequencer/` は `git status` と同じく cherry-pick か revert の途中とみなす。
+- プラグインも CLI も GitHub から直接入れる（§8）。CLI はアーカイブの URL `https://github.com/SilentMalachite/Soujo/archive/refs/heads/main.tar.gz` から入れる。npm 10 は `github:SilentMalachite/Soujo` を、あとで消す一時的な複製へのリンクとして入れ、入れ直しではその git 依存の準備をやり直して失敗するため。`.claude-plugin/plugin.json` は `version` を持たず、コミットごとに `claude plugin update` が届く。Codex のマニフェストは `package.json` の版を保つ。
 - 書き込みはプロジェクトの外に出ない（§6）。取得したリポジトリに仕込まれた symlink で、ふだんの記録操作がユーザーのファイルを上書きしうるため。
 
 未決：

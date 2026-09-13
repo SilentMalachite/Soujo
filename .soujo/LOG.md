@@ -168,3 +168,8 @@ Codex 全体レビュー #10〜12: map code の TS/JS 解析で、JSX の </・�
 
 ## 2026-09-14 codex-review-resume
 Codex 全体レビュー #13: resume の 次:・前回:・再開: の層名も60文字で切る（soujo layer done などコマンドの引数は切らない）。SPEC(+ja) §6 に明記。
+
+## 2026-09-14 github-install
+GitHub から直接導入: CLI は npm install -g <アーカイブ URL>（github: 形式は npm 10 で一時複製へのリンクになり再導入で失敗）、プラグインは両ホストとも marketplace add SilentMalachite/Soujo。
+.claude-plugin/plugin.json から version を外しコミットを版にした（ローカル導入で版が短い SHA になるのを確認）。Codex は version を保つ。
+README(+ja) の導入・更新・開発、SPEC(+ja) §4・§8・§14、CHANGELOG(+ja)、hosts.test を更新。

@@ -8,7 +8,7 @@ import { commitAll, project, repo, temp } from './helpers.js';
 
 interface Manifest {
   name: string;
-  version: string;
+  version?: string;
   description: string;
   license: string;
   skills?: string;
@@ -51,14 +51,19 @@ function runHook(event: string, cwd: string): { status: number | null; stdout: s
   return { status: result.status, stdout: result.stdout };
 }
 
-test('both host manifests carry the name, version, description, and license of package.json', () => {
+// Claude Code versions a git-installed plugin without a version by its commit, so every push reaches `claude plugin update`;
+// a fixed version would hide new commits. Codex copies the plugin again on every `codex plugin add`, so it keeps the version.
+test('both host manifests carry the name, description, and license of package.json, and only Codex the version', () => {
   const pkg = read<Manifest>('package.json');
   for (const path of ['.claude-plugin/plugin.json', '.codex-plugin/plugin.json']) {
     const manifest = read<Manifest>(path);
-    for (const key of ['name', 'version', 'description', 'license'] as const) {
+    for (const key of ['name', 'description', 'license'] as const) {
       assert.equal(manifest[key], pkg[key], `${path} の ${key}`);
     }
   }
+  assert.ok(!Object.hasOwn(read<Manifest>('.claude-plugin/plugin.json'), 'version'));
+  assert.ok(!read<ClaudeMarketplace>('.claude-plugin/marketplace.json').plugins.some((plugin) => Object.hasOwn(plugin, 'version')));
+  assert.equal(read<Manifest>('.codex-plugin/plugin.json').version, pkg.version);
 });
 
 // Claude Code finds hooks/hooks.json by itself (declaring it again is a duplicate), and validate_plugin.py rejects the field.

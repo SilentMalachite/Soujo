@@ -47,7 +47,7 @@ The design targets a user with the following traits.
 
 ```
 Soujo/
-├── .claude-plugin/plugin.json        # Claude Code manifest
+├── .claude-plugin/plugin.json        # Claude Code manifest (no version: the commit is the version)
 ├── .claude-plugin/marketplace.json   # Claude Code marketplace (source "./")
 ├── .codex-plugin/plugin.json         # Codex manifest (no hooks field)
 ├── .agents/plugins/marketplace.json  # Codex marketplace (source.path "./")
@@ -154,7 +154,8 @@ The effort column is a guide for the human or host setting (§8); SKILL.md front
 | Subagent | `review` starts `agents/reviewer.md` once | Not used; `review` is done by the main agent |
 | Concurrency | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` documented in README | n/a |
 | Effort | Given in conversation per layer from `NEXT.md` | `codex -c model_reasoning_effort=<v>` or `model_reasoning_effort` in `~/.codex/config.toml` |
-| Where skills are read | A local directory marketplace is read in place: sessions list the plugin at that directory, load skills from it, and see a skill added there without reinstalling. Installing still copies the working tree (untracked and git-ignored files included, `.git` not) into `~/.claude/plugins/cache/soujo/`, and `claude plugin update` skips an unchanged version. `claude --plugin-dir <path>` also reads in place | From the install cache `~/.codex/plugins/cache/soujo/`, a copy of the whole repository (`.git`, `node_modules`, `.soujo/` included); run `codex plugin add soujo@soujo` again to refresh |
+| Install from GitHub | `claude plugin marketplace add SilentMalachite/Soujo` clones the repository. `plugin.json` has no `version`, so the commit is the version, and `claude plugin marketplace update soujo` with `claude plugin update soujo@soujo` bring in new commits | `codex plugin marketplace add SilentMalachite/Soujo` keeps a Git snapshot; `codex plugin marketplace upgrade soujo` refreshes it and `codex plugin add soujo@soujo` copies it into the cache again |
+| Where skills are read | A local directory marketplace is read in place: sessions list the plugin at that directory, load skills from it, and see a skill added there without reinstalling. Installing still copies the working tree (untracked and git-ignored files included, `.git` not) into `~/.claude/plugins/cache/soujo/`, and `claude plugin update` skips an unchanged version (commit). `claude --plugin-dir <path>` also reads in place | From the install cache `~/.codex/plugins/cache/soujo/`, a copy of the whole repository (`.git`, `node_modules`, `.soujo/` included); run `codex plugin add soujo@soujo` again to refresh |
 | Commits | Allowed by normal permissions | The `workspace-write` sandbox cannot write `.git`; `layer done` / `close` need an approval (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
 | Validation | `claude plugin validate .` (marketplace) and `claude plugin validate .claude-plugin/plugin.json` (plugin, agents, hooks) | `validate_plugin.py` from the built-in `$plugin-creator` |
 
@@ -243,6 +244,7 @@ Decided:
 - `次: plan` counts as past every layer, so an unchecked layer left by stopping between `next set --layer plan` and the last `layer done` is warned about, shown by `resume`, and named by `close`. A `plan` run stopped before its `next set` is reported the same way; `soujo next set` to the first layer fixes it.
 - `layer done` checks that PLAN, LOG, and NEXT are staged as written before committing, because after a commit without them a re-run is refused as already committed.
 - Git state is read the same under any user configuration: untracked files regardless of `status.showUntrackedFiles`, and a leftover `sequencer/` counts as an unfinished cherry-pick or revert, as `git status` reports it.
+- Both the plugin and the CLI install straight from GitHub (§8). The CLI comes from the archive URL `https://github.com/SilentMalachite/Soujo/archive/refs/heads/main.tar.gz`: npm 10 installs `github:SilentMalachite/Soujo` as a link to a temporary clone it deletes, and prepares that git dependency again on reinstall, which fails. `.claude-plugin/plugin.json` has no `version` so that each commit reaches `claude plugin update`; the Codex manifest keeps the version of `package.json`.
 - Writes never leave the project (§6), because a cloned repository can carry symlinks planted to overwrite the user's files through ordinary record keeping.
 
 Open:
