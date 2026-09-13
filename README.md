@@ -23,7 +23,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 | resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
-| review | `/soujo:review` | `$review` | Every finding on the latest layer in one table, unfiltered |
+| review | `/soujo:review` | `$review` | Every finding on the given range (default: the latest layer, uncommitted changes included) in one table, unfiltered |
 
 | File | Holds | Limit |
 |---|---|---|
@@ -41,7 +41,7 @@ Runtime text (CLI output, skills, templates) is Japanese.
 
 ## Install
 
-1. The `soujo` CLI. It has no runtime dependencies and `dist/` is committed, so there is no build step:
+1. The `soujo` CLI, required by both hosts: skills call `soujo` from PATH (only the hooks use the plugin's own `dist/cli.js`). It has no runtime dependencies and `dist/` is committed, so there is no build step:
 
    ```sh
    git clone https://github.com/SilentMalachite/Soujo.git
@@ -78,27 +78,27 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 
 | | Claude Code | Codex |
 |---|---|---|
-| Hooks | SessionStart adds `NEXT.md` to the context; Stop warns (never blocks) when `NEXT.md` is missing, invalid, or out of step with PLAN, or changes are uncommitted | Not relied on: use `$close` before stopping. Codex runs `hooks/hooks.json` only after you trust it, and that path is unverified |
-| Effort | Set per layer from `effort:` in `NEXT.md` | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` or `model_reasoning_effort` in `~/.codex/config.toml` |
+| Hooks | SessionStart adds `NEXT.md` to the context; Stop warns (never blocks) when `NEXT.md` is missing, invalid, or out of step with PLAN, or changes are uncommitted | Not relied on: use `$close` before stopping. Codex runs `hooks/hooks.json` only after you trust it; that is unverified, so leave it untrusted |
+| Effort | Set it yourself in the conversation before `/soujo:go`, from `effort:` in `NEXT.md` | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` or `model_reasoning_effort` in `~/.codex/config.toml` |
 | Commits | Normal permissions | The `workspace-write` sandbox cannot write `.git`: approve the escalation for `soujo layer done` / `soujo close` (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
 | Subagents | `review` starts one `soujo:reviewer`. `export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` caps parallel subagents | Not used |
 
 ## CLI
 
-`soujo` takes arguments and exits. Output is a few Japanese lines; errors are one line on stderr with exit code 1. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
+`soujo` takes arguments and exits. Output is usually a few Japanese lines (`map` prints diagrams); errors are one line on stderr with exit code 1. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
 
 | Command | Does |
 |---|---|
 | `soujo init` | Creates `.soujo/` (and CLAUDE.md / AGENTS.md) without overwriting |
-| `soujo next show` | Prints `NEXT.md` |
+| `soujo next show [--hook]` | Prints `NEXT.md`; `--hook` is for the SessionStart hook |
 | `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md` |
-| `soujo next check` | Warns when the project is not resumable; always exits 0 |
+| `soujo next check [--hook]` | Warns when the project is not resumable; always exits 0; `--hook` is for the Stop hook |
 | `soujo plan list` / `soujo plan next` | Layers with their state / the next layer |
-| `soujo log add '<layer>' --line '<line>'` | Appends 1–3 lines to `LOG.md` |
+| `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md` |
 | `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>` |
 | `soujo resume` | Four-line status |
 | `soujo close [--note '<note>']` | Logs the interruption → commits `wip: <layer>` |
-| `soujo map plan` / `soujo map code [dir]` | ASCII plan diagram / Mermaid import graph or directory tree |
+| `soujo map plan` / `soujo map code [<dir>]` | ASCII plan diagram / Mermaid import graph or directory tree |
 
 ## Development
 

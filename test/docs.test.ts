@@ -1,15 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { packageDir } from '../src/files.js';
 import { assertKnownCommand, commands, temp } from './helpers.js';
 
 // User documentation is English with a Japanese translation next to it (SPEC §4).
 const DOCS = ['README', 'CHANGELOG'];
+const PAGES = DOCS.flatMap((doc) => [`${doc}.md`, `${doc}.ja.md`]);
 
 function read(name: string): string {
   return readFileSync(join(packageDir(), name), 'utf8');
+}
+
+// The shape of a page: headings, list items, table rows, and code fences in order, so a translation keeps every block.
+function structure(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => /^(#+ |\s*- |\d+\. |\||\s*```)/.exec(line)?.[1]?.trim() ?? '')
+    .filter((kind) => kind !== '');
 }
 
 // Commands with placeholders collapsed, so that the English and Japanese pages can be compared.
@@ -17,21 +26,31 @@ function shapes(text: string): string[] {
   return commands(text).map((argv) => argv.map((token) => (/^<.*>$/.test(token) ? '<>' : token)).join(' '));
 }
 
+// GitHub's heading anchors: lower case, punctuation other than "-" and "_" dropped, spaces as "-".
+function anchors(text: string): string[] {
+  return [...text.matchAll(/^#+ (.+)$/gm)].map(([, heading]) =>
+    (heading ?? '').toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/ /g, '-'),
+  );
+}
+
 for (const doc of DOCS) {
-  test(`${doc}.md and ${doc}.ja.md link to each other and list the same soujo commands`, () => {
+  test(`${doc}.md and ${doc}.ja.md link to each other and have the same blocks and soujo commands`, () => {
     const en = read(`${doc}.md`);
     const ja = read(`${doc}.ja.md`);
     assert.equal(en.split('\n')[2], `**English** | [日本語](${doc}.ja.md)`);
     assert.equal(ja.split('\n')[2], `[English](${doc}.md) | **日本語**`);
+    assert.deepEqual(structure(ja), structure(en));
     assert.deepEqual(shapes(ja), shapes(en));
   });
 }
 
-test('relative links in the docs point to existing files', () => {
-  for (const name of DOCS.flatMap((doc) => [`${doc}.md`, `${doc}.ja.md`])) {
-    for (const [, target] of read(name).matchAll(/\]\(([^)#]+)(?:#[^)]*)?\)/g)) {
-      if (target === undefined || /^https?:/.test(target)) continue;
-      assert.ok(existsSync(join(packageDir(), dirname(name), target)), `${name}: ${target}`);
+test('relative links in the docs point to existing files and headings', () => {
+  for (const name of PAGES) {
+    for (const [, target = '', anchor] of read(name).matchAll(/\]\(([^)#]*)(?:#([^)]*))?\)/g)) {
+      if (/^https?:/.test(target)) continue;
+      const file = target === '' ? name : target;
+      assert.ok(existsSync(join(packageDir(), file)), `${name}: ${target}`);
+      if (anchor !== undefined) assert.ok(anchors(read(file)).includes(anchor), `${name}: ${file}#${anchor}`);
     }
   }
 });
@@ -53,9 +72,10 @@ test('the READMEs name every skill for both hosts', () => {
   }
 });
 
-test('the latest dated version in both changelogs is the package.json version', () => {
+// A version stays "unreleased" until it is released; the date replaces it then.
+test('the latest version in both changelogs is the package.json version', () => {
   const { version } = JSON.parse(read('package.json')) as { version: string };
   for (const name of ['CHANGELOG.md', 'CHANGELOG.ja.md']) {
-    assert.equal(/^## (\S+) — \d{4}-\d{2}-\d{2}$/m.exec(read(name))?.[1], version, `${name} の先頭の版`);
+    assert.equal(/^## (\S+) — (?:unreleased|\d{4}-\d{2}-\d{2})$/m.exec(read(name))?.[1], version, `${name} の先頭の版`);
   }
 });

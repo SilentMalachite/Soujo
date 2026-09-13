@@ -153,7 +153,7 @@ effort 列は人やホストの設定で使う目安（§8）。SKILL.md の fro
 | サブエージェント | `review` が `agents/reviewer.md` を1体だけ起動 | 使わない。`review` は本体が直接行う |
 | 同時起動の上限 | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` を README に記載 | 該当なし |
 | effort の指定 | 層ごとに `NEXT.md` の値を会話で指示 | `codex -c model_reasoning_effort=<v>` か `~/.codex/config.toml` の `model_reasoning_effort` |
-| スキルの読み込み元 | 導入時に作業ツリー（未追跡のファイルを含み、`.git` は除く）を `~/.claude/plugins/cache/soujo/` へ複製する。`claude plugin update` はバージョンが同じなら何もしないので、入れ直して更新する。`claude --plugin-dir <path>` はその場で読む | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`（`.git`・`node_modules`・`.soujo/` を含むリポジトリ全体の複製）。更新は `codex plugin add soujo@soujo` をもう一度 |
+| スキルの読み込み元 | 導入時に作業ツリー（未追跡・git 無視のファイルを含み、`.git` は除く）を `~/.claude/plugins/cache/soujo/` へ複製する。`claude plugin update` はバージョンが同じなら何もしないので、入れ直して更新する。`claude --plugin-dir <path>` はその場で読む | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`（`.git`・`node_modules`・`.soujo/` を含むリポジトリ全体の複製）。更新は `codex plugin add soujo@soujo` をもう一度 |
 | コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`layer done` / `close` は承認が要る（`codex exec` なら `--add-dir "$PWD/.git"`）。再実行でコミットだけやり直る |
 | 検証の方法 | `claude plugin validate .`（マーケットプレイス）と `claude plugin validate .claude-plugin/plugin.json`（プラグイン・agents・hooks） | 組み込みの `$plugin-creator` が持つ `validate_plugin.py` |
 

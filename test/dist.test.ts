@@ -25,5 +25,6 @@ test('dist/ matches the current src/ (run npm run build when this fails)', () =>
 
 // npm link and npm i -g make the bin executable in place; building it executable keeps git from seeing a mode change afterwards.
 test('dist/cli.js is executable (run npm run build when this fails)', { skip: process.platform === 'win32' }, () => {
-  assert.equal(statSync(join(packageDir(), 'dist', 'cli.js')).mode & 0o111, 0o111, 'dist/cli.js に実行ビットがない');
+  // Only the owner bit: a restrictive umask checks out 750 or 700, which is still executable.
+  assert.equal(statSync(join(packageDir(), 'dist', 'cli.js')).mode & 0o100, 0o100, 'dist/cli.js に実行ビットがない');
 });

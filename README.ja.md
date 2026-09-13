@@ -23,7 +23,7 @@ Claude Code と Codex で使う、いつ中断しても再開できる「仕様 
 | resume | `/soujo:resume` | `$resume` | 4行：次の層・前回のログ・最新コミット・再開方法 |
 | close | `/soujo:close` | `$close` | `中断: …` をログに残し `wip: <層>` でコミット |
 | map | `/soujo:map` | `$map` | 計画の図、import のグラフ、直近の層の Before/After |
-| review | `/soujo:review` | `$review` | 直近の層の指摘を絞らず全部1つの表で |
+| review | `/soujo:review` | `$review` | 指定した範囲（なければ直近の層。未コミットの変更を含む）の指摘を絞らず全部1つの表で |
 
 | ファイル | 中身 | 上限 |
 |---|---|---|
@@ -41,7 +41,7 @@ Claude Code と Codex で使う、いつ中断しても再開できる「仕様 
 
 ## 導入
 
-1. `soujo` CLI。実行時依存はなく `dist/` もコミット済みなので、ビルドは要らない：
+1. `soujo` CLI。両ホストで必須：スキルは PATH の `soujo` を呼ぶ（プラグイン内の `dist/cli.js` を使うのはフックだけ）。実行時依存はなく `dist/` もコミット済みなので、ビルドは要らない：
 
    ```sh
    git clone https://github.com/SilentMalachite/Soujo.git
@@ -78,27 +78,27 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 
 | | Claude Code | Codex |
 |---|---|---|
-| フック | SessionStart で `NEXT.md` を文脈に入れ、Stop で `NEXT.md` がない・無効・PLAN と食い違う、または未コミットの変更があるときに警告する（止めない） | 頼らない。止まる前に `$close`。Codex は信頼した後だけ `hooks/hooks.json` を実行するが、その経路は未確認 |
-| effort | 層ごとに `NEXT.md` の `effort:` から設定 | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` か `~/.codex/config.toml` の `model_reasoning_effort` |
+| フック | SessionStart で `NEXT.md` を文脈に入れ、Stop で `NEXT.md` がない・無効・PLAN と食い違う、または未コミットの変更があるときに警告する（止めない） | 頼らない。止まる前に `$close`。Codex は信頼した後だけ `hooks/hooks.json` を実行するが、未確認なので信頼しないでおく |
+| effort | `/soujo:go` の前に、`NEXT.md` の `effort:` を見て会話で自分で設定 | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` か `~/.codex/config.toml` の `model_reasoning_effort` |
 | コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`soujo layer done` / `soujo close` の昇格を承認する（`codex exec` は `--add-dir "$PWD/.git"`）。再実行はコミットだけをやり直す |
 | サブエージェント | `review` が `soujo:reviewer` を1体だけ起動。`export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` で並列数を抑える | 使わない |
 
 ## CLI
 
-`soujo` は引数を受けて終了する。出力は数行の日本語、エラーは標準エラーに1行で終了コード1。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
+`soujo` は引数を受けて終了する。出力は通常数行の日本語（`map` は図）、エラーは標準エラーに1行で終了コード1。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
 
 | コマンド | 動作 |
 |---|---|
 | `soujo init` | `.soujo/`（と CLAUDE.md / AGENTS.md）を上書きせずに作る |
-| `soujo next show` | `NEXT.md` を出す |
+| `soujo next show [--hook]` | `NEXT.md` を出す。`--hook` は SessionStart フック用 |
 | `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える |
-| `soujo next check` | 再開できない状態を警告する。終了コードは常に0 |
+| `soujo next check [--hook]` | 再開できない状態を警告する。終了コードは常に0。`--hook` は Stop フック用 |
 | `soujo plan list` / `soujo plan next` | 層と状態 / 次の層 |
-| `soujo log add '<層>' --line '<行>'` | `LOG.md` に1〜3行を追記 |
+| `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記 |
 | `soujo layer done '<層>' [--note '<メモ>']` | PLAN の層にチェック → LOG に追記 → `layer: <層>` でコミット |
 | `soujo resume` | 4行の現在地 |
 | `soujo close [--note '<メモ>']` | 中断を記録 → `wip: <層>` でコミット |
-| `soujo map plan` / `soujo map code [dir]` | 計画の ASCII 図 / import の Mermaid 図かディレクトリ木 |
+| `soujo map plan` / `soujo map code [<ディレクトリ>]` | 計画の ASCII 図 / import の Mermaid 図かディレクトリ木 |
 
 ## 開発
 

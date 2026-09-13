@@ -2,7 +2,7 @@
 
 **English** | [日本語](CHANGELOG.ja.md)
 
-## 0.1.0 — 2026-09-13
+## 0.1.0 — unreleased
 
 First version.
 

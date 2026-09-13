@@ -102,3 +102,8 @@ Codex 0.154 は hooks/hooks.json を見つけ、信頼後だけ実行（未信�
 README/CHANGELOG（+.ja.md）: 仕組み・導入（npm link、両ホストの marketplace add と install）・始め方・ホスト差・CLI 一覧。
 npm link は bin に実行ビットを付けて作業ツリーを変えるので、build が dist/cli.js を 755 にする。隔離 prefix で npm link 後に soujo が PATH から動くことを確認。
 Claude Code 2.1.270 も導入時に作業ツリーをキャッシュへ複製し同版の update は無視と判明、SPEC §8 を更新。docs.test が英日の対応・コマンド・リンク・版を検証。
+
+## 2026-09-13 review-fix-l11
+L11 レビュー #1〜#21 を修正: 実行ビットの検査は所有者ビットだけ。引数付きの soujo span は使い方エラーも検出。docs.test は英日のブロック構成とリンクのアンカーも照合。
+README: review の範囲・effort は会話で設定・map は図・--hook・--line の繰り返し・<dir>・PATH の soujo は必須・Codex の hooks は信頼しない。CHANGELOG は unreleased。
+新しい clone で npm link / npm i -g . が node_modules なしで動き、Claude は再インストールだけで更新・git 無視のファイルも複製と確認（SPEC §8）。#18 は NEXT へ、#19 #20 は変更なし。
