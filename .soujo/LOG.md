@@ -147,3 +147,8 @@ go は plan 行きを完全なコマンドで示し、spec・go は --layer を�
 個人情報・認証情報の混入を確認: 追跡ファイル・作者情報（GitHub noreply）・キャッシュに混入なし。公開済みの ac20cbd・23c7ace・1fbe16a のメッセージに Claude のセッション URL の trailer がある（未対応）。
 test/privacy.test.ts が追跡ファイルの認証情報・セッション URL・ホームの絶対パス・個人のメールと認証ファイル名を検出。.gitignore に認証ファイルを追加。
 CLAUDE.md/AGENTS.md（+templates）の秘匿情報の規則にセッション URL・認証ファイル・ホームのパスを明記。ローカルの .git/hooks/commit-msg が同種のメッセージを拒否。
+
+## 2026-09-14 history-rewrite
+ユーザーの判断で main の履歴を書き換え、L7〜L9 レビュー修正の3コミットのメッセージからセッション URL の行を削除（ファイル・作者・日時・件名は同一）。
+新しいハッシュは 6d9497f（L7）・a2bde52（L8）・a78d0d8（L9）。privacy-guard エントリの ac20cbd・23c7ace・1fbe16a はこの3件の旧ハッシュ。
+L7 以降の全コミットのハッシュが変わったので、GitHub へは --force-with-lease で push する。
