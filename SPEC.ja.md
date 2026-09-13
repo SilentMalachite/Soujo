@@ -55,7 +55,7 @@ Soujo/
 ├── skills/                           # 両ホスト共有。commands/ は使わない
 │   ├── spec/  plan/  go/  resume/  map/  review/  close/   （各 SKILL.md）
 ├── agents/reviewer.md                # Claude Code 用サブエージェント
-├── hooks/hooks.json                  # Claude Code 専用（SessionStart / Stop）
+├── hooks/hooks.json                  # Claude Code 用（SessionStart / Stop）。Codex は信頼されたときだけ実行
 ├── src/
 │   ├── cli.ts        引数解釈と出力
 │   ├── state.ts      .soujo/ の解析・整形・検証（純粋関数）
@@ -149,13 +149,13 @@ effort 列は人やホストの設定で使う目安（§8）。SKILL.md の fro
 | マーケットプレイス | `.claude-plugin/marketplace.json` | `.agents/plugins/marketplace.json` |
 | 呼び出し | `/soujo:go` | `$go` |
 | 指示ファイル | `CLAUDE.md`（Opus 5 版） | `AGENTS.md`（Astra 版、**写しではなく別文面**） |
-| フック | `hooks/hooks.json`：SessionStart で `next show --hook`、Stop で `next check --hook` | マニフェストに hooks を書けない。`close` スキルと AGENTS.md の「止まる前に `soujo close`」で代替 |
+| フック | `hooks/hooks.json`：SessionStart で `next show --hook`、Stop で `next check --hook` | `validate_plugin.py` は `hooks` フィールドを拒否するが、Codex 0.154 は `hooks/hooks.json` を見つけ、ユーザーが信頼した後だけ実行する（未信頼の `codex exec` では何も動かなかった）。`close` スキルと AGENTS.md の「止まる前に `soujo close`」で代替 |
 | サブエージェント | `review` が `agents/reviewer.md` を1体だけ起動 | 使わない。`review` は本体が直接行う |
 | 同時起動の上限 | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` を README に記載 | 該当なし |
 | effort の指定 | 層ごとに `NEXT.md` の値を会話で指示 | `codex -c model_reasoning_effort=<v>` か `~/.codex/config.toml` の `model_reasoning_effort` |
-| スキルの読み込み元 | ディレクトリのマーケットプレイスはその場で読む。変更は次のセッションから反映 | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`。更新は `codex plugin add soujo@soujo` をもう一度 |
+| スキルの読み込み元 | ディレクトリのマーケットプレイスはその場で読む。変更は次のセッションから反映 | 導入時のキャッシュ `~/.codex/plugins/cache/soujo/`（`.git`・`node_modules`・`.soujo/` を含むリポジトリ全体の複製）。更新は `codex plugin add soujo@soujo` をもう一度 |
 | コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`layer done` / `close` は承認が要る（`codex exec` なら `--add-dir "$PWD/.git"`）。再実行でコミットだけやり直る |
-| 検証の方法 | `claude plugin validate .` | 組み込みの `$plugin-creator` が持つ `validate_plugin.py` |
+| 検証の方法 | `claude plugin validate .`（マーケットプレイス）と `claude plugin validate .claude-plugin/plugin.json`（プラグイン・agents・hooks） | 組み込みの `$plugin-creator` が持つ `validate_plugin.py` |
 
 ## 9. Opus 5 への適合（CLAUDE.md 側）
 
@@ -220,8 +220,8 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - ライセンスは 0BSD（`soujo init` が作るファイルに著作権表示を要らなくするため）。
 - `dist/` はコミットする（フックが `dist/cli.js` を直接呼ぶ）。
 - Codex のスキル名は改名しない。Codex 0.154 で `$go` / `$plan` は衝突しなかった。
-- 両ホストともスキルは `soujo:<スキル>`（エージェントは `soujo:reviewer`）で並ぶ。`/soujo:resume` は Claude Code 組み込みの `/resume` とは別物で、Codex は `$resume` を `soujo:resume` に解決する。
-- `claude plugin validate .` は `--strict` なしで通す。ルートの CLAUDE.md への警告は意図通り（§4）。
+- 両ホストともスキルは `soujo:<スキル>`、Claude Code はエージェントを `soujo:reviewer` で並べるので、`/review` や `/resume` などの組み込みと名前は重ならない。実行したのは `resume` だけ：`/soujo:resume` は組み込みの `/resume` ではなくスキルを動かし、Codex は `$resume` を `soujo:resume` に解決する。
+- `claude plugin validate .` が見るのはマーケットプレイスだけ。プラグイン本体（agents・hooks を含む）は `claude plugin validate .claude-plugin/plugin.json` で、`--strict` なしで通す。ルートの CLAUDE.md への警告は意図通り（§4）。
 - 両マーケットプレイスともリポジトリ直下（`"./"`）を指し、どちらも動く。
 - SKILL.md に `disable-model-invocation` は書かない（Codex の validator が `true` を拒否。受け入れ基準7を優先）。
 - `soujo next check` は `次:` が PLAN で `[x]` 済みの層を指すときも警告する（クリーンな木でも受け入れ基準6を満たすため）。
@@ -236,7 +236,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 未決：
 - `LOG.md` が長くなったときの巻き取り（月ごとに `LOG-YYYY-MM.md` へ退避する `soujo log rotate`）。
-- Codex のフック対応が将来マニフェストで有効になったら、Stop 相当を追加する。
+- Codex 0.154 はユーザーが信頼すると `hooks/hooks.json` を実行する（`~/.codex/config.toml` の `[hooks.state]`）。そこで `${CLAUDE_PLUGIN_ROOT}` が展開されるか、`systemMessage` が表示されるかは未確認。
 - `soujo --help`：両ホストで試されてエラーになった。
 - モデルがスキルの置き場所へ `cd` したり、そこの `.soujo/` を読もうとすることがある。ホスト側の保護で止まり、スキルにも警告を入れたが、CLI 側のガードは未対応。
 - `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち。

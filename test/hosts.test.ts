@@ -17,7 +17,8 @@ interface Manifest {
 
 interface ClaudeMarketplace {
   name: string;
-  plugins: { name: string; source: unknown }[];
+  metadata: { description: string };
+  plugins: { name: string; source: unknown; description: string; category: string }[];
 }
 
 interface CodexMarketplace {
@@ -60,18 +61,23 @@ test('both host manifests carry the name, version, description, and license of p
   }
 });
 
-test('.codex-plugin/plugin.json has no hooks field and names skills/', () => {
-  const manifest = read<Manifest>('.codex-plugin/plugin.json');
-  assert.ok(!Object.hasOwn(manifest, 'hooks'), 'Codex のマニフェストに hooks を書かない');
-  assert.equal(manifest.skills, './skills/');
+// Claude Code finds hooks/hooks.json by itself (declaring it again is a duplicate), and validate_plugin.py rejects the field.
+test('neither manifest declares hooks, and the Codex one names skills/', () => {
+  for (const path of ['.claude-plugin/plugin.json', '.codex-plugin/plugin.json']) {
+    assert.ok(!Object.hasOwn(read<Manifest>(path), 'hooks'), `${path} に hooks を書かない`);
+  }
+  assert.equal(read<Manifest>('.codex-plugin/plugin.json').skills, './skills/');
 });
 
-test('both marketplaces are named soujo and point at the repository root', () => {
+// The category is the same word in each host's casing: lower case in Claude Code marketplaces, capitalized in Codex.
+test('both marketplaces are named soujo, point at the repository root, and share the description and category', () => {
+  const pkg = read<Manifest>('package.json');
   const claude = read<ClaudeMarketplace>('.claude-plugin/marketplace.json');
   assert.equal(claude.name, 'soujo');
+  assert.equal(claude.metadata.description, pkg.description);
   assert.deepEqual(
-    claude.plugins.map(({ name, source }) => ({ name, source })),
-    [{ name: 'soujo', source: './' }],
+    claude.plugins.map(({ name, source, description, category }) => ({ name, source, description, category })),
+    [{ name: 'soujo', source: './', description: pkg.description, category: 'productivity' }],
   );
 
   const codex = read<CodexMarketplace>('.agents/plugins/marketplace.json');

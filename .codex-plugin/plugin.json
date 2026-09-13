@@ -19,6 +19,6 @@
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
     "websiteURL": "https://github.com/SilentMalachite/Soujo",
-    "defaultPrompt": ["$resume", "$go", "$spec"]
+    "defaultPrompt": ["$spec", "$resume", "$go"]
   }
 }

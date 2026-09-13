@@ -12,7 +12,7 @@ export function temp(t: TestContext): string {
   return dir;
 }
 
-/** A temporary git repository with a local identity and unsigned commits. */
+/** A temporary git repository with a local identity, unsigned commits, and untracked directories counted once. */
 export function repo(t: TestContext): string {
   const dir = temp(t);
   const run = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
@@ -20,6 +20,7 @@ export function repo(t: TestContext): string {
   run('config', 'user.name', 'soujo test');
   run('config', 'user.email', 'test@example.com');
   run('config', 'commit.gpgsign', 'false');
+  run('config', 'status.showUntrackedFiles', 'normal');
   return dir;
 }
 

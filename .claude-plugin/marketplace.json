@@ -5,14 +5,14 @@
     "url": "https://github.com/SilentMalachite"
   },
   "metadata": {
-    "description": "Soujo: resumable spec → plan → layer workflow"
+    "description": "Resumable spec → plan → layer workflow shared by Claude Code and Codex"
   },
   "plugins": [
     {
       "name": "soujo",
       "source": "./",
       "description": "Resumable spec → plan → layer workflow shared by Claude Code and Codex",
-      "category": "development"
+      "category": "productivity"
     }
   ]
 }

@@ -54,7 +54,7 @@ Soujo/
 ├── skills/                           # shared by both hosts; commands/ is not used
 │   ├── spec/  plan/  go/  resume/  map/  review/  close/   (SKILL.md each)
 ├── agents/reviewer.md                # Claude Code subagent
-├── hooks/hooks.json                  # Claude Code only (SessionStart / Stop)
+├── hooks/hooks.json                  # Claude Code (SessionStart / Stop); Codex runs it only once trusted
 ├── src/
 │   ├── cli.ts        argument parsing and output
 │   ├── state.ts      parsing, formatting, validation of .soujo/ (pure functions)
@@ -148,13 +148,13 @@ The effort column is a guide for the human or host setting (§8); SKILL.md front
 | Marketplace | `.claude-plugin/marketplace.json` | `.agents/plugins/marketplace.json` |
 | Invocation | `/soujo:go` | `$go` |
 | Instruction file | `CLAUDE.md` (Opus 5 version) | `AGENTS.md` (Astra version, **separate wording, not a copy**) |
-| Hooks | `hooks/hooks.json`: SessionStart runs `next show --hook`, Stop runs `next check --hook` | Manifests cannot declare hooks. Replaced by the `close` skill and "run `soujo close` before stopping" in AGENTS.md |
+| Hooks | `hooks/hooks.json`: SessionStart runs `next show --hook`, Stop runs `next check --hook` | `validate_plugin.py` rejects a `hooks` field, but Codex 0.154 discovers `hooks/hooks.json` and runs it only after the user trusts it (untrusted, `codex exec` ran nothing). The `close` skill and "run `soujo close` before stopping" in AGENTS.md stand in |
 | Subagent | `review` starts `agents/reviewer.md` once | Not used; `review` is done by the main agent |
 | Concurrency | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` documented in README | n/a |
 | Effort | Given in conversation per layer from `NEXT.md` | `codex -c model_reasoning_effort=<v>` or `model_reasoning_effort` in `~/.codex/config.toml` |
-| Where skills are read | A directory marketplace is read in place: changes apply from the next session | From the install cache `~/.codex/plugins/cache/soujo/`; run `codex plugin add soujo@soujo` again to refresh |
+| Where skills are read | A directory marketplace is read in place: changes apply from the next session | From the install cache `~/.codex/plugins/cache/soujo/`, a copy of the whole repository (`.git`, `node_modules`, `.soujo/` included); run `codex plugin add soujo@soujo` again to refresh |
 | Commits | Allowed by normal permissions | The `workspace-write` sandbox cannot write `.git`; `layer done` / `close` need an approval (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
-| Validation | `claude plugin validate .` | `validate_plugin.py` from the built-in `$plugin-creator` |
+| Validation | `claude plugin validate .` (marketplace) and `claude plugin validate .claude-plugin/plugin.json` (plugin, agents, hooks) | `validate_plugin.py` from the built-in `$plugin-creator` |
 
 ## 9. Fitting Opus 5 (CLAUDE.md)
 
@@ -219,8 +219,8 @@ Decided:
 - License: 0BSD, so that files created by `soujo init` need no copyright notice.
 - `dist/` is committed, because hooks call `dist/cli.js` directly.
 - No renames for Codex skill names: `$go` / `$plan` did not collide on Codex 0.154.
-- Both hosts list the skills as `soujo:<skill>` (and the agent as `soujo:reviewer`); `/soujo:resume` is not Claude Code's built-in `/resume`, and Codex resolves `$resume` to `soujo:resume`.
-- `claude plugin validate .` is run without `--strict`: the root CLAUDE.md warning is intended (§4).
+- Both hosts list the skills as `soujo:<skill>` and Claude Code lists the agent as `soujo:reviewer`, so no name is shared with built-ins such as `/review` or `/resume`. Only `resume` was run: `/soujo:resume` runs the skill, not the built-in `/resume`, and Codex resolves `$resume` to `soujo:resume`.
+- `claude plugin validate .` checks only the marketplace; `claude plugin validate .claude-plugin/plugin.json` checks the plugin with its agents and hooks and runs without `--strict`, because the root CLAUDE.md warning is intended (§4).
 - Both marketplaces point at the repository root (`"./"`); both work.
 - `disable-model-invocation` is not written in SKILL.md (Codex's validator rejects `true`; criterion 7 takes precedence).
 - `soujo next check` also warns when `次:` points to a layer already `[x]` in PLAN, so criterion 6 holds even with a clean tree.
@@ -235,7 +235,7 @@ Decided:
 
 Open:
 - Rotating `LOG.md` when it grows (`soujo log rotate` moving months into `LOG-YYYY-MM.md`).
-- Adding a Stop equivalent for Codex if manifests start supporting hooks.
+- Codex 0.154 runs `hooks/hooks.json` once the user trusts it (`[hooks.state]` in `~/.codex/config.toml`); whether `${CLAUDE_PLUGIN_ROOT}` expands there and `systemMessage` is shown is unverified.
 - `soujo --help`: both hosts tried it and got an error.
 - Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
 - The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer.

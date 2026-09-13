@@ -92,3 +92,8 @@ next set は PLAN にない層（spec/plan 除く）を拒否、init は git 外
 両マニフェスト（name/version/description/license は package.json と一致）・両マーケットプレイス（"./"）・hooks.json（SessionStart: next show --hook / Stop: next check --hook）。
 claude plugin validate . と validate_plugin.py が通る。実機で hooks の発火と、/soujo:resume・$resume が組み込みと衝突せず soujo のスキルに解決されることを確認。
 test/hosts.test.ts がマニフェスト・マーケットプレイス・hooks の形とフック実行を検証。SPEC §14 に2行追記。
+
+## 2026-09-13 review-fix-l10
+L10 レビュー #1〜#11 を修正: claude plugin validate . はマーケットプレイスだけを見るので、plugin.json（agents・hooks 込み）の検証を SPEC §8/§14 に追加。
+Codex 0.154 は hooks/hooks.json を見つけ、信頼後だけ実行（未信頼の exec では無動作）と SPEC §4/§8 に記録、信頼後の動作は未決へ。キャッシュがリポジトリ全体の複製である旨も §8 に。
+衝突確認は resume の実行のみと明記。両マニフェストの hooks 不在・marketplace の説明/カテゴリ一致をテスト、repo() で showUntrackedFiles を固定、defaultPrompt は $spec から。#11 は重複なしを確認し変更なし。
