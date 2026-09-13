@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gitAddAll, gitCommit, gitLastCommit, gitStatus, gitToplevel } from '../src/git.js';
@@ -24,6 +25,15 @@ test('gitStatus, gitAddAll, gitCommit, and gitLastCommit record a layer', (t) =>
   const commit = gitLastCommit(dir);
   assert.equal(commit?.subject, 'layer: L1 scaffold');
   assert.match(commit?.hash ?? '', /^[0-9a-f]{7,}$/);
+});
+
+test('gitStatus handles output larger than 1 MB', (t) => {
+  const dir = repo(t);
+  execFileSync('git', ['config', 'status.showUntrackedFiles', 'all'], { cwd: dir });
+  mkdirSync(join(dir, 'many'));
+  const name = 'x'.repeat(200);
+  for (let index = 0; index < 6000; index++) writeFileSync(join(dir, 'many', `${name}${index}`), '');
+  assert.equal(gitStatus(dir).length, 6000);
 });
 
 test('gitCommit with nothing to commit throws a one-line error', (t) => {

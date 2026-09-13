@@ -33,6 +33,20 @@ test('newlines in arguments do not break the one-line error', () => {
   assert.match(result.stderr, /^soujo: [^\n]*\n$/);
 });
 
+test('Object.prototype names are unknown commands', () => {
+  for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+    const result = soujo(name);
+    assert.deepEqual([result.status, result.stderr], [1, `soujo: 不明なコマンド: ${name}\n`], name);
+  }
+});
+
+test('an error message with a long whitespace run is flattened quickly', () => {
+  const started = performance.now();
+  const result = soujo(`a${' '.repeat(100_000)}b`);
+  assert.equal(result.status, 1);
+  assert.ok(performance.now() - started < 2000, `took ${Math.round(performance.now() - started)}ms`);
+});
+
 test('init, log add, and plan next work through the CLI', (t) => {
   const dir = temp(t);
   const created = soujoIn(dir, 'init');

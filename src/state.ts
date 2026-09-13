@@ -44,7 +44,8 @@ const NEXT_KEYS = [
 
 const NEXT_LINE = /^(次|前提|確認|注意|effort)\s*[:：]\s*(.*)$/;
 const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/;
-const PLAN_SEPARATOR = /\s+—\s+/;
+// Standalone tokens between the layer name and its completion condition. "—" is canonical; the rest are common typing variants.
+const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -53,7 +54,7 @@ function isEffort(value: string): value is Effort {
 }
 
 function contentLines(text: string): string[] {
-  const body = text.replace(/\s+$/, '');
+  const body = text.trimEnd();
   return body === '' ? [] : body.split(/\r?\n/);
 }
 
@@ -121,13 +122,16 @@ function matchItem(line: string): RegExpExecArray | null {
   return PLAN_ITEM.exec(line.replace(/\r$/, ''));
 }
 
+// Splits at the first separator token that has a word on both sides. Token-based rather than a /\s+—\s+/ search,
+// which backtracks quadratically on long whitespace runs.
 function splitItem(body: string): { layer: string; condition: string } {
-  const separator = PLAN_SEPARATOR.exec(body);
-  if (!separator) return { layer: body.trim(), condition: '' };
-  return {
-    layer: body.slice(0, separator.index).trim(),
-    condition: body.slice(separator.index + separator[0].length).trim(),
-  };
+  const parts = body.trim().split(/(\s+)/); // word, space, word, space, ...
+  for (let index = 2; index < parts.length - 2; index += 2) {
+    if (PLAN_SEPARATORS.has(parts[index] ?? '')) {
+      return { layer: parts.slice(0, index - 1).join(''), condition: parts.slice(index + 2).join('') };
+    }
+  }
+  return { layer: body.trim(), condition: '' };
 }
 
 /** Checklist items of PLAN.md in order; other lines are ignored. */
@@ -173,7 +177,7 @@ export function appendLog(text: string, entry: LogEntry): string {
   if (lines.some((line) => line.startsWith('## '))) throw new Error('LOG の行を「## 」で始めない');
 
   const block = `${[`## ${entry.date} ${layer}`, ...lines].join('\n')}\n`;
-  const body = text.replace(/\s+$/, '');
+  const body = text.trimEnd();
   return body === '' ? block : `${body}\n\n${block}`;
 }
 

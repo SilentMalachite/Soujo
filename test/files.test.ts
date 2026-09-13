@@ -25,6 +25,20 @@ test('findStateDir walks up to the nearest .soujo directory and skips .soujo fil
   assert.equal(requireStateDir(root), join(root, '.soujo'));
 });
 
+test('findStateDir stops at the git top level instead of using an outer project', (t) => {
+  const root = temp(t);
+  mkdirSync(join(root, '.soujo'));
+  mkdirSync(join(root, 'repo', '.git'), { recursive: true });
+  mkdirSync(join(root, 'repo', 'src'));
+  mkdirSync(join(root, 'worktree'));
+  writeFileSync(join(root, 'worktree', '.git'), 'gitdir: elsewhere\n');
+  assert.equal(findStateDir(join(root, 'repo', 'src')), undefined);
+  assert.equal(findStateDir(join(root, 'worktree')), undefined);
+
+  mkdirSync(join(root, 'repo', '.soujo'));
+  assert.equal(findStateDir(join(root, 'repo', 'src')), join(root, 'repo', '.soujo'));
+});
+
 test('findStateDir returns undefined and requireStateDir throws outside Soujo projects', (t) => {
   const root = temp(t);
   assert.equal(findStateDir(root), undefined);

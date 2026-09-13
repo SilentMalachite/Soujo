@@ -75,6 +75,28 @@ test('parsePlan reads checklist items and splits at the first separator', () => 
   assert.equal(parsePlan('- [X] L1 — c\r\n')[0]?.condition, 'c');
 });
 
+test('parsePlan accepts common separator variants but not hyphens inside words', () => {
+  for (const separator of ['—', '–', '--', '-']) {
+    assert.deepEqual(parsePlan(`- [ ] L1 scaffold ${separator} build  が通る\n`), [
+      { layer: 'L1 scaffold', condition: 'build  が通る', done: false },
+    ], separator);
+  }
+  assert.deepEqual(parsePlan('- [ ] L4 init-plan-log\n- [ ] L5 a-b —c\n'), [
+    { layer: 'L4 init-plan-log', condition: '', done: false },
+    { layer: 'L5 a-b —c', condition: '', done: false },
+  ]);
+  assert.equal(markDone('- [ ] L1 - c\n', 'L1'), '- [x] L1 - c\n');
+});
+
+test('long whitespace runs are processed in linear time', () => {
+  const spaces = ' '.repeat(200_000);
+  const started = performance.now();
+  validateNext(`a${spaces}b${spaces}`);
+  parsePlan(`- [ ] L1${spaces}x${spaces}y\n`);
+  appendLog(`a${spaces}b${spaces}`, { date: '2026-09-13', layer: 'L1', lines: [] });
+  assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)}ms`);
+});
+
 test('nextLayer returns the first unfinished layer or undefined', () => {
   assert.equal(nextLayer(parsePlan(PLAN))?.layer, 'L2 state');
   assert.equal(nextLayer(parsePlan('- [x] L1 — c\n')), undefined);

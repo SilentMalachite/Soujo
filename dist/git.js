@@ -1,12 +1,14 @@
 // git calls. Thin layer: each function runs one git command in the given directory.
 import { execFileSync } from 'node:child_process';
+// execFileSync fails beyond 1 MB by default; `git status` in a large working tree can exceed that.
+const MAX_OUTPUT = 256 * 1024 * 1024;
 function firstLine(text, from) {
     const lines = (text ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
     return from === 'first' ? lines[0] : lines[lines.length - 1];
 }
 function git(cwd, args) {
     try {
-        return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+        return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: MAX_OUTPUT });
     }
     catch (error) {
         const { stderr, stdout, message } = error;

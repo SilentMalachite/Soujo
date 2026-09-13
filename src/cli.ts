@@ -65,14 +65,19 @@ const COMMANDS: Record<string, Command> = {
   },
 };
 
+// Own keys only, so that names like "constructor" or "__proto__" are unknown commands.
+function lookup(key: string): Command | undefined {
+  return Object.hasOwn(COMMANDS, key) ? COMMANDS[key] : undefined;
+}
+
 function resolve(argv: string[]): { command: Command; args: string[] } | undefined {
   const [first, second] = argv;
   if (first === undefined) return undefined;
   if (second !== undefined) {
-    const command = COMMANDS[`${first} ${second}`];
+    const command = lookup(`${first} ${second}`);
     if (command) return { command, args: argv.slice(2) };
   }
-  const command = COMMANDS[first];
+  const command = lookup(first);
   return command ? { command, args: argv.slice(1) } : undefined;
 }
 
@@ -86,7 +91,11 @@ function describe(error: unknown): string {
 }
 
 function oneLine(text: string): string {
-  return text.replace(/\s*\n\s*/g, ' ').trim();
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .join(' ');
 }
 
 function main(argv: string[]): number {

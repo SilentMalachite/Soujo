@@ -102,7 +102,7 @@ effort: <low|medium|high|xhigh>
 - Node 20+, ESM, **zero runtime dependencies** (`node:*` only). devDependencies are only `typescript` and `@types/node`.
 - Output is short and in Japanese; normally at most 5 lines on stdout. Errors are one line on stderr with exit code 1.
 - Behaves the same on any host. No host detection; only `--hook` switches to a Claude Code hook-friendly output.
-- `.soujo/` is searched upward from the current directory.
+- `.soujo/` is searched upward from the current directory, stopping at the git top level (a directory containing `.git`).
 
 | Command | Behavior | Output |
 |---|---|---|

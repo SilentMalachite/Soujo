@@ -8,7 +8,7 @@ export function nextShow(cwd, hook) {
     try {
         const dir = hook ? findStateDir(cwd) : requireStateDir(cwd);
         const text = dir === undefined ? '' : (readState(dir, 'NEXT.md') ?? '');
-        const body = text.replace(/\s+$/, '');
+        const body = text.trimEnd();
         if (body === '')
             return hook ? [] : ['NEXT.md なし'];
         return body.split(/\r?\n/);

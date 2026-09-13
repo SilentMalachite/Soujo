@@ -28,3 +28,8 @@ packageDir は package.json を上へ探す（dist/ と .test-dist/src/ のど�
 next check は問題を「 / 」で1行に連結し、--hook では {"systemMessage"} にする。予期しない失敗も警告に変えて終了0。
 未コミット検査は git 管理下のときだけ。next check は未知の引数を無視する（hook から常に終了0）。
 next show --hook はプロジェクト外・NEXT.md なし・読めないときに無音。
+
+## 2026-09-13 review-fix
+レビュー #1〜#6 を修正: コマンド表は自身のキーだけ引く / .soujo/ 探索は .git のある階層で止める（SPEC §6 も更新）。
+build・test は出力先を消してから tsc / git 呼び出しの maxBuffer を 256MB に。
+PLAN の区切りは — に加え – -- - の独立トークンも認める / 末尾空白と区切り判定を線形時間に（trimEnd・トークン分割）。

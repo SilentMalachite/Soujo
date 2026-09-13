@@ -16,12 +16,16 @@ function isDirectory(path: string): boolean {
   }
 }
 
-/** The nearest .soujo/ directory from start upward, or undefined outside Soujo projects. */
+/**
+ * The nearest .soujo/ directory from start upward, or undefined outside Soujo projects.
+ * The search stops at the git top level (a directory with .git), so a nested repository never uses an outer project.
+ */
 export function findStateDir(start: string = process.cwd()): string | undefined {
   let dir = resolve(start);
   for (;;) {
     const candidate = join(dir, STATE_DIR);
     if (isDirectory(candidate)) return candidate;
+    if (existsSync(join(dir, '.git'))) return undefined;
     const parent = dirname(dir);
     if (parent === dir) return undefined;
     dir = parent;
