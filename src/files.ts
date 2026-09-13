@@ -1,9 +1,12 @@
 // Finding .soujo/ and reading/writing its files. Thin I/O layer: no parsing or validation here.
 
 import {
+  closeSync,
   existsSync,
+  fchmodSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -12,7 +15,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const STATE_DIR = '.soujo';
@@ -94,8 +97,21 @@ export function requireState(dir: string, file: StateFile): string {
   return text;
 }
 
-function targetOf(path: string): string {
-  return existsSync(path) ? realpathSync(path) : path;
+export interface StateTarget {
+  /** The real path: symlinks of the file and of .soujo/ resolved. A missing file (or a dangling symlink) is replaced in .soujo/. */
+  path: string;
+  /** Why the file must not be written: its real path is outside the project (the directory above .soujo/) or inside .git. */
+  problem?: 'プロジェクトの外' | '.git の中';
+}
+
+/** Where writeState writes the file. Throws when .soujo/ or the project cannot be resolved. */
+export function stateTarget(dir: string, file: StateFile): StateTarget {
+  const path = join(dir, file);
+  const real = existsSync(path) ? realpathSync(path) : join(realpathSync(dir), file);
+  const inProject = relative(realpathSync(dirname(dir)), real);
+  if (inProject === '..' || inProject.startsWith(`..${sep}`) || isAbsolute(inProject)) return { path: real, problem: 'プロジェクトの外' };
+  if (inProject.split(sep).includes('.git')) return { path: real, problem: '.git の中' };
+  return { path: real };
 }
 
 // writeState's temporary file for target: ".<name>.<pid>.tmp" next to it.
@@ -104,17 +120,43 @@ function isTempOf(target: string, name: string): boolean {
   return name.startsWith(prefix) && /^\d+\.tmp$/.test(name.slice(prefix.length));
 }
 
-/** Replaces the file via a temporary file and rename, so an interruption never leaves it half-written. Symlinks are kept. */
-export function writeState(dir: string, file: StateFile, text: string): void {
-  const path = join(dir, file);
-  const target = targetOf(path);
-  const temp = join(dirname(target), `.${basename(target)}.${process.pid}.tmp`);
+function modeOf(path: string): number | undefined {
   try {
-    writeFileSync(temp, text);
-    renameSync(temp, target);
+    return statSync(path).mode & 0o7777;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Replaces the file via a temporary file and rename, so an interruption never leaves it half-written. Symlinks are kept,
+ * but only followed to files inside the project and outside .git, so a symlink planted in a repository cannot overwrite
+ * other files. The temporary file is created exclusively, never through an existing entry, and gets the file's permissions.
+ */
+export function writeState(dir: string, file: StateFile, text: string): void {
+  let target: StateTarget;
+  try {
+    target = stateTarget(dir, file);
+  } catch (error) {
+    throw new Error(`${file} を書けない: ${(error as Error).message}`);
+  }
+  if (target.problem !== undefined) throw new Error(`${file} を書かない: 実体（symlink の先）が${target.problem}`);
+  const temp = join(dirname(target.path), `.${basename(target.path)}.${process.pid}.tmp`);
+  let created = false;
+  try {
+    const mode = modeOf(target.path);
+    const fd = openSync(temp, 'wx', mode ?? 0o666);
+    created = true;
+    try {
+      writeFileSync(fd, text);
+      if (mode !== undefined) fchmodSync(fd, mode);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(temp, target.path);
   } catch (error) {
     try {
-      rmSync(temp, { force: true });
+      if (created) rmSync(temp, { force: true });
     } catch {
       // Cleanup is best effort; report the original failure.
     }
@@ -122,18 +164,22 @@ export function writeState(dir: string, file: StateFile, text: string): void {
   }
 }
 
-/** Deletes temporary files that a killed writeState left behind, so that `git add -A` never commits them. */
+/** Deletes temporary files (or symlinks in their place) that a killed writeState left behind, so that `git add -A` never commits them. */
 export function removeLeftoverTemps(dir: string): void {
   for (const file of STATE_FILES) {
-    const target = targetOf(join(dir, file));
+    let target: StateTarget;
     let entries;
     try {
-      entries = readdirSync(dirname(target), { withFileTypes: true });
+      target = stateTarget(dir, file);
+      if (target.problem !== undefined) continue;
+      entries = readdirSync(dirname(target.path), { withFileTypes: true });
     } catch {
       continue;
     }
     for (const entry of entries) {
-      if (entry.isFile() && isTempOf(target, entry.name)) rmSync(join(dirname(target), entry.name), { force: true });
+      if ((entry.isFile() || entry.isSymbolicLink()) && isTempOf(target.path, entry.name)) {
+        rmSync(join(dirname(target.path), entry.name), { force: true });
+      }
     }
   }
 }

@@ -1,17 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   createFile,
   ensureStateDir,
   findStateDir,
+  isSymlink,
   packageDir,
   readState,
   readTemplate,
   removeLeftoverTemps,
   requireState,
   requireStateDir,
+  stateTarget,
   writeState,
 } from '../src/files.js';
 import { temp } from './helpers.js';
@@ -76,6 +89,63 @@ test('writeState reports a one-line error when the directory is missing', (t) =>
   assert.throws(() => writeState(dir, 'NEXT.md', 'x'), /^Error: NEXT\.md を書けない: [^\n]+$/);
 });
 
+test('writeState refuses symlinks to files outside the project or inside .git and writes nothing', { skip: process.platform === 'win32' }, (t) => {
+  const outside = join(temp(t), 'config');
+  writeFileSync(outside, 'keep\n');
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(dir);
+  mkdirSync(join(root, '.git'));
+  writeFileSync(join(root, '.git', 'config'), 'keep\n');
+  symlinkSync(outside, join(dir, 'LOG.md'));
+  symlinkSync('../.git/config', join(dir, 'NEXT.md'));
+  assert.deepEqual(stateTarget(dir, 'LOG.md'), { path: realpathSync(outside), problem: 'プロジェクトの外' });
+  assert.throws(() => writeState(dir, 'LOG.md', 'x'), /^Error: LOG\.md を書かない: 実体（symlink の先）がプロジェクトの外$/);
+  assert.throws(() => writeState(dir, 'NEXT.md', 'x'), /^Error: NEXT\.md を書かない: 実体（symlink の先）が\.git の中$/);
+  assert.equal(readFileSync(outside, 'utf8'), 'keep\n');
+  assert.equal(readFileSync(join(root, '.git', 'config'), 'utf8'), 'keep\n');
+
+  const linkedDir = temp(t);
+  symlinkSync(dirname(outside), join(linkedDir, '.soujo'));
+  assert.throws(() => writeState(join(linkedDir, '.soujo'), 'PLAN.md', 'x'), /を書かない: 実体（symlink の先）がプロジェクトの外$/);
+  assert.equal(existsSync(join(dirname(outside), 'PLAN.md')), false);
+});
+
+test('writeState never writes through an existing temporary path, and removes only what it created', { skip: process.platform === 'win32' }, (t) => {
+  const outside = join(temp(t), 'victim');
+  writeFileSync(outside, 'keep\n');
+  const dir = temp(t);
+  writeFileSync(join(dir, 'NEXT.md'), 'old\n');
+  const planted = join(dir, `.NEXT.md.${process.pid}.tmp`);
+  symlinkSync(outside, planted);
+  assert.throws(() => writeState(dir, 'NEXT.md', 'new\n'), /^Error: NEXT\.md を書けない: [^\n]*EEXIST/);
+  assert.equal(readFileSync(outside, 'utf8'), 'keep\n');
+  assert.equal(readState(dir, 'NEXT.md'), 'old\n');
+  assert.ok(lstatSync(planted).isSymbolicLink());
+
+  removeLeftoverTemps(dir);
+  assert.equal(isSymlink(planted), false);
+  assert.equal(readFileSync(outside, 'utf8'), 'keep\n');
+  writeState(dir, 'NEXT.md', 'new\n');
+  assert.equal(readState(dir, 'NEXT.md'), 'new\n');
+});
+
+test('writeState keeps the permissions of the file and of a symlink target', { skip: process.platform === 'win32' }, (t) => {
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(dir);
+  writeFileSync(join(dir, 'LOG.md'), 'old\n', { mode: 0o600 });
+  chmodSync(join(dir, 'LOG.md'), 0o600);
+  writeFileSync(join(root, 'PLAN.md'), 'old\n');
+  chmodSync(join(root, 'PLAN.md'), 0o640);
+  symlinkSync('../PLAN.md', join(dir, 'PLAN.md'));
+  writeState(dir, 'LOG.md', 'new\n');
+  writeState(dir, 'PLAN.md', 'new\n');
+  assert.equal(statSync(join(dir, 'LOG.md')).mode & 0o777, 0o600);
+  assert.equal(statSync(join(root, 'PLAN.md')).mode & 0o777, 0o640);
+  assert.equal(readFileSync(join(root, 'PLAN.md'), 'utf8'), 'new\n');
+});
+
 test('removeLeftoverTemps deletes only writeState temporary files, next to symlink targets too', (t) => {
   const root = temp(t);
   const dir = join(root, '.soujo');
@@ -91,6 +161,17 @@ test('removeLeftoverTemps deletes only writeState temporary files, next to symli
   assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
   assert.deepEqual(kept.filter((path) => !existsSync(path)), []);
   assert.ok(existsSync(join(dir, '.SPEC.md.7.tmp')));
+});
+
+test('removeLeftoverTemps leaves files next to a symlink target outside the project', { skip: process.platform === 'win32' }, (t) => {
+  const elsewhere = temp(t);
+  writeFileSync(join(elsewhere, 'LOG.md'), '');
+  writeFileSync(join(elsewhere, '.LOG.md.123.tmp'), 'not ours');
+  const root = temp(t);
+  mkdirSync(join(root, '.soujo'));
+  symlinkSync(join(elsewhere, 'LOG.md'), join(root, '.soujo', 'LOG.md'));
+  removeLeftoverTemps(join(root, '.soujo'));
+  assert.ok(existsSync(join(elsewhere, '.LOG.md.123.tmp')));
 });
 
 test('requireState throws for a missing file', (t) => {

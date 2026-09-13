@@ -103,6 +103,7 @@ effort: <low|medium|high|xhigh>
 - Output is short and in Japanese; normally at most 5 lines on stdout (`--help` and `map` print more). Errors are one line on stderr with exit code 1.
 - Behaves the same on any host. No host detection; only `--hook` switches to a Claude Code hook-friendly output.
 - `.soujo/` is searched upward from the current directory, stopping at the git top level (a directory containing `.git`).
+- `.soujo/` files are replaced through a temporary file created exclusively next to the real file, keeping its permissions. Symlinks (of a file or of `.soujo/`) are followed only to files inside the project and outside `.git`; any other write is refused.
 
 | Command | Behavior | Output |
 |---|---|---|
@@ -239,6 +240,7 @@ Decided:
 - `soujo next set` refuses layers missing from PLAN (other than `spec` / `plan`), so a mistyped layer name is not noticed only at `layer done`.
 - `soujo --help` and `soujo <command> --help` print usage lines and run nothing else (L13): both hosts tried `soujo --help` and got an error, and write commands given `--help` must keep writing nothing, as they do now by rejecting it as an unknown option.
 - `soujo next set` writes `effort: high` for `次: spec` / `次: plan`, the effort of those skills in §7, and refuses other values (L14), so `NEXT.md` after the last layer no longer carries an arbitrary effort. `NEXT.md` written by other means is not checked for it.
+- Writes never leave the project (§6), because a cloned repository can carry symlinks planted to overwrite the user's files through ordinary record keeping.
 
 Open:
 - Rotating `LOG.md` when it grows (`soujo log rotate` moving months into `LOG-YYYY-MM.md`).

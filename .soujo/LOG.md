@@ -152,3 +152,7 @@ CLAUDE.md/AGENTS.md（+templates）の秘匿情報の規則にセッション UR
 ユーザーの判断で main の履歴を書き換え、L7〜L9 レビュー修正の3コミットのメッセージからセッション URL の行を削除（ファイル・作者・日時・件名は同一）。
 新しいハッシュは 6d9497f（L7）・a2bde52（L8）・a78d0d8（L9）。privacy-guard エントリの ac20cbd・23c7ace・1fbe16a はこの3件の旧ハッシュ。
 L7 以降の全コミットのハッシュが変わったので、GitHub へは --force-with-lease で push する。
+
+## 2026-09-14 codex-review-write-safety
+Codex 全体レビュー #1・#5・#6: writeState は実体（symlink の先）がプロジェクト外・.git 内なら書かず、一時ファイルを wx で排他作成して自作分だけ消し、元の権限を保つ。
+removeLeftoverTemps は一時ファイル名の symlink も消し、プロジェクト外の実体の隣は触らない。SPEC(+ja) §6・§14 に明記。
