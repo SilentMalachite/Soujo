@@ -62,3 +62,8 @@ Codex レビュー #2 #10 #11: HEAD の PLAN でチェック済みなら作業�
 resume: 次/前回/コミット/再開の4行。NEXT がない・無効なら PLAN の次の層と next set を示し、層が尽きたら plan。
 close: NEXT 検証→「中断: …」を NEXT の層で LOG へ→wip コミット。LOG の最後が同じなら追記せず再実行はコミットだけ。
 コミット前提の検査を gitRequireCommittable（git.ts）へ移し layer done と共有。
+
+## 2026-09-13 review-fix-l7
+L7 レビュー #1〜#37 を修正: close は HEAD に無い末尾の中断エントリだけ再利用 / PLAN チェック未コミット（layer done 途中）は拒否 / next set 後に止まったら未チェックの層で wip。
+resume は NEXT 無効・完了済み・層飛ばし・layer done 途中をそれぞれ案内し、読めない行だけ縮退、値は60文字で切る。next check も層飛ばしを警告。
+git の add/commit/status は -- . でプロジェクト内に限定、.soujo/ の symlink を拒否、出力の制御文字を空白に、CRLF の LOG は CRLF で追記。共有処理は commands/shared.ts。

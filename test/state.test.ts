@@ -5,10 +5,15 @@ import {
   formatDate,
   formatNext,
   lastLog,
+  logLines,
   markDone,
+  newlyDone,
   nextLayer,
+  nextStatus,
+  parseLog,
   parseNext,
   parsePlan,
+  printable,
   validateNext,
 } from '../src/state.js';
 
@@ -75,17 +80,27 @@ test('validateNext counts trailing blank lines toward the limit, with LF and CRL
   assert.deepEqual(validateNext(' \n\n'), ['NEXT.md が空']);
 });
 
-test('appendLog keeps the existing text as an exact prefix', () => {
+test('appendLog keeps the existing text as an exact prefix and follows its line break', () => {
   const entry = { date: '2026-09-13', layer: 'L1', lines: ['a'] };
   const block = '## 2026-09-13 L1\na\n';
+  const crlfBlock = block.replaceAll('\n', '\r\n');
   const cases: [string, string][] = [
-    ['x  ', 'x  \n\n'],
-    ['x\n', 'x\n\n'],
-    ['x\n\n\n', 'x\n\n\n'],
-    ['x\r\n', 'x\r\n\n'],
-    ['x\r\n\r\n', 'x\r\n\r\n'],
+    ['x  ', `x  \n\n${block}`],
+    ['x\n', `x\n\n${block}`],
+    ['x\n\n\n', `x\n\n\n${block}`],
+    ['x\r\n', `x\r\n\r\n${crlfBlock}`],
+    ['x\r\n\r\n', `x\r\n\r\n${crlfBlock}`],
+    ['# LOG\r\n\r\nx', `# LOG\r\n\r\nx\r\n\r\n${crlfBlock}`],
   ];
-  for (const [text, prefix] of cases) assert.equal(appendLog(text, entry), `${prefix}${block}`, JSON.stringify(text));
+  for (const [text, expected] of cases) assert.equal(appendLog(text, entry), expected, JSON.stringify(text));
+});
+
+test('printable and logLines turn control characters into spaces', () => {
+  const [lineSeparator, bell] = [String.fromCharCode(0x2028), String.fromCharCode(7)];
+  assert.equal(printable(`a\rb\tc\nd${lineSeparator}e${bell}`), 'a b c d e ');
+  assert.deepEqual(logLines([' a\r\n\r\n b\rc ', `\t${lineSeparator}`]), ['a', 'b c']);
+  assert.equal(appendLog('', { date: '2026-09-13', layer: 'L1', lines: ['a\rb'] }), '## 2026-09-13 L1\na b\n');
+  assert.throws(() => appendLog('', { date: '2026-09-13', layer: 'L1\rx', lines: [] }), /制御文字なし/);
 });
 
 test('appendLog refuses any line lastLog would read as a heading, and only those', () => {
@@ -161,10 +176,31 @@ test('appendLog refuses entries that break the format', () => {
   assert.throws(() => appendLog('', { ...entry, lines: ['## 2026-09-14 fake'] }), /## /);
 });
 
-test('lastLog returns the last entry with its lines, or undefined', () => {
-  const log = '# LOG\n\n## 2026-09-12 plan\nold\n\n## 2026-09-13 L1 scaffold\na\n\nb\n';
+test('parseLog and lastLog return entries with their lines', () => {
+  const log = '# LOG\n\nintro\n\n## 2026-09-12 plan\nold\n\n## 2026-09-13 L1 scaffold\r\na\r\n\r\nb\r\n';
+  assert.deepEqual(parseLog(log), [
+    { date: '2026-09-12', layer: 'plan', lines: ['old'] },
+    { date: '2026-09-13', layer: 'L1 scaffold', lines: ['a', 'b'] },
+  ]);
   assert.deepEqual(lastLog(log), { date: '2026-09-13', layer: 'L1 scaffold', lines: ['a', 'b'] });
+  assert.deepEqual(parseLog('# LOG\n'), []);
   assert.equal(lastLog('# LOG\n'), undefined);
+});
+
+test('nextStatus tells a finished layer and a layer left unclosed before NEXT.md', () => {
+  const items = parsePlan('- [x] L1 — a\n- [ ] L2 — b\n- [ ] L3 — c\n');
+  assert.deepEqual(nextStatus('L2', items), { state: 'ok' });
+  assert.deepEqual(nextStatus('spec', items), { state: 'ok' });
+  assert.deepEqual(nextStatus('L1', items), { state: 'done' });
+  assert.deepEqual(nextStatus('L3', items), { state: 'skipped', unfinished: { layer: 'L2', condition: 'b', done: false } });
+});
+
+test('newlyDone lists layers checked only in the later PLAN', () => {
+  const head = parsePlan('- [x] L1\n- [ ] L2\n- [ ] L3\n');
+  const working = parsePlan('- [x] L1\n- [x] L2\n- [ ] L3\n- [x] L4\n');
+  assert.deepEqual(newlyDone(head, working).map((item) => item.layer), ['L2', 'L4']);
+  assert.deepEqual(newlyDone(working, head), []);
+  assert.deepEqual(newlyDone([], head).map((item) => item.layer), ['L1']);
 });
 
 test('formatDate pads month and day in local time', () => {

@@ -1,26 +1,11 @@
 // soujo layer done: checks the layer in PLAN.md, appends LOG.md, and commits everything as "layer: <layer>".
 
 import { dirname } from 'node:path';
-import {
-  STATE_DIR,
-  STATE_PATHS,
-  readState,
-  removeLeftoverTemps,
-  requireState,
-  requireStateDir,
-  writeState,
-} from '../files.js';
-import {
-  gitAddedFiles,
-  gitCommitAll,
-  gitFindCommit,
-  gitHeadFile,
-  gitLastCommit,
-  gitRequireCommittable,
-} from '../git.js';
-import { appendLog, formatDate, lastLog, markDone, parseNext, parsePlan, validateNext } from '../state.js';
+import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
+import { gitAddedFiles, gitCommitAll, gitFindCommit, gitLastCommit } from '../git.js';
+import { appendLog, formatDate, lastLog, markDone, parsePlan } from '../state.js';
+import { headState, requireCommittable, requireNext, resumable } from './shared.js';
 
-const PLAN_PATH = `${STATE_DIR}/PLAN.md`;
 const SHOWN_FILES = 5;
 
 function isChecked(plan: string | undefined, layer: string): boolean {
@@ -29,20 +14,7 @@ function isChecked(plan: string | undefined, layer: string): boolean {
 
 function requireNextStep(dir: string, layer: string): void {
   const hint = '（先に soujo next set で次の一手を書く）';
-  const text = readState(dir, 'NEXT.md');
-  if (text === undefined) throw new Error(`NEXT.md がない${hint}`);
-  const problems = validateNext(text);
-  if (problems.length > 0) throw new Error(`NEXT.md が無効: ${problems.join('、')}${hint}`);
-  if (parseNext(text)?.layer === layer) throw new Error(`NEXT.md の次がまだ「${layer}」${hint}`);
-}
-
-/** Runs step and adds what is already recorded and how to resume to its error message. */
-function resumable<T>(step: () => T, recorded: string): T {
-  try {
-    return step();
-  } catch (error) {
-    throw new Error(`${(error as Error).message}（${recorded}）`);
-  }
+  if (requireNext(dir, hint).layer === layer) throw new Error(`NEXT.md の次がまだ「${layer}」${hint}`);
 }
 
 // Display only: the commit already succeeded, so a failure here must not turn the result into an error.
@@ -71,7 +43,7 @@ function describeAdded(root: string): string {
 export function layerDone(cwd: string, layer: string, note?: string, now: Date = new Date()): string[] {
   const dir = requireStateDir(cwd);
   const root = dirname(dir);
-  gitRequireCommittable(root, STATE_PATHS);
+  requireCommittable(root);
 
   const name = layer.trim();
   const plan = requireState(dir, 'PLAN.md');
@@ -81,7 +53,7 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   const subject = `layer: ${name}`;
   const committed = gitFindCommit(root, subject);
   if (committed !== undefined) throw new Error(`層「${name}」はコミット済み（${committed.hash}）`);
-  if (isChecked(gitHeadFile(root, PLAN_PATH), name)) {
+  if (isChecked(headState(root, 'PLAN.md'), name)) {
     throw new Error(`層「${name}」は PLAN のチェックごとコミット済み（件名が「${subject}」ではない）`);
   }
   requireNextStep(dir, name);

@@ -9,6 +9,7 @@ import { logAdd } from './commands/log.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
+import { printable } from './state.js';
 
 type Command = (args: string[], cwd: string) => string[];
 
@@ -74,7 +75,7 @@ const COMMANDS: Record<string, Command> = {
   resume: noArguments('resume', resume),
   close: (args, cwd) => {
     const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
-    expectPositionals(positionals, 0, 'close [--note <一言>]');
+    expectPositionals(positionals, 0, 'close [--note <1〜3行>]');
     return close(cwd, values.note);
   },
 };
@@ -100,6 +101,11 @@ function describe(error: unknown): string {
   const code = (error as NodeJS.ErrnoException).code;
   const quoted = /'([^']+)'/.exec(error.message)?.[1] ?? '';
   if (code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION') return `不明なオプション: ${quoted}`;
+  // "--note - x" leaves the value looking like an option; the value has to be attached with "=".
+  const dashed = /use '(--[\w-]+)=/.exec(error.message)?.[1];
+  if (code === 'ERR_PARSE_ARGS_INVALID_OPTION_VALUE' && dashed !== undefined) {
+    return `オプションの値が「-」で始まる: ${dashed}=<値> の形で書く`;
+  }
   if (code === 'ERR_PARSE_ARGS_INVALID_OPTION_VALUE') return `オプションの値が不正: ${quoted}`;
   return error.message;
 }
@@ -107,7 +113,7 @@ function describe(error: unknown): string {
 function oneLine(text: string): string {
   return text
     .split('\n')
-    .map((line) => line.trim())
+    .map((line) => printable(line).trim())
     .filter((line) => line !== '')
     .join(' ');
 }
@@ -119,7 +125,8 @@ function main(argv: string[]): number {
       throw new Error(argv[0] === undefined ? 'コマンドがありません' : `不明なコマンド: ${argv[0]}`);
     }
     const lines = found.command(found.args, process.cwd());
-    if (lines.length > 0) process.stdout.write(`${lines.join('\n')}\n`);
+    // Values from files can carry CR or other controls; each returned line stays one terminal line.
+    if (lines.length > 0) process.stdout.write(`${lines.map(printable).join('\n')}\n`);
     return 0;
   } catch (error) {
     process.stderr.write(`soujo: ${oneLine(describe(error))}\n`);

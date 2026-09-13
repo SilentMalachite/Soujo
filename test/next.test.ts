@@ -74,6 +74,11 @@ test('next check warns about a missing NEXT.md and a NEXT.md pointing to a finis
   assert.deepEqual(nextCheck(finished, false), ['soujo 警告: NEXT.md の次「L1 scaffold」は PLAN で完了済み']);
 });
 
+test('next check warns when NEXT.md moved past a layer that was never closed', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'L3 io'), 'PLAN.md': `${PLAN}- [ ] L3 io — io\n` });
+  assert.deepEqual(nextCheck(dir, false), ['soujo 警告: NEXT.md の次「L3 io」より前の「L2 state」が PLAN で未完了']);
+});
+
 test('next check --hook returns a systemMessage JSON line', (t) => {
   const dir = project(temp(t));
   assert.deepEqual(nextCheck(dir, true), [JSON.stringify({ systemMessage: 'soujo 警告: NEXT.md がない' })]);

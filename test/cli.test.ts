@@ -92,25 +92,36 @@ test('layer done works through the CLI and refuses a second run', (t) => {
   assert.match(again.stderr, /^soujo: 層「L1 scaffold」はコミット済み（[0-9a-f]+）\n$/);
 });
 
-test('resume prints four lines and close exits 1 on an invalid NEXT.md through the CLI', (t) => {
+test('resume prints exactly four lines through the CLI, with control characters flattened', (t) => {
   const dir = repo(t);
   soujoIn(dir, 'init');
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), `# LOG\n\n## 2026-09-13 spec\na\rb${String.fromCharCode(0x2028)}c\n`);
   const resumed = soujoIn(dir, 'resume');
   assert.equal(resumed.status, 0, resumed.stderr);
-  assert.equal(resumed.stdout.split('\n').filter(Boolean).length, 4);
-  assert.match(resumed.stdout, /^次: spec（effort: high）確認: /);
+  assert.match(
+    resumed.stdout,
+    /^次: spec（effort: high）確認: [^\n]+\n前回: 2026-09-13 spec — a b c\nコミット: まだない（未コミット \d+件）\n再開: \/soujo:go（Codex は \$go）\n$/,
+  );
+});
 
+test('close exits 1 on an invalid NEXT.md without writing, then commits through the CLI', (t) => {
+  const dir = repo(t);
+  soujoIn(dir, 'init');
   const nextPath = join(dir, '.soujo', 'NEXT.md');
+  const logBefore = readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8');
   const valid = readFileSync(nextPath, 'utf8');
   writeFileSync(nextPath, `${valid}補足: x\n`);
   const refused = soujoIn(dir, 'close', '--note', 'a');
   assert.deepEqual([refused.status, refused.stdout], [1, '']);
-  assert.match(refused.stderr, /^soujo: NEXT\.md が無効: NEXT\.md が5行を超えている（6行）、[^\n]*\n$/);
+  assert.match(refused.stderr, /^soujo: NEXT\.md が無効: 5行を超えている（6行）、6行目を読めない: 補足: x（soujo next set で書き直してから再実行）\n$/);
+  assert.equal(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), logBefore);
+  assert.equal(soujoIn(dir, 'resume').stdout.split('\n')[2], 'コミット: まだない（未コミット 3件）');
 
   writeFileSync(nextPath, valid);
-  const closed = soujoIn(dir, 'close', '--note', 'a');
+  const closed = soujoIn(dir, 'close', '--note=- 途中');
   assert.equal(closed.status, 0, closed.stderr);
   assert.match(closed.stdout, /^中断を LOG に記録・コミット: [0-9a-f]+ wip: spec\n再開: \/soujo:resume（Codex は \$resume）\n$/);
+  assert.match(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), /\n中断: - 途中\n$/);
 });
 
 test('argument errors are one Japanese line with exit 1', () => {
@@ -121,7 +132,8 @@ test('argument errors are one Japanese line with exit 1', () => {
     [['log', 'add', 'L1', 'scaffold', '--line', 'a'], 'soujo: 使い方: soujo log add "<層名>" --line <行> [--line <行>]\n'],
     [['plan'], 'soujo: 不明なコマンド: plan\n'],
     [['resume', 'now'], 'soujo: 使い方: soujo resume\n'],
-    [['close', 'note'], 'soujo: 使い方: soujo close [--note <一言>]\n'],
+    [['close', 'note'], 'soujo: 使い方: soujo close [--note <1〜3行>]\n'],
+    [['close', '--note', '- 途中'], 'soujo: オプションの値が「-」で始まる: --note=<値> の形で書く\n'],
     [
       ['next', 'set', '--layer', 'L1'],
       'soujo: 使い方: soujo next set --layer <層> --premise <前提> --check <確認> [--caution <注意>] [--effort low|medium|high|xhigh]\n',

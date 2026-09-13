@@ -61,7 +61,7 @@ Soujo/
 │   ├── files.ts      finding .soujo/ and reading/writing it (thin I/O layer)
 │   ├── git.ts        git calls (thin layer)
 │   ├── map.ts        ASCII / Mermaid diagram generation (pure functions)
-│   └── commands/     one file per command
+│   └── commands/     one file per command; shared.ts holds checks and messages used by several
 ├── test/                             # node:test (no dependencies)
 ├── dist/                             # tsc output; committed because hooks call it directly
 ├── templates/                        # copied into target projects by `soujo init`
@@ -109,18 +109,18 @@ effort: <low|medium|high|xhigh>
 | `soujo init` | Creates `.soujo/` from templates, plus CLAUDE.md / AGENTS.md if missing. Uses the git top level when inside a repository. Never overwrites existing files | Created files, then one line listing skipped ones |
 | `soujo next show [--hook]` | Prints `NEXT.md`, or `NEXT.md なし`. With `--hook`, prints nothing when `NEXT.md` is missing | 5 lines |
 | `soujo next set --layer --premise --check [--caution] [--effort]` | Rewrites `NEXT.md`. Defaults: caution `なし`, effort `medium`. Values must be one line | 1 line |
-| `soujo next check [--hook]` | Warns when `NEXT.md` is missing, invalid, points to a layer already `[x]` in PLAN, or there are uncommitted changes. Silent outside Soujo projects. `--hook` returns `{"systemMessage": "..."}`. **Exit code is always 0** | 0–1 line |
+| `soujo next check [--hook]` | Warns when `NEXT.md` is missing, invalid, points to a layer already `[x]` in PLAN or past an unchecked one, or there are uncommitted changes in the project. Silent outside Soujo projects. `--hook` returns `{"systemMessage": "..."}`. **Exit code is always 0** | 0–1 line |
 | `soujo plan list` | Layers and their state | 1 line per layer |
 | `soujo plan next` | First unfinished layer and its completion condition | 2 lines |
 | `soujo log add <layer> --line ...` | Appends to `LOG.md` (1–3 lines) | 1 line |
-| `soujo layer done <layer> [--note ...]` | Checks PLAN → appends LOG → `git add -A` and `git commit -m "layer: <layer>"`. Refuses and writes nothing when: the layer is not in PLAN or the note breaks LOG limits; `NEXT.md` is missing, invalid, or `次:` is still this layer; a merge/rebase/cherry-pick/revert is unfinished, files are unmerged, or `.soujo/` files are git-ignored; the layer is already committed (a `layer: <layer>` commit exists, or it is checked in PLAN at HEAD). When the check exists only in the working tree (a previous run stopped), appends LOG if its last entry is not this layer and commits. A failure after writing says what is recorded; fixing the cause and re-running resumes | 1 line, with up to 5 added files |
-| `soujo resume` | `次:` (`NEXT.md`), `前回:` (first line of the last `LOG.md` entry), `コミット:` (`git log -1`), `再開:` (`/soujo:go`). When `NEXT.md` is missing or invalid, shows PLAN's next layer and adds the reason and `soujo next set` to `再開:`; with no layer left, points to `/soujo:plan` | 4 lines |
-| `soujo close [--note ...]` | Validates `NEXT.md` (exit 1 if missing or invalid) → logs `--note` as `中断: ...` under NEXT's `次:` layer → commits uncommitted changes as `wip: <layer>` → prints how to resume. Before writing, refuses a blank note or one that breaks LOG limits, and the same uncommittable states as `layer done`. Skips the LOG entry when the last one has the same layer and lines, so re-running the same command after a failed commit retries only the commit | 2 lines |
+| `soujo layer done <layer> [--note ...]` | Checks PLAN → appends LOG → `git add -A -- .` and `git commit -m "layer: <layer>" -- .` in the project directory (a project in a subdirectory commits only that subdirectory). Refuses and writes nothing when: the layer is not in PLAN or the note breaks LOG limits; `NEXT.md` is missing, invalid, or `次:` is still this layer; not a repository, `.soujo/` is a symlink, a merge/rebase/cherry-pick/revert is unfinished, files are unmerged, or `.soujo/` files are git-ignored; the layer is already committed (a `layer: <layer>` commit exists, or it is checked in PLAN at HEAD). When the check exists only in the working tree (a previous run stopped), appends LOG if its last entry is not this layer and commits. A failure after writing says what is recorded; fixing the cause and re-running resumes | 1 line, with up to 5 added files |
+| `soujo resume` | `次: <layer>（effort: <e>）確認: <check>` (`NEXT.md`) / `前回: <date> <layer> — <first line>` (last `LOG.md` entry) / `コミット: <hash> <subject>（未コミット N件）` / `再開: /soujo:go（Codex は $go）`. Values are cut at 60 characters with `…`. When `NEXT.md` is missing, unreadable, invalid, or points to a checked layer: `次:` is PLAN's next layer and `再開:` gives the reason and `soujo next set`; with no layer left, `/soujo:spec` (SPEC.md missing or still the template) or `/soujo:plan`. When `NEXT.md` points past an unchecked layer: `次:` is that layer and `再開:` suggests `soujo layer done`. A PLAN check not committed yet (a stopped `layer done`) makes `再開:` say to re-run it. Unreadable files and git failures degrade only their line | 4 lines |
+| `soujo close [--note ...]` | Logs `--note` as `中断: ...` → commits the project as `wip: <layer>` → prints how to resume. Refuses (exit 1) and writes nothing when: the same uncommittable states as `layer done`; `NEXT.md` is missing, invalid, or points to a checked layer; a PLAN check is not committed yet (re-run `layer done` instead); the note is blank or breaks LOG limits. The layer is `次:`, or PLAN's first unchecked layer when `次:` already points past it (stopped between `next set` and `layer done`). An uncommitted `中断` entry of that layer at the end of LOG is kept instead of adding another, so re-running after a failed commit retries only the commit | 2 lines |
 | `soujo map plan` | Vertical ASCII diagram of `PLAN.md` (`[x]` done, `←次` next, completion condition on the rail) | 2 lines per layer |
 | `soujo map code [dir]` | Scans imports and prints Mermaid `graph LR`. Import patterns are one row per language in `LANGUAGES` in `src/map.ts` (TS/JS initially). Skips `node_modules`, `dist`, and dot-entries. Falls back to a directory tree for unsupported languages | Mermaid |
 
 Public pure functions of `state.ts` (each has tests):
-`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `nextLayer` / `markDone` / `appendLog` / `lastLog` / `formatDate`.
+`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `nextLayer` / `nextStatus` / `newlyDone` / `markDone` / `printable` / `logLines` / `appendLog` / `parseLog` / `lastLog` / `formatDate`.
 
 ## 7. Skills (`skills/`, shared by both hosts)
 
@@ -134,7 +134,7 @@ Common rules: `description` is one sentence with a narrow trigger (Astra truncat
 | `resume` | — | Return the CLI output as is | `soujo resume` | 4 lines | low |
 | `map` | `git diff` only for `diff` | `plan` / `code <dir>` show the CLI diagram verbatim; `diff` is drawn as Before/After by the model | `soujo map` | Diagram + ≤5 lines | medium |
 | `review` | Diff of the latest layer | **Report every finding** as `# / location / what / why / fix`; one `reviewer` subagent where available | — | Table | medium |
-| `close` | — | Pass the one-line note to `--note` | `soujo close` | 1–2 lines | low |
+| `close` | — | Pass the one-line note to `--note` | `soujo close` | 2 lines | low |
 
 `go` writes `NEXT.md` before `layer done` so that the commit includes the next `NEXT.md`. This keeps `next check` passing with "clean tree + valid NEXT".
 
@@ -220,6 +220,8 @@ Decided:
 - Both marketplaces point at the repository root (`"./"`); both work.
 - `disable-model-invocation` is not written in SKILL.md (Codex's validator rejects `true`; criterion 7 takes precedence).
 - `soujo next check` also warns when `次:` points to a layer already `[x]` in PLAN, so criterion 6 holds even with a clean tree.
+- `soujo close` refuses while a PLAN check is uncommitted, so a stopped `layer done` still ends in its own `layer:` commit instead of a `wip:` one.
+- Staging, commits, and the uncommitted count are limited to the project directory (`-- .`); output lines never carry control characters.
 - `soujo next show --hook` stays silent without `NEXT.md`, so projects that don't use Soujo get no extra context.
 - `soujo layer done` refuses when `NEXT.md` is missing, invalid, or still points to the layer being closed, so every layer commit carries the next step.
 - Codex 0.154 has no `--reasoning-effort` flag; effort is passed with `-c model_reasoning_effort=<v>`.

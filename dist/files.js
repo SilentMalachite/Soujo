@@ -1,17 +1,43 @@
 // Finding .soujo/ and reading/writing its files. Thin I/O layer: no parsing or validation here.
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 export const STATE_DIR = '.soujo';
 export const STATE_FILES = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'];
-/** The state files relative to the project root. */
-export const STATE_PATHS = STATE_FILES.map((file) => `${STATE_DIR}/${file}`);
+/** The state file relative to the project root, e.g. ".soujo/PLAN.md". */
+export function statePath(file) {
+    return `${STATE_DIR}/${file}`;
+}
+export const STATE_PATHS = STATE_FILES.map(statePath);
 function isDirectory(path) {
     try {
         return statSync(path).isDirectory();
     }
     catch {
         return false;
+    }
+}
+export function isSymlink(path) {
+    try {
+        return lstatSync(path).isSymbolicLink();
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Where git tracks the state file, relative to root: the symlink target when the file is a symlink (root resolved too,
+ * so /tmp and /private/tmp compare equal), otherwise ".soujo/<file>".
+ */
+export function trackedStatePath(root, file) {
+    const path = join(root, statePath(file));
+    if (!isSymlink(path))
+        return statePath(file);
+    try {
+        return relative(realpathSync(root), realpathSync(path)).split(sep).join('/');
+    }
+    catch {
+        return statePath(file);
     }
 }
 /**

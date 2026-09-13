@@ -58,9 +58,13 @@ export function gitHasCommits(cwd: string): boolean {
   return exitCode(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD']) === 0;
 }
 
-/** `git status --porcelain` lines; empty when the tree is clean. Untracked files are included. */
+// Staging, committing, and status are limited to cwd with this pathspec, so a project in a subdirectory of a larger
+// repository never sweeps up changes outside it.
+const HERE = ['--', '.'];
+
+/** `git status --porcelain` lines for cwd and below; empty when clean. Untracked files are included. */
 export function gitStatus(cwd: string): string[] {
-  return git(cwd, ['status', '--porcelain']).split('\n').filter((line) => line !== '');
+  return git(cwd, ['status', '--porcelain', ...HERE]).split('\n').filter((line) => line !== '');
 }
 
 const OPERATIONS = [
@@ -77,20 +81,22 @@ export function gitOperationInProgress(cwd: string): string | undefined {
   return OPERATIONS.find(([marker]) => existsSync(join(gitDir, marker)))?.[1];
 }
 
+/** Stages every change in cwd and below, deletions and untracked files included. */
 export function gitAddAll(cwd: string): void {
-  git(cwd, ['add', '-A']);
+  git(cwd, ['add', '-A', ...HERE]);
 }
 
+/** Commits the changes in cwd and below; changes staged elsewhere stay staged. */
 export function gitCommit(cwd: string, message: string): void {
-  git(cwd, ['commit', '-q', '-m', message]);
+  git(cwd, ['commit', '-q', '-m', message, ...HERE]);
 }
 
-/** Whether the index has anything to commit (compared with HEAD, or with nothing before the first commit). */
+/** Whether the index has anything to commit in cwd and below (compared with HEAD, or with nothing before the first commit). */
 export function gitHasStagedChanges(cwd: string): boolean {
-  return exitCode(cwd, ['diff', '--cached', '--quiet']) === 1;
+  return exitCode(cwd, ['diff', '--cached', '--quiet', ...HERE]) === 1;
 }
 
-/** Stages everything and commits it. Returns false, without committing, when nothing ends up staged. */
+/** Stages everything in cwd and below and commits it. Returns false, without committing, when nothing ends up staged. */
 export function gitCommitAll(cwd: string, message: string): boolean {
   gitAddAll(cwd);
   if (!gitHasStagedChanges(cwd)) return false;
@@ -99,7 +105,7 @@ export function gitCommitAll(cwd: string, message: string): boolean {
 }
 
 /** The paths (relative to cwd) that git ignores. Tracked files are never reported. */
-export function gitIgnored(cwd: string, paths: string[]): string[] {
+export function gitIgnored(cwd: string, paths: readonly string[]): string[] {
   const args = ['check-ignore', '--', ...paths];
   const result = run(cwd, args);
   if (result.error === undefined && result.status === 1) return [];
@@ -109,20 +115,9 @@ export function gitIgnored(cwd: string, paths: string[]): string[] {
 
 const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
 
-/**
- * Throws unless committing everything in cwd is safe: a repository, no unfinished merge/rebase/cherry-pick/revert,
- * no unmerged files, and none of recorded (paths relative to cwd) ignored by git.
- */
-export function gitRequireCommittable(cwd: string, recorded: string[]): void {
-  if (gitToplevel(cwd) === undefined) throw new Error('git リポジトリではないのでコミットできない');
-  const operation = gitOperationInProgress(cwd);
-  if (operation !== undefined) throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
-  const unmerged = gitStatus(cwd).filter((line) => UNMERGED.test(line)).length;
-  if (unmerged > 0) throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
-  const ignored = gitIgnored(cwd, recorded);
-  if (ignored.length > 0) {
-    throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
-  }
+/** The number of files with unresolved conflicts anywhere in the repository. */
+export function gitUnmergedCount(cwd: string): number {
+  return git(cwd, ['status', '--porcelain']).split('\n').filter((line) => UNMERGED.test(line)).length;
 }
 
 function parseCommit(line: string): Commit | undefined {

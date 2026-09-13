@@ -1,7 +1,7 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { layerDone } from '../src/commands/layer.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
@@ -68,7 +68,7 @@ test('layer done refuses without a usable NEXT.md and writes nothing', (t) => {
   unchanged();
 
   writeFileSync(nextPath, `${NEXT}補足: x\n`);
-  assert.throws(() => layerDone(dir, 'L2 state', 'n', NOW), /^Error: NEXT\.md が無効: NEXT\.md が5行を超えている（6行）、/);
+  assert.throws(() => layerDone(dir, 'L2 state', 'n', NOW), /^Error: NEXT\.md が無効: 5行を超えている（6行）、6行目を読めない: 補足: x（/);
   unchanged();
 
   writeFileSync(nextPath, NEXT.replace('L3 io', 'L2 state'));
@@ -238,6 +238,36 @@ test('layer done lists at most five added files', (t) => {
   for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) writeFileSync(join(dir, `${name}.ts`), '');
   const [line] = layerDone(dir, 'L2 state', undefined, NOW);
   assert.match(line ?? '', /（追加: a\.ts, b\.ts, c\.ts, d\.ts, e\.ts ほか2件）$/);
+});
+
+test('layer done in a subdirectory project commits only that subdirectory', (t) => {
+  const top = repo(t);
+  writeFileSync(join(top, 'outside.txt'), 'outside\n');
+  commitAll(top, 'base');
+  writeFileSync(join(top, 'outside.txt'), 'changed\n');
+  const dir = project(join(top, 'app'), STATE);
+  mkdirSync(join(dir, 'src'));
+  writeFileSync(join(dir, 'src', 'state.ts'), '');
+  const [line] = layerDone(join(dir, 'src'), 'L2 state', undefined, NOW);
+  assert.match(line ?? '', /（追加: app\/\.soujo\/LOG\.md, app\/\.soujo\/NEXT\.md, app\/\.soujo\/PLAN\.md, app\/src\/state\.ts）$/);
+  assert.deepEqual(gitStatus(top), [' M outside.txt']);
+});
+
+test('layer done follows a symlinked PLAN.md to the committed target', { skip: process.platform === 'win32' }, (t) => {
+  const dir = workingProject(t);
+  writeFileSync(join(dir, 'PLAN.md'), PLAN.replace('- [ ] L2 state', '- [x] L2 state'));
+  rmSync(join(dir, '.soujo', 'PLAN.md'));
+  symlinkSync('../PLAN.md', join(dir, '.soujo', 'PLAN.md'));
+  commitAll(dir, 'feat: L2 without layer done');
+  assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /は PLAN のチェックごとコミット済み/);
+});
+
+test('layer done refuses a symlinked .soujo/ directory', { skip: process.platform === 'win32' }, (t) => {
+  const dir = repo(t);
+  const real = project(join(dir, 'records'), STATE);
+  symlinkSync('records/.soujo', join(dir, '.soujo'));
+  assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: \.soujo\/ が symlink なので記録をコミットできない/);
+  assert.equal(read(real, 'PLAN.md'), PLAN);
 });
 
 test('layer done works as the first commit of a repository', (t) => {

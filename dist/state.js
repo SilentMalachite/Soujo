@@ -15,6 +15,8 @@ const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/;
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+// Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, U+2028/2029.
+const CONTROL = /[\u0000-\u001f\u007f\u2028\u2029]/g;
 function isEffort(value) {
     return EFFORTS.includes(value);
 }
@@ -24,13 +26,13 @@ function contentLines(text) {
     return body.trim() === '' ? [] : body.split(/\r?\n/);
 }
 // What to put between existing LOG text and a new entry: a line break if missing, then one blank line.
-function logSeparator(text) {
+function logSeparator(text, eol) {
     if (text === '')
         return '';
     if (!text.endsWith('\n'))
-        return '\n\n';
+        return `${eol}${eol}`;
     const withoutLastBreak = text.slice(0, text.endsWith('\r\n') ? -2 : -1);
-    return withoutLastBreak.endsWith('\n') ? '' : '\n';
+    return withoutLastBreak.endsWith('\n') ? '' : eol;
 }
 function readNext(text) {
     const values = new Map();
@@ -123,6 +125,25 @@ export function parsePlan(text) {
 export function nextLayer(items) {
     return items.find((item) => !item.done);
 }
+/**
+ * How NEXT.md's layer stands in PLAN: 'done' when it is checked, 'skipped' when an unchecked layer comes before it
+ * (NEXT.md was moved on but that layer was never closed), 'ok' otherwise, including layers not in PLAN such as "spec".
+ */
+export function nextStatus(layer, items) {
+    const index = items.findIndex((item) => item.layer === layer);
+    if (index === -1)
+        return { state: 'ok' };
+    if (items[index]?.done)
+        return { state: 'done' };
+    const unfinished = items.findIndex((item) => !item.done);
+    const item = items[unfinished];
+    return item !== undefined && unfinished < index ? { state: 'skipped', unfinished: item } : { state: 'ok' };
+}
+/** Layers checked in after but not in before (e.g. the working tree against HEAD), in after's order. */
+export function newlyDone(before, after) {
+    const done = new Set(before.filter((item) => item.done).map((item) => item.layer));
+    return after.filter((item) => item.done && !done.has(item.layer));
+}
 /** PLAN.md text with the layer checked. Already checked layers are left as is; unknown layers throw. */
 export function markDone(text, layer) {
     const lines = text.split('\n');
@@ -136,38 +157,51 @@ export function markDone(text, layer) {
     lines[index] = line.replace(/\[[ xX]\]/, '[x]');
     return lines.join('\n');
 }
-/** LOG.md text with the entry appended after a blank line. Throws when the entry breaks the format. */
+/** text with every control character (line breaks included) turned into a space, so it prints as one terminal line. */
+export function printable(text) {
+    return text.replace(CONTROL, ' ');
+}
+/** Lines as LOG.md stores them: split at line breaks, other control characters turned into spaces, trimmed, blanks dropped. */
+export function logLines(lines) {
+    return lines
+        .flatMap((line) => line.split(/\r?\n/))
+        .map((line) => printable(line).trim())
+        .filter((line) => line !== '');
+}
+/** LOG.md text with the entry appended after a blank line, using the file's line break (CRLF or LF). Throws when the entry breaks the format. */
 export function appendLog(text, entry) {
     const layer = entry.layer.trim();
-    if (layer === '' || /[\r\n]/.test(layer))
-        throw new Error('層名は空でない1行で書く');
+    if (layer === '' || printable(layer) !== layer)
+        throw new Error('層名は空でない1行で書く（制御文字なし）');
     if (!DATE.test(entry.date))
         throw new Error(`日付は YYYY-MM-DD: ${entry.date}`);
-    const lines = entry.lines
-        .flatMap((line) => line.split(/\r?\n/))
-        .map((line) => line.trim())
-        .filter((line) => line !== '');
+    const lines = logLines(entry.lines);
     if (lines.length > LOG_MAX_LINES) {
         throw new Error(`LOG は1エントリ${LOG_MAX_LINES}行まで（${lines.length}行）`);
     }
-    // The same rule lastLog uses to find entries, so no line can turn into a heading.
+    // The same rule parseLog uses to find entries, so no line can turn into a heading.
     if (lines.some((line) => LOG_HEADER.test(line)))
         throw new Error('LOG の行を見出しの形（## YYYY-MM-DD 層名）にしない');
-    const block = `${[`## ${entry.date} ${layer}`, ...lines].join('\n')}\n`;
-    return `${text}${logSeparator(text)}${block}`;
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const block = `${[`## ${entry.date} ${layer}`, ...lines].join(eol)}${eol}`;
+    return `${text}${logSeparator(text, eol)}${block}`;
 }
-/** The last `## YYYY-MM-DD <layer>` entry of LOG.md with its non-blank lines. */
-export function lastLog(text) {
-    let last;
+/** Every `## YYYY-MM-DD <layer>` entry of LOG.md in order, each with its non-blank lines. */
+export function parseLog(text) {
+    const entries = [];
     for (const raw of text.split('\n')) {
         const line = raw.trim();
         const header = LOG_HEADER.exec(line);
         if (header)
-            last = { date: header[1] ?? '', layer: (header[2] ?? '').trim(), lines: [] };
-        else if (last && line !== '')
-            last.lines.push(line);
+            entries.push({ date: header[1] ?? '', layer: (header[2] ?? '').trim(), lines: [] });
+        else if (line !== '')
+            entries[entries.length - 1]?.lines.push(line);
     }
-    return last;
+    return entries;
+}
+/** The last entry of LOG.md, or undefined when there is none. */
+export function lastLog(text) {
+    return parseLog(text).at(-1);
 }
 /** YYYY-MM-DD in local time. */
 export function formatDate(date) {

@@ -45,9 +45,12 @@ export function gitToplevel(cwd) {
 export function gitHasCommits(cwd) {
     return exitCode(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD']) === 0;
 }
-/** `git status --porcelain` lines; empty when the tree is clean. Untracked files are included. */
+// Staging, committing, and status are limited to cwd with this pathspec, so a project in a subdirectory of a larger
+// repository never sweeps up changes outside it.
+const HERE = ['--', '.'];
+/** `git status --porcelain` lines for cwd and below; empty when clean. Untracked files are included. */
 export function gitStatus(cwd) {
-    return git(cwd, ['status', '--porcelain']).split('\n').filter((line) => line !== '');
+    return git(cwd, ['status', '--porcelain', ...HERE]).split('\n').filter((line) => line !== '');
 }
 const OPERATIONS = [
     ['MERGE_HEAD', 'merge'],
@@ -61,17 +64,19 @@ export function gitOperationInProgress(cwd) {
     const gitDir = git(cwd, ['rev-parse', '--absolute-git-dir']).trim();
     return OPERATIONS.find(([marker]) => existsSync(join(gitDir, marker)))?.[1];
 }
+/** Stages every change in cwd and below, deletions and untracked files included. */
 export function gitAddAll(cwd) {
-    git(cwd, ['add', '-A']);
+    git(cwd, ['add', '-A', ...HERE]);
 }
+/** Commits the changes in cwd and below; changes staged elsewhere stay staged. */
 export function gitCommit(cwd, message) {
-    git(cwd, ['commit', '-q', '-m', message]);
+    git(cwd, ['commit', '-q', '-m', message, ...HERE]);
 }
-/** Whether the index has anything to commit (compared with HEAD, or with nothing before the first commit). */
+/** Whether the index has anything to commit in cwd and below (compared with HEAD, or with nothing before the first commit). */
 export function gitHasStagedChanges(cwd) {
-    return exitCode(cwd, ['diff', '--cached', '--quiet']) === 1;
+    return exitCode(cwd, ['diff', '--cached', '--quiet', ...HERE]) === 1;
 }
-/** Stages everything and commits it. Returns false, without committing, when nothing ends up staged. */
+/** Stages everything in cwd and below and commits it. Returns false, without committing, when nothing ends up staged. */
 export function gitCommitAll(cwd, message) {
     gitAddAll(cwd);
     if (!gitHasStagedChanges(cwd))
@@ -90,23 +95,9 @@ export function gitIgnored(cwd, paths) {
     return result.stdout.split('\n').filter((line) => line !== '');
 }
 const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
-/**
- * Throws unless committing everything in cwd is safe: a repository, no unfinished merge/rebase/cherry-pick/revert,
- * no unmerged files, and none of recorded (paths relative to cwd) ignored by git.
- */
-export function gitRequireCommittable(cwd, recorded) {
-    if (gitToplevel(cwd) === undefined)
-        throw new Error('git リポジトリではないのでコミットできない');
-    const operation = gitOperationInProgress(cwd);
-    if (operation !== undefined)
-        throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
-    const unmerged = gitStatus(cwd).filter((line) => UNMERGED.test(line)).length;
-    if (unmerged > 0)
-        throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
-    const ignored = gitIgnored(cwd, recorded);
-    if (ignored.length > 0) {
-        throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
-    }
+/** The number of files with unresolved conflicts anywhere in the repository. */
+export function gitUnmergedCount(cwd) {
+    return git(cwd, ['status', '--porcelain']).split('\n').filter((line) => UNMERGED.test(line)).length;
 }
 function parseCommit(line) {
     const tab = line.indexOf('\t');

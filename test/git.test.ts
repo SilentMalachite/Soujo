@@ -17,6 +17,7 @@ import {
   gitOperationInProgress,
   gitStatus,
   gitToplevel,
+  gitUnmergedCount,
 } from '../src/git.js';
 import { repo, temp } from './helpers.js';
 
@@ -73,6 +74,44 @@ test('gitHasStagedChanges and gitCommitAll work before and after the first commi
   assert.equal(gitHasStagedChanges(dir), false);
   assert.equal(gitCommitAll(dir, 'clean'), false);
   assert.equal(gitLastCommit(dir)?.subject, 'first');
+});
+
+test('status, staging, and commits are limited to cwd and below', (t) => {
+  const top = repo(t);
+  mkdirSync(join(top, 'app'));
+  writeFileSync(join(top, 'outside.txt'), 'o\n');
+  writeFileSync(join(top, 'app', 'a.txt'), 'a\n');
+  gitAddAll(top);
+  gitCommit(top, 'base');
+
+  writeFileSync(join(top, 'outside.txt'), 'staged\n');
+  execFileSync('git', ['add', 'outside.txt'], { cwd: top });
+  writeFileSync(join(top, 'untracked.txt'), '');
+  writeFileSync(join(top, 'app', 'b.txt'), 'b\n');
+  execFileSync('git', ['rm', '-q', 'app/a.txt'], { cwd: top });
+  const app = join(top, 'app');
+  assert.deepEqual(gitStatus(app), ['D  app/a.txt', '?? app/']);
+  assert.equal(gitCommitAll(app, 'app only'), true);
+  assert.deepEqual(gitStatus(app), []);
+  assert.deepEqual(gitStatus(top), ['M  outside.txt', '?? untracked.txt']);
+  assert.equal(gitCommitAll(app, 'nothing in app'), false);
+});
+
+test('gitUnmergedCount counts conflicts in the whole repository', (t) => {
+  const dir = repo(t);
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  writeFileSync(join(dir, 'f.txt'), 'base\n');
+  gitCommitAll(dir, 'base');
+  assert.equal(gitUnmergedCount(dir), 0);
+  git('checkout', '-q', '-b', 'side');
+  writeFileSync(join(dir, 'f.txt'), 'side\n');
+  gitCommitAll(dir, 'side');
+  git('checkout', '-q', '-');
+  writeFileSync(join(dir, 'f.txt'), 'main\n');
+  gitCommitAll(dir, 'main');
+  assert.throws(() => git('merge', '-q', 'side'));
+  mkdirSync(join(dir, 'sub'));
+  assert.equal(gitUnmergedCount(join(dir, 'sub')), 1);
 });
 
 test('gitIgnored reports ignored paths but not tracked files', (t) => {
