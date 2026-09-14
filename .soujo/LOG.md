@@ -209,3 +209,8 @@ privacy テストはコミットメッセージ・拡張子なしの SSH 鍵・�
 ## 2026-09-14 release-0.1.1
 0.1.1 をリリース（2026-09-14）: grok レビューの修正（close のステージ確認・一時ファイル掃除・privacy 検査の拡張）。
 package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.1 にし、CHANGELOG(+ja) に Fixed / Changed を追加。
+
+## 2026-09-14 codex-upgrade-local
+Codex で upgrade が local のマーケットプレイスに失敗する（not configured as a Git marketplace、終了1）ことを隔離した CODEX_HOME で再現。
+README(+ja) の更新と開発の節・SPEC(+ja) のホスト表に remove → add SilentMalachite/Soujo → plugin add での GitHub 版への切り替えを追記。
+v0.1.1 のリリースノートの Update にも同じ案内を追加。

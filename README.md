@@ -86,6 +86,8 @@ codex plugin marketplace upgrade soujo && codex plugin add soujo@soujo
 
 The Claude Code plugin declares no `version`, so each new commit counts as an update. Codex copies the plugin into its install cache again on every `codex plugin add`.
 
+If `codex plugin marketplace upgrade soujo` fails with `` marketplace `soujo` is not configured as a Git marketplace ``, the marketplace was added from a local path ([Development](#development)); switch it to GitHub once with `codex plugin marketplace remove soujo && codex plugin marketplace add SilentMalachite/Soujo && codex plugin add soujo@soujo`, and the update above works from then on.
+
 ## Start
 
 In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, which creates `.soujo/` and, when missing, `CLAUDE.md` and `AGENTS.md`. Existing files are never overwritten.
@@ -130,7 +132,7 @@ npm test        # node:test; also fails when dist/ is stale
 claude --plugin-dir .   # try the plugin from the working tree without installing
 ```
 
-To use the working tree instead of the GitHub install, run in it `npm link`, `claude plugin marketplace add ./`, and `codex plugin marketplace add ./`, then install the plugins as above (remove the GitHub marketplaces first: both are named `soujo`). Write `./`, not `.`: Claude Code rejects `.`. Both hosts save the clone's absolute path. Claude Code sessions read the plugin from the clone in place; Codex needs `codex plugin add soujo@soujo` again after each change.
+To use the working tree instead of the GitHub install, run in it `npm link`, `claude plugin marketplace add ./`, and `codex plugin marketplace add ./`, then install the plugins as above (remove the GitHub marketplaces first: both are named `soujo`). Write `./`, not `.`: Claude Code rejects `.`. Both hosts save the clone's absolute path. Claude Code sessions read the plugin from the clone in place; Codex needs `codex plugin add soujo@soujo` again after each change. To return Codex to the GitHub install, run `codex plugin marketplace remove soujo && codex plugin marketplace add SilentMalachite/Soujo && codex plugin add soujo@soujo`: `codex plugin marketplace upgrade` works only for a marketplace added from GitHub.
 
 How to contribute is in [CONTRIBUTING.md](CONTRIBUTING.md), and the rules for agents in [CLAUDE.md](CLAUDE.md) (Claude Code) and [AGENTS.md](AGENTS.md) (Codex); their wording differs on purpose. Changes are listed in [CHANGELOG.md](CHANGELOG.md). Report security problems as [SECURITY.md](SECURITY.md) describes.
 
