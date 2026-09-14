@@ -10,6 +10,7 @@ import {
   requireNext,
   resumable,
   skill,
+  uncommittedLogs,
 } from '../src/commands/shared.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
@@ -35,7 +36,21 @@ test('describeInvalidNext and requireNext report problems without repeating NEXT
   assert.equal(requireNext(join(dir, '.soujo'), '').layer, 'L3 io');
 });
 
-test('requireCommittable refuses each unsafe state', { skip: process.platform === 'win32' }, (t) => {
+test('uncommittedLogs lists entries HEAD lacks wherever they are, counting repeated entries', () => {
+  const a = '## 2026-09-12 L1\na\n';
+  const b = '## 2026-09-13 L2\nb\n';
+  const c = '## 2026-09-13 L3\nc\n';
+  const entry = (layer: string, line: string) => ({ date: layer === 'L1' ? '2026-09-12' : '2026-09-13', layer, lines: [line] });
+  assert.deepEqual(uncommittedLogs(`${a}${b}`, undefined), [entry('L1', 'a'), entry('L2', 'b')]);
+  assert.deepEqual(uncommittedLogs(`${a}${b}`, a), [entry('L2', 'b')]);
+  assert.deepEqual(uncommittedLogs(`${a}${b}${c}`, a), [entry('L2', 'b'), entry('L3', 'c')]);
+  // As many entries as HEAD, one replaced.
+  assert.deepEqual(uncommittedLogs(`${a}${c}`, `${a}${b}`), [entry('L3', 'c')]);
+  assert.deepEqual(uncommittedLogs(`${b}${a}${b}`, `${a}${b}`), [entry('L2', 'b')]);
+  assert.deepEqual(uncommittedLogs(a, `${a}${b}`), []);
+});
+
+test('requireCommittable refuses each unsafe state',{ skip: process.platform === 'win32' }, (t) => {
   assert.throws(() => requireCommittable(project(temp(t))), /^Error: git リポジトリではないのでコミットできない$/);
 
   const clean = project(repo(t), { 'NEXT.md': NEXT });

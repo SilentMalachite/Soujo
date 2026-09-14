@@ -148,9 +148,13 @@ test('TS/JS imports ignore comments, strings, templates with substitutions, rege
   assert.deepEqual(imports(text), ['./j.js', './m.js']);
 });
 
-test('TS/JS imports tell a division and a JSX closing tag from a regex, and a regex after a condition from a division', () => {
+test('TS/JS imports tell a division and a JSX closing tag from a regex, and a regex after a condition or "<" from a division', () => {
   const text = [
     "const view = <div>hello</div>; import('./after-jsx.js');",
+    "const less = a < /import('.\\/fake-less.js')/.source.length;",
+    "for (const k in o) /import('.\\/fake-for.js')/.test(k);",
+    "with (o) /require('.\\/fake-with.js')/.test(s);",
+    "for await (const c of s) /import('.\\/fake-for-await.js')/.test(c);",
     "const self = <br />; import('./after-self-closing.js');",
     "const x = a++ / b; import('./after-increment.js');",
     "const y = c-- / d; import('./after-decrement.js');",

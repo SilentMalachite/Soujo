@@ -154,6 +154,17 @@ test('after a failed commit, re-running close keeps the logged entry and retries
   assert.equal(read(dir, 'LOG.md'), `${logAfterFailure}${ENTRY}中断: 二回目\n`);
 });
 
+test('a re-run of close keeps its uncommitted 中断 entry when another entry was added after it', (t) => {
+  const dir = workingProject(t);
+  const unlock = lockIndex(dir);
+  assert.throws(() => close(dir, 'テスト途中', NOW), /git add に失敗/);
+  unlock();
+  const log = `${read(dir, 'LOG.md')}\n## 2026-09-13 L8 map\nmemo\n`;
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), log);
+  assert.match(close(dir, 'テスト途中', NOW)[0] ?? '', /^中断は LOG に記録済み・コミット: [0-9a-f]+ wip: L7 resume-close$/);
+  assert.equal(read(dir, 'LOG.md'), log);
+});
+
 test('a later close with the same note after a successful one is logged again', (t) => {
   const dir = workingProject(t);
   close(dir, 'テスト途中', NOW);

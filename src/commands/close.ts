@@ -5,21 +5,32 @@ import { isDeepStrictEqual } from 'node:util';
 import { readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitLastCommit } from '../git.js';
 import { appendLog, formatDate, logLines, newlyDone, nextStatus, parsePlan, type LogEntry } from '../state.js';
-import { INTERRUPTED, commitRecords, headState, requireCommittable, requireNext, resumable, skill, uncommittedLastLog } from './shared.js';
+import {
+  INTERRUPTED,
+  INTERRUPTION_NOTE,
+  commitRecords,
+  headState,
+  requireCommittable,
+  requireNext,
+  resumable,
+  skill,
+  uncommittedLogs,
+} from './shared.js';
 
 const HINT = '（soujo next set で書き直してから再実行）';
 
 // The note as LOG lines with "中断: " before the first; a "中断:" already written by the caller is not doubled.
 function interruptionLines(note: string): string[] {
-  const [first, ...rest] = logLines([note.replace(/^\s*中断\s*[:：]/, '')]);
+  const [first, ...rest] = logLines([note.replace(INTERRUPTION_NOTE, '')]);
   if (first === undefined) throw new Error('--note が空');
   return [`${INTERRUPTED}${first}`, ...rest];
 }
 
-// The last LOG entry when it is a 中断 entry of layer that HEAD does not have yet: a previous close whose commit failed.
+// The last 中断 entry of layer that HEAD does not have yet, even with entries added after it: a previous close whose commit failed.
 function uncommittedInterruption(log: string, head: string | undefined, layer: string): LogEntry | undefined {
-  const last = uncommittedLastLog(log, head);
-  return last?.layer === layer && last.lines[0]?.startsWith(INTERRUPTED) ? last : undefined;
+  return uncommittedLogs(log, head)
+    .filter((entry) => entry.layer === layer && entry.lines[0]?.startsWith(INTERRUPTED))
+    .at(-1);
 }
 
 /**
@@ -30,7 +41,7 @@ function uncommittedInterruption(log: string, head: string | undefined, layer: s
  * - --note blank or breaking LOG limits                                        → refuse
  * After the 中断 entry is written, nothing is committed while PLAN, LOG, or NEXT is not staged as written (see commitRecords).
  * The layer is NEXT.md's, or PLAN's first unfinished layer when NEXT.md already points past it (stopped between next set and layer done).
- * With --note, an uncommitted 中断 entry of the same layer at the end of LOG is kept instead of adding another,
+ * With --note, a 中断 entry of the same layer not in HEAD's LOG is kept instead of adding another,
  * so re-running after a failed commit retries only the commit, even with different wording.
  */
 export function close(cwd: string, note?: string, now: Date = new Date()): string[] {

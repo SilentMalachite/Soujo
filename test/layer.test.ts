@@ -50,6 +50,9 @@ test('layer done writes nothing on invalid input', (t) => {
   assert.throws(() => layerDone(dir, 'L2', undefined, NOW), /PLAN\.md に層「L2」がない/);
   assert.throws(() => layerDone(dir, 'L2 state', 'a\nb\nc\nd', NOW), /3行まで（4行）/);
   assert.throws(() => layerDone(dir, 'L2 state', '## 2026-09-14 fake', NOW), /## /);
+  for (const note of ['中断: 途中', '\n 中断：途中']) {
+    assert.throws(() => layerDone(dir, 'L2 state', note, NOW), /^Error: --note を「中断:」で始めない（close の中断の記録と区別できなくなる）$/);
+  }
   assert.deepEqual(before(), snapshot);
 
   const outsideGit = project(temp(t), STATE);
@@ -204,7 +207,33 @@ test('a re-run still refuses an invalid note before committing', (t) => {
   rmSync(lock);
   const before = [read(dir, 'LOG.md'), gitLastCommit(dir)?.hash];
   assert.throws(() => layerDone(dir, 'L2 state', 'a\nb\nc\nd', NOW), /3行まで（4行）/);
+  assert.throws(() => layerDone(dir, 'L2 state', '中断: 途中', NOW), /「中断:」で始めない/);
   assert.deepEqual([read(dir, 'LOG.md'), gitLastCommit(dir)?.hash], before);
+});
+
+test('a re-run finds its uncommitted LOG entry after later entries, and when LOG has as many entries as HEAD', (t) => {
+  const memo = '\n## 2026-09-12 L3 io\nmemo\n';
+  const dir = project(repo(t), { ...STATE, 'LOG.md': `${LOG}${memo}` });
+  commitAll(dir, 'layer: L1 scaffold');
+  writeFileSync(join(dir, 'state.ts'), 'export {};\n');
+  const lock = join(dir, '.git', 'index.lock');
+  writeFileSync(lock, '');
+  assert.throws(() => layerDone(dir, 'L2 state', 'note', NOW), /git add に失敗/);
+  rmSync(lock);
+  const logged = read(dir, 'LOG.md');
+
+  const later = `${logged}\n## 2026-09-13 L3 io\nlater\n`;
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), later);
+  writeFileSync(lock, '');
+  assert.throws(() => layerDone(dir, 'L2 state', 'note', NOW), /git add に失敗/);
+  rmSync(lock);
+  assert.equal(read(dir, 'LOG.md'), later);
+
+  // The memo entry of HEAD removed: as many entries as HEAD, one of them this layer's.
+  const replaced = logged.replace(memo, '');
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), replaced);
+  assert.match(layerDone(dir, 'L2 state', 'note', NOW)[0] ?? '', /のコミットをやり直した/);
+  assert.equal(read(dir, 'LOG.md'), replaced);
 });
 
 test('leftover temporary files from a killed write are removed, not committed', (t) => {

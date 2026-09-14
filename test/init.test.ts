@@ -37,6 +37,16 @@ test('init outside git uses the current directory, never overwrites, and lists s
   assert.deepEqual(init(dir), [`既存のため作らず: ${ALL.join(', ')}`, 'git リポジトリではない: layer done / close の前に git init が要る']);
 });
 
+test('init removes temporary files left by a killed write', (t) => {
+  const dir = repo(t);
+  mkdirSync(join(dir, '.soujo'));
+  writeFileSync(join(dir, '.soujo', '.PLAN.md.99999.tmp'), 'half');
+  writeFileSync(join(dir, '.soujo', 'notes.tmp'), 'mine');
+  init(dir);
+  assert.equal(existsSync(join(dir, '.soujo', '.PLAN.md.99999.tmp')), false);
+  assert.equal(readFileSync(join(dir, '.soujo', 'notes.tmp'), 'utf8'), 'mine');
+});
+
 test('templates: NEXT.md is valid, PLAN.md has no layers, CLAUDE.md / AGENTS.md match the repository copies', () => {
   assert.deepEqual(validateNext(readTemplate('NEXT.md')), []);
   assert.deepEqual(parsePlan(readTemplate('PLAN.md')), []);

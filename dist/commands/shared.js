@@ -9,6 +9,8 @@ const RECORDS = ['PLAN.md', 'LOG.md', 'NEXT.md'];
 export const NO_LAYERS = 'PLAN.md に層がない';
 /** The start of the first line of a LOG entry written by close. */
 export const INTERRUPTED = '中断: ';
+/** A note starting like a 中断 entry, in any spelling close accepts. */
+export const INTERRUPTION_NOTE = /^\s*中断\s*[:：]/;
 /** The layers of PLAN.md in the project above cwd; throws outside Soujo projects or without PLAN.md. */
 export function readPlan(cwd) {
     return parsePlan(requireState(requireStateDir(cwd), 'PLAN.md'));
@@ -65,10 +67,21 @@ export function requireCommittable(root) {
         throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
     }
 }
-/** The last LOG entry when HEAD's LOG.md does not have it yet (a previous run wrote it but did not commit), or undefined. */
-export function uncommittedLastLog(log, head) {
-    const entries = parseLog(log);
-    return entries.length > parseLog(head ?? '').length ? entries.at(-1) : undefined;
+/**
+ * The LOG entries, in order, that HEAD's LOG.md does not have (a previous run wrote them but did not commit), wherever they
+ * are. Entries are compared whole and counted, so a repeated entry is uncommitted once HEAD has fewer copies of it.
+ */
+export function uncommittedLogs(log, head) {
+    const key = (entry) => JSON.stringify([entry.date, entry.layer, entry.lines]);
+    const committed = new Map();
+    for (const entry of parseLog(head ?? ''))
+        committed.set(key(entry), (committed.get(key(entry)) ?? 0) + 1);
+    return parseLog(log).filter((entry) => {
+        const copies = committed.get(key(entry)) ?? 0;
+        if (copies > 0)
+            committed.set(key(entry), copies - 1);
+        return copies === 0;
+    });
 }
 /** The state file as committed at HEAD (following a symlinked file to its target), or undefined when HEAD has none. */
 export function headState(root, file) {

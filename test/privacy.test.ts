@@ -21,24 +21,34 @@ const SECRETS: [string, RegExp][] = [
   // The user name may end the path (cd /Users/name); Windows paths ignore case.
   ['ホームディレクトリの絶対パス', /\/Users\/[^/\s`'"]+|\/home\/[^/\s`'"]+|[A-Za-z]:\\[Uu]sers\\/],
 ];
-// Addresses that identify nobody: SSH remotes (git@github.com), no-reply addresses, the sign-off of Dependabot's commits,
-// test fixtures, GitHub's noreply addresses, and image names for high-density screens (icon@2x.png).
-const ALLOWED_EMAIL = /^(?:git|noreply)@|^support@github\.com$|@(?:example\.com|users\.noreply\.github\.com)$|@\d+x\.(?:png|jpe?g|gif|webp|svg)$/;
+// Addresses that identify nobody: GitHub's SSH remote (git@github.com), the Co-Authored-By address of Claude in early commits,
+// the sign-off of Dependabot's commits, test fixtures, GitHub's noreply addresses, and image names for high-density screens
+// (icon@2x.png). Other hosts' git@ and noreply@ addresses may belong to a person or a company, so they are not allowed.
+const ALLOWED_EMAIL =
+  /^(?:git@github\.com|noreply@anthropic\.com|support@github\.com)$|@(?:example\.com|users\.noreply\.github\.com)$|@\d+x\.(?:png|jpe?g|gif|webp|svg)$/;
 const EMAIL = /[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}/g;
 // File names that hold credentials; .gitignore keeps them out of `git add -A`. .env.example is a template without values.
-const CREDENTIAL_FILE = /^(?:\.env(?:\.(?!example$).+)?|\.npmrc|\.credentials\.json|auth\.json|id_(?:rsa|ed25519|ecdsa)(?:\.pub)?|.+\.(?:pem|key))$/;
+const CREDENTIAL_FILE =
+  /^(?:\.env(?:\.(?!example$).+)?|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|auth\.json|id_(?:rsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.+\.(?:pem|key))$/;
 const CREDENTIAL_EXAMPLES = [
   '.env',
   '.env.local',
   '.npmrc',
+  '.netrc',
+  '_netrc',
+  '.git-credentials',
   '.credentials.json',
   'auth.json',
   'id_rsa',
   'id_rsa.pub',
   'id_ed25519',
   'id_ed25519.pub',
+  'id_ed25519_sk',
+  'id_ed25519_sk.pub',
   'id_ecdsa',
   'id_ecdsa.pub',
+  'id_ecdsa_sk',
+  'id_ecdsa_sk.pub',
   'server.pem',
   'server.key',
   'sub/id_rsa',
@@ -97,7 +107,9 @@ test('the patterns catch what they are for and let through what identifies nobod
   assert.deepEqual(caught('cd /Users/name'), ['ホームディレクトリの絶対パス']);
   assert.deepEqual(caught('ls /home/name/src'), ['ホームディレクトリの絶対パス']);
   assert.deepEqual(caught('c:\\users\\name'), ['ホームディレクトリの絶対パス']);
-  assert.deepEqual(caught('mail someone@gmail.com'), ['メールアドレス']);
+  for (const line of ['mail someone@gmail.com', 'git clone git@evil.example:owner/repo.git', 'git@company.com', 'noreply@gmail.com']) {
+    assert.deepEqual(caught(line), ['メールアドレス'], line);
+  }
   for (const line of ['git clone git@github.com:owner/repo.git', 'ssh://git@github.com/owner/repo', 'icon@2x.png', 'Signed-off-by: dependabot[bot] <support@github.com>']) {
     assert.deepEqual(caught(line), [], line);
   }

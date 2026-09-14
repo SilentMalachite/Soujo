@@ -1,12 +1,12 @@
 // soujo init: copies templates into the project root without overwriting anything.
 import { join, resolve } from 'node:path';
-import { STATE_DIR, STATE_FILES, createFile, ensureStateDir, readTemplate } from '../files.js';
+import { STATE_DIR, STATE_FILES, createFile, ensureStateDir, readTemplate, removeLeftoverTemps } from '../files.js';
 import { gitToplevel } from '../git.js';
 const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'];
 export function init(cwd) {
     const toplevel = gitToplevel(cwd);
     const root = toplevel ?? resolve(cwd);
-    ensureStateDir(root);
+    removeLeftoverTemps(ensureStateDir(root));
     const targets = [
         ...STATE_FILES.map((file) => ({ template: file, path: `${STATE_DIR}/${file}` })),
         ...ROOT_FILES.map((file) => ({ template: file, path: file })),

@@ -2,8 +2,8 @@
 import { dirname } from 'node:path';
 import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
 import { gitAddedFiles, gitFindCommit, gitLastCommit } from '../git.js';
-import { appendLog, formatDate, markDone, parsePlan } from '../state.js';
-import { INTERRUPTED, commitRecords, headState, requireCommittable, requireNext, resumable, uncommittedLastLog } from './shared.js';
+import { appendLog, formatDate, logLines, markDone, parsePlan } from '../state.js';
+import { INTERRUPTED, INTERRUPTION_NOTE, commitRecords, headState, requireCommittable, requireNext, resumable, uncommittedLogs, } from './shared.js';
 const SHOWN_FILES = 5;
 function isChecked(plan, layer) {
     return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
@@ -33,9 +33,10 @@ function describeAdded(root) {
  * - committed ("layer: <layer>" exists)                       → refuse
  * - checked in PLAN at HEAD (committed under another subject), even if unchecked again in the working tree → refuse
  * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
+ * - --note starting with "中断:"                              → refuse (only close writes those, so a re-run can tell them apart)
  * - unchecked in PLAN                                         → check PLAN, append LOG, commit
- * - checked only in the working tree (interrupted run)        → append LOG unless its last entry is this layer's uncommitted
- *                                                                completion entry (a 中断 entry of close does not count), then commit
+ * - checked only in the working tree (interrupted run)        → append LOG unless LOG has this layer's completion entry not in
+ *                                                                HEAD yet (a 中断 entry of close does not count), then commit
  * After the first write, every failure says what is recorded, so that fixing the cause and re-running resumes. Nothing is
  * committed while PLAN, LOG, or NEXT is not staged as written (skip-worktree), since a re-run could not add them afterwards.
  */
@@ -56,9 +57,12 @@ export function layerDone(cwd, layer, note, now = new Date()) {
         throw new Error(`層「${name}」は PLAN のチェックごとコミット済み（件名が「${subject}」ではない）`);
     }
     requireNextStep(dir, name);
+    if (note !== undefined && INTERRUPTION_NOTE.test(logLines([note])[0] ?? '')) {
+        throw new Error('--note を「中断:」で始めない（close の中断の記録と区別できなくなる）');
+    }
     const log = readState(dir, 'LOG.md') ?? '';
-    const last = item.done ? uncommittedLastLog(log, headState(root, 'LOG.md')) : undefined;
-    const logged = last?.layer === name && !last.lines[0]?.startsWith(INTERRUPTED);
+    const uncommitted = item.done ? uncommittedLogs(log, headState(root, 'LOG.md')) : [];
+    const logged = uncommitted.some((entry) => entry.layer === name && !entry.lines[0]?.startsWith(INTERRUPTED));
     const newPlan = item.done ? undefined : markDone(plan, name);
     // Built even when the existing entry is reused, so an invalid note is refused on a re-run too.
     const appended = appendLog(log, { date: formatDate(now), layer: name, lines: note === undefined ? [] : [note] });

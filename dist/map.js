@@ -101,7 +101,8 @@ function endsOperand(token) {
         return !REGEX_AFTER.has(token.value);
     return token?.kind === 'string' || token?.kind === 'other' || isPunct(token, ')') || isPunct(token, ']');
 }
-function regexAllowed(tokens) {
+// before is the character just before the "/".
+function regexAllowed(tokens, before) {
     const previous = tokens.at(-1);
     if (previous === undefined)
         return true;
@@ -111,8 +112,10 @@ function regexAllowed(tokens) {
         return false;
     if (previous.value === ')')
         return previous.condition === true;
-    // "</" closes a JSX element.
-    if (']}<'.includes(previous.value))
+    // "</" with nothing between closes a JSX element; "a < /re/" compares with a regular expression.
+    if (previous.value === '<')
+        return before !== '<';
+    if (']}'.includes(previous.value))
         return false;
     // "a++ / b" divides.
     if ('+-'.includes(previous.value) && isPunct(tokens.at(-2), previous.value))
@@ -222,7 +225,7 @@ function scriptTokens(text) {
                 substitutions.push(depth);
             index = template.next;
         }
-        else if (char === '/' && regexAllowed(tokens)) {
+        else if (char === '/' && regexAllowed(tokens, text[index - 1])) {
             index = scanRegex(text, index);
             tokens.push({ kind: 'other', value: '' });
         }
@@ -240,8 +243,10 @@ function scriptTokens(text) {
             else if (char === '}')
                 depth -= 1;
             else if (char === '(') {
-                const previous = tokens.at(-1);
-                conditions.push(previous?.kind === 'word' && CONDITION_BEFORE.has(previous.value) && !isPunct(tokens.at(-2), '.'));
+                // "for await (" opens a condition like "for (".
+                const at = isWord(tokens.at(-1), 'await') && isWord(tokens.at(-2), 'for') ? -2 : -1;
+                const keyword = tokens.at(at);
+                conditions.push(keyword?.kind === 'word' && CONDITION_BEFORE.has(keyword.value) && !isPunct(tokens.at(at - 1), '.'));
             }
             else if (char === ')')
                 token.condition = conditions.pop() === true;
@@ -253,6 +258,9 @@ function scriptTokens(text) {
 }
 function isPunct(token, value) {
     return token?.kind === 'punct' && token.value === value;
+}
+function isWord(token, value) {
+    return token?.kind === 'word' && token.value === value;
 }
 // Specifiers of `from "x"`, `import "x"`, `import("x")`, and `require("x")`, skipping member calls such as `obj.import("x")`
 // and arguments that are not a whole fixed string, such as `import("./x" + name)`.
