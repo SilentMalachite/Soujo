@@ -1,12 +1,10 @@
 // soujo layer done: checks the layer in PLAN.md, appends LOG.md, and commits everything as "layer: <layer>".
 import { dirname } from 'node:path';
-import { readState, removeLeftoverTemps, requireState, requireStateDir, trackedStatePath, writeState } from '../files.js';
-import { gitAddAll, gitAddedFiles, gitCommit, gitFindCommit, gitHasStagedChanges, gitLastCommit, gitNotStaged } from '../git.js';
+import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
+import { gitAddedFiles, gitFindCommit, gitLastCommit } from '../git.js';
 import { appendLog, formatDate, markDone, parsePlan } from '../state.js';
-import { INTERRUPTED, headState, requireCommittable, requireNext, resumable, uncommittedLastLog } from './shared.js';
+import { INTERRUPTED, commitRecords, headState, requireCommittable, requireNext, resumable, uncommittedLastLog } from './shared.js';
 const SHOWN_FILES = 5;
-// The records a layer commit must carry as written.
-const RECORDS = ['PLAN.md', 'LOG.md', 'NEXT.md'];
 function isChecked(plan, layer) {
     return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
 }
@@ -71,16 +69,7 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     if (newLog !== undefined) {
         resumable(() => writeState(dir, 'LOG.md', newLog), 'PLAN は記録済み。原因を直して再実行すれば LOG 追記からやり直す');
     }
-    const done = resumable(() => {
-        gitAddAll(root);
-        const unstaged = gitNotStaged(root, RECORDS.map((file) => trackedStatePath(root, file)));
-        if (unstaged.length > 0)
-            throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
-        if (!gitHasStagedChanges(root))
-            return false;
-        gitCommit(root, subject);
-        return true;
-    }, 'PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す');
+    const done = resumable(() => commitRecords(root, subject), 'PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す');
     if (!done)
         throw new Error('コミットする変更がない（PLAN と LOG の変更を git が拾っていない。skip-worktree などを確認）');
     const hash = gitLastCommit(root)?.hash ?? '?';

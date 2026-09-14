@@ -29,7 +29,7 @@ claude --plugin-dir .   # try the plugin from the working tree without installin
 - **Documentation is English first.** User documentation (README, CHANGELOG, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT) is English with a Japanese translation of the same blocks (`test/docs.test.ts` compares them). Text read at run time — CLI output, skills, templates, CLAUDE.md, AGENTS.md — is Japanese.
 - **CLAUDE.md and AGENTS.md differ on purpose.** A rule change edits both, and their copies in `templates/`.
 - **Commit messages** are English: `<type>: <description>` with `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, or `ci`.
-- **No private data.** Credentials, session links, home directory paths, and personal email addresses never enter files or commit messages (`test/privacy.test.ts` checks tracked files).
+- **No private data.** Credentials, session links, home directory paths, and personal email addresses never enter files or commit messages (`test/privacy.test.ts` checks tracked files and commit messages).
 
 `.soujo/` holds the maintainer's own Soujo records for this repository; leave it unchanged unless you work with Soujo here.
 

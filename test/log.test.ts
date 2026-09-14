@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { logAdd } from '../src/commands/log.js';
 import { project, temp } from './helpers.js';
@@ -22,6 +22,15 @@ test('log add creates LOG.md when it is missing', (t) => {
   const dir = project(temp(t));
   logAdd(dir, 'L1', ['a'], NOW);
   assert.equal(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), '## 2026-09-13 L1\na\n');
+});
+
+test('log add removes temporary files a killed write left, one with its own process id included', (t) => {
+  const dir = project(temp(t), { 'LOG.md': '# LOG\n' });
+  const leftovers = [`.LOG.md.${process.pid}.tmp`, '.NEXT.md.99999.tmp'].map((name) => join(dir, '.soujo', name));
+  for (const path of leftovers) writeFileSync(path, 'half');
+  logAdd(dir, 'L1', ['a'], NOW);
+  assert.equal(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), '# LOG\n\n## 2026-09-13 L1\na\n');
+  assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
 });
 
 test('log add writes nothing when the lines are missing or too many', (t) => {

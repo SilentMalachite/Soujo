@@ -170,18 +170,33 @@ test('a failed commit without --note says how to resume', (t) => {
   unlock();
 });
 
-test('close refuses to report success when git does not pick up the 中断 entry, on a re-run too', (t) => {
+test('close commits nothing while git does not pick up the 中断 entry, on a re-run too, and commits once it does', (t) => {
   const dir = workingProject(t);
-  rmSync(join(dir, 'resume.ts'));
-  execFileSync('git', ['update-index', '--skip-worktree', '.soujo/LOG.md'], { cwd: dir });
+  const skipWorktree = (flag: string) => execFileSync('git', ['update-index', flag, '.soujo/LOG.md'], { cwd: dir });
+  skipWorktree('--skip-worktree');
   const before = gitLastCommit(dir)?.hash;
-  const message = /^Error: 中断ログを git が拾っていない（中断は LOG に記録済み。skip-worktree などを確認）$/;
+  const message =
+    /^Error: \.soujo\/LOG\.md の変更を git が拾っていない（skip-worktree などを確認）（中断は LOG に記録済み。原因を直して同じコマンドを再実行すればコミットだけやり直す）$/;
   assert.throws(() => close(dir, 'note', NOW), message);
   assert.throws(() => close(dir, 'note', NOW), message);
   assert.equal(gitLastCommit(dir)?.hash, before);
+  assert.equal(read(dir, 'LOG.md'), `${LOG}${ENTRY}中断: note\n`);
 
-  writeFileSync(join(dir, 'other.ts'), '');
-  assert.throws(() => close(dir, 'note', NOW), /^Error: コミットに中断ログが入っていない（/);
+  skipWorktree('--no-skip-worktree');
+  assert.match(close(dir, 'note', NOW)[0] ?? '', /^中断は LOG に記録済み・コミット: [0-9a-f]+ wip: L7 resume-close$/);
+  assert.deepEqual(gitStatus(dir), []);
+});
+
+test('close without --note commits nothing while a changed NEXT.md is not staged as written', (t) => {
+  const dir = workingProject(t);
+  execFileSync('git', ['update-index', '--skip-worktree', '.soujo/NEXT.md'], { cwd: dir });
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('前提: p', '前提: q'));
+  const before = gitLastCommit(dir)?.hash;
+  assert.throws(
+    () => close(dir, undefined, NOW),
+    /^Error: \.soujo\/NEXT\.md の変更を git が拾っていない（skip-worktree などを確認）（記録したものはない。原因を直して同じコマンドを再実行する）$/,
+  );
+  assert.equal(gitLastCommit(dir)?.hash, before);
 });
 
 test('after layer done stops before its commit, close refuses and re-running layer done finishes the layer', (t) => {

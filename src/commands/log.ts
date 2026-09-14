@@ -1,6 +1,6 @@
 // soujo log add: appends one dated entry to LOG.md.
 
-import { readState, requireStateDir, writeState } from '../files.js';
+import { readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { appendLog, formatDate, lastLog } from '../state.js';
 
 export function logAdd(cwd: string, layer: string, lines: string[], now: Date = new Date()): string[] {
@@ -8,6 +8,7 @@ export function logAdd(cwd: string, layer: string, lines: string[], now: Date = 
   const dir = requireStateDir(cwd);
   const date = formatDate(now);
   const text = appendLog(readState(dir, 'LOG.md') ?? '', { date, layer, lines });
+  removeLeftoverTemps(dir);
   writeState(dir, 'LOG.md', text);
   return [`LOG.md に追記: ${date} ${layer.trim()}（${lastLog(text)?.lines.length ?? 0}行）`];
 }

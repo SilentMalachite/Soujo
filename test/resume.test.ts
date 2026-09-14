@@ -61,6 +61,14 @@ test('resume clips long layer names too, but keeps them whole inside commands', 
 
   const missing = project(temp(t), { 'PLAN.md': plan });
   assert.equal(resume(missing)[0], `次: ${clipped}（PLAN から）確認: io`);
+
+  const pending = project(repo(t), { 'NEXT.md': NEXT.replace('L3 io', 'L4 cli'), 'PLAN.md': plan });
+  commitAll(pending);
+  writeFileSync(join(pending, '.soujo', 'PLAN.md'), plan.replace(`- [ ] ${long}`, `- [x] ${long}`));
+  assert.equal(
+    resume(pending)[3],
+    `再開: 「${clipped}」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done "${long}" を再実行`,
+  );
 });
 
 test('resume falls back to the next layer of PLAN when NEXT.md is missing, invalid, or finished', (t) => {

@@ -1,11 +1,18 @@
 node_modules/
 .test-dist/
 .DS_Store
-# Credentials: `soujo layer done` stages everything with git add -A.
+# Credentials: `soujo layer done` stages everything with git add -A. test/privacy.test.ts checks these against CREDENTIAL_FILE.
 .env
 .env.*
+!.env.example
 .npmrc
 .credentials.json
 auth.json
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+id_ecdsa
+id_ecdsa.pub
 *.pem
 *.key

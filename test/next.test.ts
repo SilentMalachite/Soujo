@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nextCheck, nextSet, nextShow } from '../src/commands/next.js';
 import { commitAll, project, repo, temp } from './helpers.js';
@@ -40,6 +40,15 @@ test('next set rewrites NEXT.md with defaults', (t) => {
   assert.equal(readNext(dir), NEXT);
   nextSet(dir, { layer: 'L3', premise: 'p', check: 'c', caution: '遅い', effort: 'xhigh' });
   assert.match(readNext(dir), /^注意: 遅い\neffort: xhigh\n$/m);
+});
+
+test('next set removes temporary files a killed write left, one with its own process id included', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': 'old\n' });
+  const leftovers = [`.NEXT.md.${process.pid}.tmp`, '.LOG.md.99999.tmp'].map((name) => join(dir, '.soujo', name));
+  for (const path of leftovers) writeFileSync(path, 'half');
+  nextSet(dir, { layer: 'L2 state', premise: 'L1 完了', check: 'npm test が通る' });
+  assert.equal(readNext(dir), NEXT);
+  assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
 });
 
 test('next set writes nothing for invalid values', (t) => {

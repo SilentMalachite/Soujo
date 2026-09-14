@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { packageDir } from '../src/files.js';
 
-// CLAUDE.md §6: committed files carry no credentials, session links, or personal data. This file holds the patterns, so it is not scanned.
+// CLAUDE.md §6: committed files and commit messages carry no credentials, session links, or personal data. This file holds the patterns, so it is not scanned.
 const SELF = 'test/privacy.test.ts';
 
 const SECRETS: [string, RegExp][] = [
@@ -18,31 +18,87 @@ const SECRETS: [string, RegExp][] = [
   ['JWT', /\beyJ[\w-]{10,}\.[\w-]{10,}\./],
   ['Claude の認証情報の項目', /"(?:accessToken|refreshToken|oauthAccount)"\s*:/],
   ['Claude のセッション URL', /claude\.ai\/code\/session_|Claude-Session:/],
-  ['ホームディレクトリの絶対パス', /\/Users\/[^/\s`'"]+\/|\/home\/[^/\s`'"]+\/|[A-Z]:\\Users\\/],
+  // The user name may end the path (cd /Users/name); Windows paths ignore case.
+  ['ホームディレクトリの絶対パス', /\/Users\/[^/\s`'"]+|\/home\/[^/\s`'"]+|[A-Za-z]:\\[Uu]sers\\/],
 ];
-// Addresses that identify nobody: test fixtures and GitHub's noreply addresses.
-const ALLOWED_EMAIL = /@(?:example\.com|users\.noreply\.github\.com)$/;
+// Addresses that identify nobody: SSH remotes (git@github.com), no-reply addresses, the sign-off of Dependabot's commits,
+// test fixtures, GitHub's noreply addresses, and image names for high-density screens (icon@2x.png).
+const ALLOWED_EMAIL = /^(?:git|noreply)@|^support@github\.com$|@(?:example\.com|users\.noreply\.github\.com)$|@\d+x\.(?:png|jpe?g|gif|webp|svg)$/;
 const EMAIL = /[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}/g;
-// File names that hold credentials; .gitignore keeps them out of `git add -A`.
-const CREDENTIAL_FILE = /^(?:\.env(?:\..+)?|\.npmrc|\.credentials\.json|auth\.json|id_(?:rsa|ed25519|ecdsa)(?:\.pub)?|.+\.(?:pem|key))$/;
+// File names that hold credentials; .gitignore keeps them out of `git add -A`. .env.example is a template without values.
+const CREDENTIAL_FILE = /^(?:\.env(?:\.(?!example$).+)?|\.npmrc|\.credentials\.json|auth\.json|id_(?:rsa|ed25519|ecdsa)(?:\.pub)?|.+\.(?:pem|key))$/;
+const CREDENTIAL_EXAMPLES = [
+  '.env',
+  '.env.local',
+  '.npmrc',
+  '.credentials.json',
+  'auth.json',
+  'id_rsa',
+  'id_rsa.pub',
+  'id_ed25519',
+  'id_ed25519.pub',
+  'id_ecdsa',
+  'id_ecdsa.pub',
+  'server.pem',
+  'server.key',
+  'sub/id_rsa',
+];
+
+function git(args: string[]): string {
+  return execFileSync('git', args, { cwd: packageDir(), encoding: 'utf8' });
+}
 
 function tracked(): string[] {
-  return execFileSync('git', ['ls-files', '-z'], { cwd: packageDir(), encoding: 'utf8' }).split('\0').filter(Boolean);
+  return git(['ls-files', '-z']).split('\0').filter(Boolean);
+}
+
+// "<label>:<line> <what>" for each line of text that carries a secret pattern or an email address not in ALLOWED_EMAIL.
+function leaks(label: string, text: string): string[] {
+  const found: string[] = [];
+  text.split('\n').forEach((line, index) => {
+    for (const [name, pattern] of SECRETS) if (pattern.test(line)) found.push(`${label}:${index + 1} ${name}`);
+    for (const [email] of line.matchAll(EMAIL)) if (!ALLOWED_EMAIL.test(email)) found.push(`${label}:${index + 1} メールアドレス`);
+  });
+  return found;
 }
 
 test('no tracked file is a credential file', () => {
   for (const file of tracked()) assert.doesNotMatch(basename(file), CREDENTIAL_FILE, file);
 });
 
+test('.gitignore ignores every kind of credential file, and not .env.example', () => {
+  for (const name of CREDENTIAL_EXAMPLES) assert.match(basename(name), CREDENTIAL_FILE, name);
+  assert.doesNotMatch('.env.example', CREDENTIAL_FILE);
+  const ignored = git(['check-ignore', '--no-index', '--', ...CREDENTIAL_EXAMPLES, '.env.example']);
+  assert.deepEqual(ignored.split('\n').filter(Boolean).sort(), [...CREDENTIAL_EXAMPLES].sort());
+});
+
 test('tracked files carry no credentials, session links, home paths, or personal email addresses', () => {
-  const found: string[] = [];
-  for (const file of tracked().filter((file) => file !== SELF)) {
-    readFileSync(join(packageDir(), file), 'utf8')
-      .split('\n')
-      .forEach((line, index) => {
-        for (const [name, pattern] of SECRETS) if (pattern.test(line)) found.push(`${file}:${index + 1} ${name}`);
-        for (const [email] of line.matchAll(EMAIL)) if (!ALLOWED_EMAIL.test(email)) found.push(`${file}:${index + 1} メールアドレス`);
-      });
-  }
+  const found = tracked()
+    .filter((file) => file !== SELF)
+    .flatMap((file) => leaks(file, readFileSync(join(packageDir(), file), 'utf8')));
   assert.deepEqual(found, []);
+});
+
+// CI checks out the whole history (fetch-depth: 0) so that every commit message is seen; a shallow clone checks fewer.
+test('commit messages carry no credentials, session links, home paths, or personal email addresses', () => {
+  const found = git(['log', '-z', '--format=%h%n%B'])
+    .split('\0')
+    .filter(Boolean)
+    .flatMap((commit) => {
+      const [hash = '', ...body] = commit.split('\n');
+      return leaks(`commit ${hash}`, body.join('\n'));
+    });
+  assert.deepEqual(found, []);
+});
+
+test('the patterns catch what they are for and let through what identifies nobody', () => {
+  const caught = (line: string) => leaks('x', line).map((leak) => leak.slice('x:1 '.length));
+  assert.deepEqual(caught('cd /Users/name'), ['ホームディレクトリの絶対パス']);
+  assert.deepEqual(caught('ls /home/name/src'), ['ホームディレクトリの絶対パス']);
+  assert.deepEqual(caught('c:\\users\\name'), ['ホームディレクトリの絶対パス']);
+  assert.deepEqual(caught('mail someone@gmail.com'), ['メールアドレス']);
+  for (const line of ['git clone git@github.com:owner/repo.git', 'ssh://git@github.com/owner/repo', 'icon@2x.png', 'Signed-off-by: dependabot[bot] <support@github.com>']) {
+    assert.deepEqual(caught(line), [], line);
+  }
 });

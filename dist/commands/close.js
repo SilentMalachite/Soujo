@@ -2,9 +2,9 @@
 import { dirname } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { gitCommitAll, gitLastCommit } from '../git.js';
-import { appendLog, formatDate, logLines, newlyDone, nextStatus, parseLog, parsePlan } from '../state.js';
-import { INTERRUPTED, headState, requireCommittable, requireNext, resumable, skill, uncommittedLastLog } from './shared.js';
+import { gitLastCommit } from '../git.js';
+import { appendLog, formatDate, logLines, newlyDone, nextStatus, parsePlan } from '../state.js';
+import { INTERRUPTED, commitRecords, headState, requireCommittable, requireNext, resumable, skill, uncommittedLastLog } from './shared.js';
 const HINT = '（soujo next set で書き直してから再実行）';
 // The note as LOG lines with "中断: " before the first; a "中断:" already written by the caller is not doubled.
 function interruptionLines(note) {
@@ -24,6 +24,7 @@ function uncommittedInterruption(log, head, layer) {
  * - NEXT.md missing, invalid, or pointing to a layer already checked in PLAN   → refuse
  * - a layer checked in PLAN but not at HEAD (layer done stopped before commit) → refuse; re-running layer done finishes it
  * - --note blank or breaking LOG limits                                        → refuse
+ * After the 中断 entry is written, nothing is committed while PLAN, LOG, or NEXT is not staged as written (see commitRecords).
  * The layer is NEXT.md's, or PLAN's first unfinished layer when NEXT.md already points past it (stopped between next set and layer done).
  * With --note, an uncommitted 中断 entry of the same layer at the end of LOG is kept instead of adding another,
  * so re-running after a failed commit retries only the commit, even with different wording.
@@ -63,13 +64,9 @@ export function close(cwd, note, now = new Date()) {
     if (newLog !== undefined)
         writeState(dir, 'LOG.md', newLog);
     const subject = `wip: ${layer}`;
-    const committed = resumable(() => gitCommitAll(root, subject), note === undefined
+    const committed = resumable(() => commitRecords(root, subject), note === undefined
         ? '記録したものはない。原因を直して同じコマンドを再実行する'
         : '中断は LOG に記録済み。原因を直して同じコマンドを再実行すればコミットだけやり直す');
-    if (note !== undefined && parseLog(headState(root, 'LOG.md') ?? '').length < parseLog(newLog ?? log).length) {
-        const what = committed ? 'コミットに中断ログが入っていない' : '中断ログを git が拾っていない';
-        throw new Error(`${what}（中断は LOG に記録済み。skip-worktree などを確認）`);
-    }
     const result = committed ? `コミット: ${gitLastCommit(root)?.hash ?? '?'} ${subject}` : '未コミットの変更なし';
     return [[...(logged === undefined ? [] : [logged]), result].join('・'), `再開: ${skill('resume')}`];
 }

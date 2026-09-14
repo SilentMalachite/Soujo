@@ -200,3 +200,8 @@ README(+ja) のライセンスバッジを、GitHub の判定を読む動的な�
 ## 2026-09-14 release-0.1.0
 ユーザーの判断で v0.1.0 のタグを最新の main に付け替え（旧 bac8682）、CI・Dependabot・標準の LICENSE・英日の文書をリリースに含めた。
 CHANGELOG(+ja) の 0.1.0 に文書と設定の項目を追加し、リリースノートを差し替え。
+
+## 2026-09-14 grok-review
+grok レビュー #1〜#12 を調査し、誤検知の #11（npm の group は dependency-type だけで有効）以外を修正。
+close も PLAN・LOG・NEXT が書いたとおりステージされるまでコミットしない（commitRecords に共通化）。next set・log add も残った一時ファイルを消す。
+privacy テストはコミットメッセージ・拡張子なしの SSH 鍵・末尾区切りなしのホームパスも検査し、SSH の git@ と .env.example を除外。CI は全履歴を取得。

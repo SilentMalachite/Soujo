@@ -1,7 +1,7 @@
 // soujo next show / set / check: the one file needed to resume.
 
 import { dirname } from 'node:path';
-import { findStateDir, readState, requireStateDir, writeState } from '../files.js';
+import { findStateDir, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitStatus, gitToplevel } from '../git.js';
 import { formatNext, nextStatus, parseNext, parsePlan, validateNext, type Effort, type NextInput } from '../state.js';
 
@@ -44,6 +44,8 @@ export function nextSet(cwd: string, input: NextInput): string[] {
   if (items.length > 0 && !phase && !items.some((item) => item.layer === layer)) {
     throw new Error(`NEXT.md を書かない: PLAN.md に層「${layer}」がない（PLAN の層名をそのまま、または ${PHASES.join(' / ')}）`);
   }
+  // A killed write's temporary file would otherwise stay untracked until layer done or close, or block a write under the same pid.
+  removeLeftoverTemps(dir);
   writeState(dir, 'NEXT.md', text);
   return [`NEXT.md を更新: 次: ${layer}`];
 }

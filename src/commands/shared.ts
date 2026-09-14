@@ -14,10 +14,22 @@ import {
   trackedStatePath,
   type StateFile,
 } from '../files.js';
-import { gitHeadFile, gitIgnored, gitOperationInProgress, gitToplevel, gitUnmergedCount } from '../git.js';
+import {
+  gitAddAll,
+  gitCommit,
+  gitHasStagedChanges,
+  gitHeadFile,
+  gitIgnored,
+  gitNotStaged,
+  gitOperationInProgress,
+  gitToplevel,
+  gitUnmergedCount,
+} from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext, type LogEntry, type Next, type PlanItem } from '../state.js';
 
 const CLIP = 60;
+// The records a layer or wip commit must carry as written.
+const RECORDS = ['PLAN.md', 'LOG.md', 'NEXT.md'] as const;
 
 export const NO_LAYERS = 'PLAN.md に層がない';
 
@@ -89,6 +101,20 @@ export function uncommittedLastLog(log: string, head: string | undefined): LogEn
 /** The state file as committed at HEAD (following a symlinked file to its target), or undefined when HEAD has none. */
 export function headState(root: string, file: StateFile): string | undefined {
   return gitHeadFile(root, trackedStatePath(root, file));
+}
+
+/**
+ * Stages everything in the project and commits it as subject. Returns false, without committing, when nothing ends up staged.
+ * Nothing is committed while PLAN, LOG, or NEXT is not staged as written (skip-worktree): the commit would lack its records,
+ * and a re-run of layer done could not add them afterwards.
+ */
+export function commitRecords(root: string, subject: string): boolean {
+  gitAddAll(root);
+  const unstaged = gitNotStaged(root, RECORDS.map((file) => trackedStatePath(root, file)));
+  if (unstaged.length > 0) throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
+  if (!gitHasStagedChanges(root)) return false;
+  gitCommit(root, subject);
+  return true;
 }
 
 /** Runs step and appends what is already recorded and how to resume to its error message. */

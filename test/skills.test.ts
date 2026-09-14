@@ -92,18 +92,39 @@ test('every soujo command in the skills is a known command with known options', 
   }
 });
 
+// The value of an option given as "--name value" or "--name=value", as the CLI accepts both.
+function option(argv: string[], name: string): string | undefined {
+  const index = argv.indexOf(name);
+  if (index !== -1) return argv[index + 1];
+  return argv.find((token) => token.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+// Whether argv is next set to spec or plan (trimmed, as the CLI compares), and whether it passes --effort.
+function phaseSet(argv: string[]): { phase: boolean; effort: boolean } {
+  const layer = option(argv, '--layer')?.trim();
+  const phase = argv[0] === 'next' && argv[1] === 'set' && (layer === 'spec' || layer === 'plan');
+  return { phase, effort: argv.some((token) => token === '--effort' || token.startsWith('--effort=')) };
+}
+
 // SPEC §6: next set fixes the effort of spec and plan, so a skill passing one would be refused.
-test('next set for spec or plan in the skills passes no --effort', () => {
-  let found = 0;
+test('next set for spec or plan in the skills passes no --effort; spec and go each have one to plan', () => {
+  const cases: [string[], { phase: boolean; effort: boolean }][] = [
+    [['next', 'set', '--layer=plan', '--effort', 'low'], { phase: true, effort: true }],
+    [['next', 'set', '--layer', ' spec ', '--effort=low'], { phase: true, effort: true }],
+    [['next', 'set', '--layer', 'L1', '--effort', 'low'], { phase: false, effort: true }],
+  ];
+  for (const [argv, expected] of cases) assert.deepEqual(phaseSet(argv), expected, argv.join(' '));
+
+  const withPhase = new Set<string>();
   for (const name of SKILLS) {
     for (const argv of commands(split(join(packageDir(), 'skills', name, 'SKILL.md')).body)) {
-      const layer = argv[argv.indexOf('--layer') + 1];
-      if (argv[0] !== 'next' || argv[1] !== 'set' || (layer !== 'spec' && layer !== 'plan')) continue;
-      found += 1;
-      assert.ok(!argv.some((token) => token === '--effort' || token.startsWith('--effort=')), `${name}: soujo ${argv.join(' ')}`);
+      const { phase, effort } = phaseSet(argv);
+      if (!phase) continue;
+      withPhase.add(name);
+      assert.ok(!effort, `${name}: soujo ${argv.join(' ')}`);
     }
   }
-  assert.ok(found >= 2, 'spec と go に plan 行きの next set がある');
+  assert.deepEqual([...withPhase].sort(), ['go', 'spec']);
 });
 
 test('agents/reviewer.md is the subagent the review skill names', () => {
