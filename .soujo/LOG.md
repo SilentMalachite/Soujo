@@ -214,3 +214,7 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.1 にし、
 Codex で upgrade が local のマーケットプレイスに失敗する（not configured as a Git marketplace、終了1）ことを隔離した CODEX_HOME で再現。
 README(+ja) の更新と開発の節・SPEC(+ja) のホスト表に remove → add SilentMalachite/Soujo → plugin add での GitHub 版への切り替えを追記。
 v0.1.1 のリリースノートの Update にも同じ案内を追加。
+
+## 2026-09-14 claude-return-github
+Claude Code を remove → add SilentMalachite/Soujo → install で GitHub 版に切り替え、marketplace update と plugin update が通ることを確認。
+README(+ja) の開発の節の戻し方に Claude Code のコマンドを追加。

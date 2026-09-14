@@ -132,7 +132,7 @@ npm test        # node:test。dist/ が古いときも落ちる
 claude --plugin-dir .   # 導入せずに作業ツリーのプラグインを試す
 ```
 
-GitHub からの導入の代わりに作業ツリーを使うなら、そこで `npm link`・`claude plugin marketplace add ./`・`codex plugin marketplace add ./` を実行し、上と同じくプラグインを入れる（どちらも名前が `soujo` なので、先に GitHub のマーケットプレイスを外す）。`.` ではなく `./` と書く（Claude Code は `.` を受け付けない）。両ホストとも複製の絶対パスを保存する。Claude Code のセッションは複製からその場でプラグインを読み、Codex は変更のたびに `codex plugin add soujo@soujo` をもう一度。Codex を GitHub からの導入に戻すには `codex plugin marketplace remove soujo && codex plugin marketplace add SilentMalachite/Soujo && codex plugin add soujo@soujo` を実行する（`codex plugin marketplace upgrade` は GitHub から入れたマーケットプレイスでしか使えない）。
+GitHub からの導入の代わりに作業ツリーを使うなら、そこで `npm link`・`claude plugin marketplace add ./`・`codex plugin marketplace add ./` を実行し、上と同じくプラグインを入れる（どちらも名前が `soujo` なので、先に GitHub のマーケットプレイスを外す）。`.` ではなく `./` と書く（Claude Code は `.` を受け付けない）。両ホストとも複製の絶対パスを保存する。Claude Code のセッションは複製からその場でプラグインを読み、Codex は変更のたびに `codex plugin add soujo@soujo` をもう一度。GitHub からの導入に戻すには、Claude Code は `claude plugin marketplace remove soujo && claude plugin marketplace add SilentMalachite/Soujo && claude plugin install soujo@soujo`、Codex は `codex plugin marketplace remove soujo && codex plugin marketplace add SilentMalachite/Soujo && codex plugin add soujo@soujo` を実行する（`codex plugin marketplace upgrade` は GitHub から入れたマーケットプレイスでしか使えない）。
 
 コントリビュートの方法は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md)、エージェント向けの規約は [CLAUDE.md](CLAUDE.md)（Claude Code）と [AGENTS.md](AGENTS.md)（Codex）。文面が違うのは意図的。変更履歴は [CHANGELOG.ja.md](CHANGELOG.ja.md)。セキュリティの問題は [SECURITY.ja.md](SECURITY.ja.md) のとおりに報告する。
 
