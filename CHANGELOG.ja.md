@@ -4,6 +4,20 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
+## 0.1.1 — 2026-09-14
+
+リリース：[v0.1.1](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.1)。
+
+### 修正
+
+- `soujo close` は、`PLAN.md`・`LOG.md`・`NEXT.md` が書いたとおりにステージされていない（skip-worktree など）間は何もコミットしない（`layer done` と同じ）。これまでは「中断」エントリのない、または古い `NEXT.md` の `wip:` コミットを残すことがあった。
+- `soujo next set` と `soujo log add` は、中断された書き込みが残した一時ファイルを消す。これまでは `layer done` か `close` まで未追跡のまま残り、後の書き込みを妨げることがあった。
+- `go` スキルは `次: plan` の場合を先に示す。`next set` が CLI に拒否される `--effort` 付きで写されないため。
+
+### 変更
+
+- `test/privacy.test.ts` はコミットメッセージ（CI は全履歴を取得する）、末尾に区切りのないホームパス、SSH 鍵のファイルも検査し、`.gitignore` は SSH 鍵を無視する。`git@github.com` のような SSH のリモートと `.env.example` は検出・無視の対象から外した。
+
 ## 0.1.0 — 2026-09-14
 
 最初のリリース：[v0.1.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.0)。

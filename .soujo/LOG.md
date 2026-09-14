@@ -205,3 +205,7 @@ CHANGELOG(+ja) の 0.1.0 に文書と設定の項目を追加し、リリース�
 grok レビュー #1〜#12 を調査し、誤検知の #11（npm の group は dependency-type だけで有効）以外を修正。
 close も PLAN・LOG・NEXT が書いたとおりステージされるまでコミットしない（commitRecords に共通化）。next set・log add も残った一時ファイルを消す。
 privacy テストはコミットメッセージ・拡張子なしの SSH 鍵・末尾区切りなしのホームパスも検査し、SSH の git@ と .env.example を除外。CI は全履歴を取得。
+
+## 2026-09-14 release-0.1.1
+0.1.1 をリリース（2026-09-14）: grok レビューの修正（close のステージ確認・一時ファイル掃除・privacy 検査の拡張）。
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.1 にし、CHANGELOG(+ja) に Fixed / Changed を追加。
