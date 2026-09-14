@@ -4,9 +4,17 @@
 
 [![CI](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml/badge.svg)](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml) [![TypeScript](https://img.shields.io/github/package-json/dependency-version/SilentMalachite/Soujo/dev/typescript?logo=typescript&logoColor=white&color=3178C6)](https://www.typescriptlang.org/) [![License](https://img.shields.io/github/license/SilentMalachite/Soujo)](LICENSE)
 
-A spec → plan → layer workflow for Claude Code and Codex that survives any interruption. All state lives in four files under `.soujo/`, so work continues without conversation history — in the same host or the other one.
+**Interruptible development, resumable AI coding, low-context development** — a spec → plan → layer workflow for Claude Code and Codex.
 
-In an excavation, strata (層) are removed one at a time in order (序), and each removed layer is recorded. With the records, anyone can continue the dig.
+AI coding sessions end mid-task: a usage limit, a compacted context, a meeting, the end of the day, a move to the other host. When the plan and the decisions live only in the conversation, the next session starts by reconstructing them. Soujo keeps them in four short files under `.soujo/` and commits each finished layer, so the next session — in either host — continues from the files alone.
+
+| | What it means | How Soujo does it |
+|---|---|---|
+| Interruptible development | Stopping at any moment loses no work and no decision | Layers of ≤30 minutes, one commit each; `close` commits unfinished work as `wip:` |
+| Resumable AI coding | A new session needs no conversation history, in either host | `NEXT.md` (≤5 lines) names the next step; `resume` prints a four-line status |
+| Low-context development | Neither you nor the model has to keep much in mind | Each file has a line limit; one question at a time; the CLI updates the records |
+
+The name: in an excavation, strata (層) are removed one at a time in order (序), and each removed layer is recorded. With the records, anyone can continue the dig.
 
 Design and decisions: [SPEC.md](SPEC.md).
 

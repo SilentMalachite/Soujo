@@ -1,4 +1,4 @@
-# SPEC — 層序（Soujo）: Claude Code / Codex 共用プラグイン（TypeScript 実装）
+# SPEC — 層序（Soujo）: 中断でき、再開でき、少ない文脈で進める AI コーディング（Claude Code / Codex 共用、TypeScript 実装）
 
 [English](SPEC.md) | **日本語**
 
@@ -6,8 +6,15 @@
 
 ## 0. 一言で
 
-Spec-kit の「仕様→計画→実装」と Superpowers の「作法をスキルで型にする」を、
-**作業記憶に頼らず・いつ中断しても再開でき・モデルの自律性を邪魔しない**形に削ぎ落としたもの。
+Soujo は AI コーディングを **中断でき（interruptible）・再開でき（resumable）・少ない文脈で進められる（low-context）** ものにする。作業は30分以内の層で進めて層ごとにコミットし、状態はすべて短い4ファイルに置く。だからセッションはいつ止まってもよく、次のセッションは Claude Code でも Codex でも、そのファイルだけで続きから始められる。
+
+| 性質 | 要件 | 満たす仕組み |
+|---|---|---|
+| Interruptible development | どこで止めても、作業も決定も失わない | 1層=1コミット。`soujo close` が途中の作業を `wip:` でコミット。`soujo next check` が再開できない状態を警告（§6） |
+| Resumable AI coding | 次のセッションは会話履歴を要らず、もう一方のホストでもよい | 5行以内の `NEXT.md`（§5）。`soujo resume`。両ホストで共有する `skills/` と `.soujo/`（§4） |
+| Low-context development | 利用者もモデルも、1画面を超える状態を抱えなくてよい | 4ファイルの行数上限（§5）。質問は1つずつ（§7）。判断の要らない記録の更新は CLI に寄せる（§6） |
+
+Spec-kit の「仕様→計画→実装」と Superpowers の「作法をスキルで型にする」を、この3つの性質に削ぎ落とし、モデルの自律性は邪魔しない。
 本体は TypeScript の CLI `soujo` 1本。Claude Code（Opus 5）と Codex（GPT-6 Astra）は、同じ `skills/` と同じ `.soujo/` 記録を共有し、違いはマニフェストと指示ファイルだけに閉じ込める。
 
 名前の由来：発掘では地層を一枚ずつ剥ぎ、剥いだ層は必ず日誌と図面に残す。剥いだ層は戻せないが、記録があれば誰でも続きができる。

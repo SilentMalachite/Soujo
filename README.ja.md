@@ -4,9 +4,17 @@
 
 [![CI](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml/badge.svg)](https://github.com/SilentMalachite/Soujo/actions/workflows/ci.yml) [![TypeScript](https://img.shields.io/github/package-json/dependency-version/SilentMalachite/Soujo/dev/typescript?logo=typescript&logoColor=white&color=3178C6)](https://www.typescriptlang.org/) [![License](https://img.shields.io/github/license/SilentMalachite/Soujo)](LICENSE)
 
-Claude Code と Codex で使う、いつ中断しても再開できる「仕様 → 計画 → 層」の進め方。状態はすべて `.soujo/` の4ファイルにあるので、会話履歴なしで続けられる。同じホストでも、もう一方のホストでも。
+**中断できる開発・再開できる AI コーディング・少ない文脈で進める開発** — Claude Code と Codex で使う「仕様 → 計画 → 層」の進め方。
 
-発掘では地層（層）を順番（序）に1枚ずつ剥がし、剥がした層を記録する。記録があれば、誰でも発掘を引き継げる。
+AI とのコーディングは途中で途切れる。使用上限、圧縮された文脈、会議、一日の終わり、もう一方のホストへの移動。計画と決定が会話の中にしかないと、次のセッションはそれを組み立て直すところから始まる。Soujo はそれを `.soujo/` の短い4ファイルに置き、層を終えるたびにコミットする。だから次のセッションは、どちらのホストでも、ファイルだけで続きから始められる。
+
+| | 意味 | Soujo のやり方 |
+|---|---|---|
+| Interruptible development（中断できる開発） | いつ止めても、作業も決定も失わない | 30分以内の層ごとに1コミット。`close` が途中の作業を `wip:` でコミット |
+| Resumable AI coding（再開できる AI コーディング） | 新しいセッションは、どちらのホストでも会話履歴を要らない | `NEXT.md`（5行以内）が次の一手を示し、`resume` が4行の現在地を出す |
+| Low-context development（少ない文脈で進める開発） | 人もモデルも、多くを覚えておかなくてよい | 各ファイルに行数の上限。質問は1つずつ。記録の更新は CLI が担う |
+
+名前の由来：発掘では地層（層）を順番（序）に1枚ずつ剥がし、剥がした層を記録する。記録があれば、誰でも発掘を引き継げる。
 
 設計と決定事項：[SPEC.ja.md](SPEC.ja.md)。
 

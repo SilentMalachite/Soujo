@@ -1,4 +1,4 @@
-# SPEC — Soujo (層序): a plugin shared by Claude Code and Codex (TypeScript)
+# SPEC — Soujo (層序): interruptible, resumable, low-context AI coding for Claude Code and Codex (TypeScript)
 
 **English** | [日本語](SPEC.ja.md)
 
@@ -6,7 +6,15 @@ This English version is canonical. `.soujo/SPEC.md` in this repository is a syml
 
 ## 0. In one sentence
 
-Take Spec-kit's "spec → plan → implement" and Superpowers' "turn practice into skills", and strip them down to something that **does not rely on working memory, can be resumed after any interruption, and does not get in the way of the model's autonomy**.
+Soujo makes AI coding **interruptible, resumable, and low-context**: work proceeds in layers of at most 30 minutes, each ending in a commit, and all state lives in four short files, so a session can stop at any moment and the next one — in Claude Code or Codex — continues from those files alone.
+
+| Property | Requirement | Met by |
+|---|---|---|
+| Interruptible development | Stopping at any point loses no work and no decision | 1 layer = 1 commit; `soujo close` commits unfinished work as `wip:`; `soujo next check` warns when the state is not resumable (§6) |
+| Resumable AI coding | The next session needs no conversation history and may run in the other host | `NEXT.md` of at most 5 lines (§5); `soujo resume`; `skills/` and `.soujo/` shared by both hosts (§4) |
+| Low-context development | Neither the user nor the model has to hold more than one screen of state | Line limits on the four files (§5); one question at a time (§7); record updates that need no judgment go to the CLI (§6) |
+
+It takes Spec-kit's "spec → plan → implement" and Superpowers' "turn practice into skills", strips them down to these three properties, and stays out of the way of the model's autonomy.
 The core is a single TypeScript CLI, `soujo`. Claude Code (Opus 5) and Codex (GPT-6 Astra) share the same `skills/` and the same `.soujo/` records; the differences are confined to manifests and instruction files.
 
 Name: in an excavation, strata (層) are removed one at a time in order (序), and every removed layer is recorded in the site journal and drawings. A removed layer cannot be put back, but with the records anyone can continue the dig.
