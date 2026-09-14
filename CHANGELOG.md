@@ -4,6 +4,23 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.2 — 2026-09-15
+
+Release: [v0.1.2](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.2).
+
+### Fixed
+
+- `soujo layer done` and `soujo close` find the LOG entry of a failed run wherever it is in `LOG.md`. Before, an entry added after it (e.g. by `soujo log add`) or an edited older entry made a re-run log the layer a second time.
+- `soujo layer done` refuses a `--note` starting with `中断:`, the form only `close` writes. Before, a re-run took such a completion entry for an interruption and logged the layer again.
+- `soujo init` removes temporary files left by a killed write, as the other commands that write `.soujo/` do.
+- `soujo map code` reads a regular expression after a `<` that does not form `</`, and after the condition of `for await (...)`. Before, an `import(...)` inside such a regular expression could be drawn as an edge.
+
+### Changed
+
+- `test/privacy.test.ts` allows only specific `git@` and `noreply@` addresses such as `git@github.com`, and `.gitignore` also ignores `.netrc`, `_netrc`, `.git-credentials`, and FIDO SSH keys (`id_ed25519_sk`, `id_ecdsa_sk`).
+- The README shows how to return Claude Code, as well as Codex, to the GitHub install.
+- SPEC: `next set` for `spec` / `plan` refuses an `--effort` other than `high` (wording only), and acceptance criterion 9 records its test count as of L12.
+
 ## 0.1.1 — 2026-09-14
 
 Release: [v0.1.1](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.1).

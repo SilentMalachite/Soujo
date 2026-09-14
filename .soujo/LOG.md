@@ -218,3 +218,12 @@ v0.1.1 のリリースノートの Update にも同じ案内を追加。
 ## 2026-09-14 claude-return-github
 Claude Code を remove → add SilentMalachite/Soujo → install で GitHub 版に切り替え、marketplace update と plugin update が通ることを確認。
 README(+ja) の開発の節の戻し方に Claude Code のコマンドを追加。
+
+## 2026-09-15 grok-review-2
+grok レビュー #1〜#10 を調査し、誤検知の #1（hash-object はパス指定で eol・clean filter を掛ける）以外を修正。
+layer done・close は HEAD に無い LOG エントリを位置によらず探し（uncommittedLogs）、layer done は 中断: で始まる note を拒否。init も一時ファイルを消す。
+map は </ 以外の < の後と for await ( の後を正規表現に。privacy は git@/noreply@ を特定アドレスに限定、.netrc 等を無視。
+
+## 2026-09-15 release-0.1.2
+0.1.2 をリリース（2026-09-15）: grok レビュー2回目の修正（LOG エントリの再利用・map の正規表現判定・privacy 検査）。
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.2 にし、CHANGELOG(+ja) に Fixed / Changed を追加。
