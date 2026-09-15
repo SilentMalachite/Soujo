@@ -1,8 +1,8 @@
 // git calls. Thin layer: runs git in the given directory and returns its output; no Soujo file parsing here.
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, lstatSync, readlinkSync, type Stats } from 'node:fs';
+import { join, posix } from 'node:path';
 
 // spawnSync fails beyond 1 MB by default; `git status` in a large working tree can exceed that.
 const MAX_OUTPUT = 256 * 1024 * 1024;
@@ -50,8 +50,9 @@ function environment(extra: Record<string, string>): NodeJS.ProcessEnv {
   return env;
 }
 
-function run(cwd: string, args: string[], extra: Record<string, string> = {}): SpawnSyncReturns<string> {
-  return spawnSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: MAX_OUTPUT, env: environment(extra) });
+function run(cwd: string, args: string[], extra: Record<string, string> = {}, input?: string): SpawnSyncReturns<string> {
+  const stdin = input === undefined ? 'ignore' : 'pipe';
+  return spawnSync('git', args, { cwd, encoding: 'utf8', input, stdio: [stdin, 'pipe', 'pipe'], maxBuffer: MAX_OUTPUT, env: environment(extra) });
 }
 
 // A path printed by git on one line: only the line break is dropped, since a directory name may start or end with a space.
@@ -68,8 +69,8 @@ function failure(args: string[], result: SpawnSyncReturns<string>): Error {
   return new Error(`git ${args[0]} に失敗: ${reason}`);
 }
 
-function git(cwd: string, args: string[]): string {
-  const result = run(cwd, args);
+function git(cwd: string, args: string[], input?: string): string {
+  const result = run(cwd, args, {}, input);
   if (result.error !== undefined || result.status !== 0) throw failure(args, result);
   return result.stdout;
 }
@@ -166,24 +167,25 @@ export function gitHasStagedChanges(cwd: string): boolean {
 
 /**
  * The paths (relative to cwd) whose file is not staged as it is, for example because skip-worktree or assume-unchanged
- * keeps `git add` from picking it up. Compared by object id, so clean filters and line-ending conversion count as staged.
- * Missing files are skipped.
+ * keeps `git add` from picking it up. Compared by object id, so clean filters and line-ending conversion count as staged;
+ * a symlink is compared by its link text, as git stores it, not by the file it points to. Missing paths are skipped.
  */
 export function gitNotStaged(cwd: string, paths: readonly string[]): string[] {
   return paths.filter((path) => {
-    if (!existsSync(join(cwd, path))) return false;
+    let stats: Stats;
+    try {
+      stats = lstatSync(join(cwd, path));
+    } catch {
+      return false;
+    }
     const staged = run(cwd, ['rev-parse', '--verify', '--quiet', `:./${path}`]);
     if (staged.error !== undefined || (staged.status !== 0 && staged.status !== 1)) throw failure(['rev-parse'], staged);
-    return staged.status === 1 || staged.stdout.trim() !== git(cwd, ['hash-object', '--', path]).trim();
+    if (staged.status === 1) return true;
+    const object = stats.isSymbolicLink()
+      ? git(cwd, ['hash-object', '--stdin'], readlinkSync(join(cwd, path)))
+      : git(cwd, ['hash-object', '--', path]);
+    return staged.stdout.trim() !== object.trim();
   });
-}
-
-/** Stages everything in cwd and below and commits it. Returns false, without committing, when nothing ends up staged. */
-export function gitCommitAll(cwd: string, message: string): boolean {
-  gitAddAll(cwd);
-  if (!gitHasStagedChanges(cwd)) return false;
-  gitCommit(cwd, message);
-  return true;
 }
 
 /** The paths (relative to cwd) that git ignores. Tracked files are never reported. */
@@ -221,31 +223,51 @@ export function gitLastCommit(cwd: string): Commit | undefined {
   }
 }
 
-/** The latest commit whose subject is exactly subject, or undefined (also when there are no commits). Git failures throw. */
+// The history functions below read, like staging and committing, only the commits that change cwd and below (history
+// simplified as `git log -- .` does), so another project in the same repository and empty commits are not seen.
+
+/** The latest commit changing cwd whose subject is exactly subject, or undefined (also when there are no commits). Git failures throw. */
 export function gitFindCommit(cwd: string, subject: string): Commit | undefined {
   if (!gitHasCommits(cwd)) return undefined;
-  const output = git(cwd, ['log', COMMIT_FORMAT, '--fixed-strings', `--grep=${subject}`]);
+  const output = git(cwd, ['log', COMMIT_FORMAT, '--fixed-strings', `--grep=${subject}`, ...HERE]);
   return parseCommits(output).find((commit) => commit.subject === subject);
 }
 
-/** The latest commit whose subject starts with prefix, or undefined (also when there are no commits). Git failures throw. */
+/** The latest commit changing cwd whose subject starts with prefix, or undefined (also when there are no commits). Git failures throw. */
 export function gitFindCommitStarting(cwd: string, prefix: string): Commit | undefined {
   if (!gitHasCommits(cwd)) return undefined;
-  const output = git(cwd, ['log', COMMIT_FORMAT, '--fixed-strings', `--grep=${prefix}`]);
+  const output = git(cwd, ['log', COMMIT_FORMAT, '--fixed-strings', `--grep=${prefix}`, ...HERE]);
   return parseCommits(output).find((commit) => commit.subject.startsWith(prefix));
 }
 
-/** The commits reachable from HEAD but not from since (every commit without since), oldest first. Git failures throw. */
+/** The commits changing cwd reachable from HEAD but not from since (all of them without since), oldest first. Git failures throw. */
 export function gitCommitsAfter(cwd: string, since?: string): Commit[] {
   if (!gitHasCommits(cwd)) return [];
-  return parseCommits(git(cwd, ['log', '--reverse', COMMIT_FORMAT, since === undefined ? 'HEAD' : `${since}..HEAD`, '--']));
+  return parseCommits(git(cwd, ['log', '--reverse', COMMIT_FORMAT, since === undefined ? 'HEAD' : `${since}..HEAD`, ...HERE]));
 }
 
-/** The file at HEAD, or undefined when there are no commits or HEAD does not contain it. path is relative to cwd. */
-export function gitHeadFile(cwd: string, path: string): string | undefined {
+export interface HeadEntry {
+  /** Whether the entry is a symlink; content is then its link text. */
+  symlink: boolean;
+  content: string;
+}
+
+// An ls-tree -z record of a file or symlink: mode, object id, and path.
+const BLOB_RECORD = /^(\d{6}) blob ([0-9a-f]+)\t(.*)$/s;
+
+/**
+ * The file or symlink at path (relative to cwd, "/"-separated, taken literally) in HEAD, not followed. Undefined when there
+ * are no commits, or HEAD has no file or symlink there (nothing, a directory, a submodule, or a path outside the repository).
+ * Git failures throw.
+ */
+export function gitHeadEntry(cwd: string, path: string): HeadEntry | undefined {
   if (!gitHasCommits(cwd)) return undefined;
-  if (git(cwd, ['ls-tree', '--name-only', 'HEAD', '--', path]).trim() === '') return undefined;
-  return git(cwd, ['show', `HEAD:./${path}`]);
+  const full = posix.normalize(posix.join(pathLine(git(cwd, ['rev-parse', '--show-prefix'])), path));
+  if (full === '..' || full.startsWith('../')) return undefined;
+  const output = git(cwd, ['ls-tree', '-z', '--full-tree', 'HEAD', '--', `:(literal)${full}`]);
+  const match = output.split('\0').map((record) => BLOB_RECORD.exec(record)).find((record) => record?.[3] === full);
+  if (!match) return undefined;
+  return { symlink: match[1] === '120000', content: git(cwd, ['cat-file', 'blob', match[2] ?? '']) };
 }
 
 /** Paths added by the HEAD commit, the root commit included. */

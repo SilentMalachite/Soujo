@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { brief } from '../src/commands/brief.js';
+import { close } from '../src/commands/close.js';
 import { resume } from '../src/commands/resume.js';
-import { gitLastCommit } from '../src/git.js';
+import { gitLastCommit, gitStatus } from '../src/git.js';
 import { readTemplate } from '../src/files.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
@@ -158,7 +159,19 @@ test('resume says to re-run layer done when a PLAN check is not committed yet', 
   ]);
 });
 
-test('resume degrades per line when files cannot be read', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
+test('resume and close do not take committed checks for uncommitted ones after PLAN.md is moved behind a symlink', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': LOG });
+  commitAll(dir, 'chore: base');
+  mkdirSync(join(dir, 'docs'));
+  renameSync(join(dir, '.soujo', 'PLAN.md'), join(dir, 'docs', 'PLAN.md'));
+  symlinkSync('../docs/PLAN.md', join(dir, '.soujo', 'PLAN.md'));
+  assert.equal(resume(dir)[3], GO);
+  close(dir, 'PLAN を移した', new Date());
+  assert.equal(gitLastCommit(dir)?.subject, 'wip: L3 io');
+  assert.deepEqual(gitStatus(dir), []);
+});
+
+test('resume degrades per line when files cannot be read',{ skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
   const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': LOG });
   chmodSync(join(dir, '.soujo', 'LOG.md'), 0o000);
   assert.deepEqual(resume(dir).slice(0, 2), ['次: L3 io（effort: high）確認: io のテストが通る', '前回: LOG.md を読めない']);

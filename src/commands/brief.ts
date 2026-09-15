@@ -17,10 +17,12 @@ interface History {
   after: Commit[];
 }
 
+// Only the commits that change the project count, so a repository with commits can still have none for the project.
 function readHistory(root: string): History | NoCommit {
-  return readGit(root, () => {
+  return readGit(root, (): History | NoCommit => {
     const layer = gitFindCommitStarting(root, LAYER_COMMIT);
-    return { layer, after: gitCommitsAfter(root, layer?.hash) };
+    const after = gitCommitsAfter(root, layer?.hash);
+    return layer === undefined && after.length === 0 ? 'まだない' : { layer, after };
   });
 }
 

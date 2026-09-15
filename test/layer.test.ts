@@ -345,7 +345,18 @@ test('layer done in a subdirectory project commits only that subdirectory', (t) 
   assert.deepEqual(gitStatus(top), [' M outside.txt']);
 });
 
-test('layer done follows a symlinked PLAN.md to the committed target', { skip: process.platform === 'win32' }, (t) => {
+test('layer done is not refused by a layer commit of the same name in another project of the repository', (t) => {
+  const top = repo(t);
+  project(join(top, 'other'), STATE);
+  commitAll(top, 'layer: L2 state');
+  const dir = project(join(top, 'app'), STATE);
+  layerDone(dir, 'L2 state', undefined, NOW);
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
+  assert.deepEqual(gitStatus(top), []);
+  assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: 層「L2 state」はコミット済み/);
+});
+
+test('layer done follows a symlinked PLAN.md to the committed target',{ skip: process.platform === 'win32' }, (t) => {
   const dir = workingProject(t);
   writeFileSync(join(dir, 'PLAN.md'), PLAN.replace('- [ ] L2 state', '- [x] L2 state'));
   rmSync(join(dir, '.soujo', 'PLAN.md'));

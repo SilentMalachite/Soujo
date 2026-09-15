@@ -10,6 +10,7 @@ import {
   requireStateDir,
   stateTarget,
   statePath,
+  symlinkTargetPath,
   trackedStatePath,
   type StateFile,
 } from '../files.js';
@@ -18,7 +19,7 @@ import {
   gitCommit,
   gitHasCommits,
   gitHasStagedChanges,
-  gitHeadFile,
+  gitHeadEntry,
   gitIgnored,
   gitLastCommit,
   gitNotStaged,
@@ -170,19 +171,31 @@ export function missingEntries<T>(items: readonly T[], present: readonly LogEntr
   });
 }
 
-/** The state file as committed at HEAD (following a symlinked file to its target), or undefined when HEAD has none. */
+/**
+ * The state file as committed at HEAD, or undefined when HEAD has none. HEAD's entry decides: a symlink there is followed to
+ * its target at HEAD (through a chain, undefined for a loop), whatever the working tree has now, so moving PLAN.md behind a
+ * symlink, or replacing a symlink with the file, does not change what HEAD is taken to hold.
+ */
 export function headState(root: string, file: StateFile): string | undefined {
-  return gitHeadFile(root, trackedStatePath(root, file));
+  const seen = new Set<string>();
+  for (let path = statePath(file); !seen.has(path); ) {
+    seen.add(path);
+    const entry = gitHeadEntry(root, path);
+    if (entry?.symlink !== true) return entry?.content;
+    path = symlinkTargetPath(root, path, entry.content);
+  }
+  return undefined;
 }
 
 /**
  * Stages everything in the project and commits it as subject. Returns false, without committing, when nothing ends up staged.
- * Nothing is committed while PLAN, LOG, NEXT, or an extra file is not staged as written (skip-worktree): the commit would lack
- * its records, and a re-run of layer done could not add them afterwards.
+ * Nothing is committed while PLAN, LOG, NEXT, or an extra file, or the symlink standing for one, is not staged as written
+ * (skip-worktree): the commit would lack its records, and a re-run of layer done could not add them afterwards.
  */
 export function commitRecords(root: string, subject: string, extra: readonly StateFile[] = []): boolean {
   gitAddAll(root);
-  const unstaged = gitNotStaged(root, [...RECORDS, ...extra].map((file) => trackedStatePath(root, file)));
+  const paths = [...RECORDS, ...extra].flatMap((file) => [statePath(file), trackedStatePath(root, file)]);
+  const unstaged = gitNotStaged(root, [...new Set(paths)]);
   if (unstaged.length > 0) throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
   if (!gitHasStagedChanges(root)) return false;
   gitCommit(root, subject);

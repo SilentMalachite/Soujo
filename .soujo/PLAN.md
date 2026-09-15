@@ -20,7 +20,7 @@
 - [x] L18 plugin-guard — cwd の実パスに .claude/plugins か .codex/plugins があるとき next check と next show --hook は Soujo 外と同じ（無音）、それ以外のコマンドは --help を除き何も読み書きせず終了1になることがテストで通り、README(+.ja)・CHANGELOG(+.ja) に載る
 - [x] L19 resume-brief — resume スキルが 再開: に N日ぶり があるとき soujo brief も実行してその5行を4行の後に返し（各節3行以内のまま）、skills テストが通り、README(+.ja)・CHANGELOG(+.ja) に載る
 - [x] L20 git-env — git 呼び出しがリポジトリの位置を変える環境変数を落とし、「リポジトリ外」のときだけ toplevel が undefined になり、git の返すパスは改行だけ除かれ、テストの git がユーザー設定から隔離されることがテストで通る（REVIEW-FIX #4 #9 #23 #39）
-- [ ] L21 git-scope — layer コミットの検索と brief の履歴がプロジェクトのパスに限られ、HEAD の状態を HEAD のエントリ（symlink ならその時点のリンク先）で読み、symlink 自身の staging も検証し、gitCommitAll がないことがテストで通る（#5 #6 #7 #42）
+- [x] L21 git-scope — layer コミットの検索と brief の履歴がプロジェクトのパスに限られ、HEAD の状態を HEAD のエントリ（symlink ならその時点のリンク先）で読み、symlink 自身の staging も検証し、gitCommitAll がないことがテストで通る（#5 #6 #7 #42）
 - [ ] L22 state-targets — 大小文字違いの .git を実体とする状態ファイルを拒否し、状態ファイルや書庫が同じ実体を指すとき書込み前に拒否することがテストで通る（#1 #2）
 - [ ] L23 file-create — hardlink を張れない FS でも既存を置き換えず、生存中の pid の一時ファイルを消さず、必要なファイルが揃った読取り専用ディレクトリで init が成功することがテストで通る（#8 #22 #41）
 - [ ] L24 cli-robust — 案内するコマンドの層名が単一引用符で安全に囲まれ、cwd を取れなくても next check が終了0、stdout の EPIPE で落ちず、エラーのホームパスが ~ になることがテストで通る（#3 #10 #11 #24）

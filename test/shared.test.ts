@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   clip,
+  commitRecords,
   describeInvalidNext,
   headState,
   missingEntries,
@@ -14,6 +16,7 @@ import {
   skill,
   uncommittedLogs,
 } from '../src/commands/shared.js';
+import { gitLastCommit } from '../src/git.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
 const NEXT = '次: L3 io\n前提: p\n確認: c\n注意: なし\neffort: medium\n';
@@ -137,6 +140,50 @@ test('headState reads the committed file, following a symlinked state file', { s
   symlinkSync('../LOG.md', join(dir, '.soujo', 'LOG.md'));
   commitAll(dir);
   assert.equal(headState(dir, 'LOG.md'), 'target\n');
+});
+
+test('headState reads the entry at HEAD, a symlink through its target at HEAD, whatever the working tree has now', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { 'PLAN.md': 'committed\n' });
+  mkdirSync(join(dir, 'docs'));
+  writeFileSync(join(dir, 'docs', 'LOG.md'), 'target at HEAD\n');
+  symlinkSync('../docs/LOG.md', join(dir, '.soujo', 'LOG.md'));
+  commitAll(dir);
+
+  renameSync(join(dir, '.soujo', 'PLAN.md'), join(dir, 'docs', 'PLAN.md'));
+  writeFileSync(join(dir, 'docs', 'PLAN.md'), 'moved\n');
+  symlinkSync('../docs/PLAN.md', join(dir, '.soujo', 'PLAN.md'));
+  assert.equal(headState(dir, 'PLAN.md'), 'committed\n');
+
+  rmSync(join(dir, '.soujo', 'LOG.md'));
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), 'regular now\n');
+  assert.equal(headState(dir, 'LOG.md'), 'target at HEAD\n');
+});
+
+test('headState follows absolute and chained symlinks at HEAD, and is undefined for a symlink loop', { skip: process.platform === 'win32' }, (t) => {
+  const top = repo(t);
+  const dir = project(join(top, 'app'));
+  writeFileSync(join(dir, 'real.md'), 'real\n');
+  symlinkSync(join(dir, 'real.md'), join(dir, 'absolute.md'));
+  symlinkSync('../absolute.md', join(dir, '.soujo', 'PLAN.md'));
+  symlinkSync('../loop.md', join(dir, '.soujo', 'LOG.md'));
+  symlinkSync('.soujo/LOG.md', join(dir, 'loop.md'));
+  commitAll(top);
+  assert.equal(headState(dir, 'PLAN.md'), 'real\n');
+  assert.equal(headState(dir, 'LOG.md'), undefined);
+});
+
+test('commitRecords refuses when git add leaves the re-pointed symlink of a state file unstaged', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT });
+  writeFileSync(join(dir, 'PLAN-a.md'), 'a\n');
+  writeFileSync(join(dir, 'PLAN-b.md'), 'b\n');
+  symlinkSync('../PLAN-a.md', join(dir, '.soujo', 'PLAN.md'));
+  commitAll(dir, 'base');
+  execFileSync('git', ['update-index', '--skip-worktree', '.soujo/PLAN.md'], { cwd: dir });
+  rmSync(join(dir, '.soujo', 'PLAN.md'));
+  symlinkSync('../PLAN-b.md', join(dir, '.soujo', 'PLAN.md'));
+  writeFileSync(join(dir, 'state.ts'), '');
+  assert.throws(() => commitRecords(dir, 'layer: L1'), /^Error: \.soujo\/PLAN\.md の変更を git が拾っていない/);
+  assert.equal(gitLastCommit(dir)?.subject, 'base');
 });
 
 test('resumable appends what is recorded to the error', () => {

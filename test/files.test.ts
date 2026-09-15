@@ -33,9 +33,20 @@ import {
   requireStateDir,
   statePath,
   stateTarget,
+  symlinkTargetPath,
   writeState,
 } from '../src/files.js';
 import { temp } from './helpers.js';
+
+test('symlinkTargetPath resolves a relative link as committed and an absolute one through real paths', { skip: process.platform === 'win32' }, (t) => {
+  assert.equal(symlinkTargetPath('/nowhere', '.soujo/PLAN.md', '../docs/./PLAN.md'), 'docs/PLAN.md');
+  assert.equal(symlinkTargetPath('/nowhere', '.soujo/PLAN.md', '../../PLAN.md'), '../PLAN.md');
+  const root = temp(t);
+  mkdirSync(join(root, 'docs'));
+  symlinkSync('docs', join(root, 'linked'));
+  assert.equal(symlinkTargetPath(root, '.soujo/LOG.md', join(realpathSync(root), 'missing', 'LOG.md')), 'missing/LOG.md');
+  assert.equal(symlinkTargetPath(realpathSync(root), '.soujo/LOG.md', join(root, 'linked', 'LOG.md')), 'docs/LOG.md');
+});
 
 test('findStateDir walks up to the nearest .soujo directory and skips .soujo files', (t) => {
   const root = temp(t);

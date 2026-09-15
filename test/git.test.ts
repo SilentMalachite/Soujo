@@ -1,21 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import * as gitApi from '../src/git.js';
 import {
   REPOSITORY_ENV,
   gitAddAll,
   gitAddedFiles,
   gitChangedPaths,
   gitCommit,
-  gitCommitAll,
   gitCommitsAfter,
   gitFindCommit,
   gitFindCommitStarting,
   gitHasCommits,
   gitHasStagedChanges,
-  gitHeadFile,
+  gitHeadEntry,
   gitIgnored,
   gitLastCommit,
   gitNotStaged,
@@ -123,7 +123,7 @@ test('gitNotStaged reports files that git add leaves unstaged, and not converted
   writeFileSync(join(dir, 'b.md'), 'b\n');
   writeFileSync(join(dir, '.gitattributes'), 'crlf.md text eol=crlf\n');
   writeFileSync(join(dir, 'crlf.md'), 'x\r\n');
-  gitCommitAll(dir, 'base');
+  commitAll(dir, 'base');
   git('update-index', '--skip-worktree', 'a.md');
   writeFileSync(join(dir, 'a.md'), 'changed\n');
   writeFileSync(join(dir, 'b.md'), 'changed\n');
@@ -133,6 +133,21 @@ test('gitNotStaged reports files that git add leaves unstaged, and not converted
   assert.deepEqual(gitNotStaged(dir, ['a.md', 'b.md', 'crlf.md', 'new.md', 'missing.md']), ['a.md']);
   writeFileSync(join(dir, 'untracked.md'), '');
   assert.deepEqual(gitNotStaged(dir, ['untracked.md']), ['untracked.md']);
+});
+
+test('gitNotStaged compares a symlink by its link text and reports a re-pointed skip-worktree symlink', { skip: process.platform === 'win32' }, (t) => {
+  const dir = repo(t);
+  writeFileSync(join(dir, 'a.md'), 'a\n');
+  writeFileSync(join(dir, 'b.md'), 'b\n');
+  symlinkSync('a.md', join(dir, 'link.md'));
+  symlinkSync('missing.md', join(dir, 'dangling.md'));
+  commitAll(dir, 'base');
+  assert.deepEqual(gitNotStaged(dir, ['link.md', 'dangling.md', 'a.md']), []);
+  execFileSync('git', ['update-index', '--skip-worktree', 'link.md'], { cwd: dir });
+  rmSync(join(dir, 'link.md'));
+  symlinkSync('b.md', join(dir, 'link.md'));
+  gitAddAll(dir);
+  assert.deepEqual(gitNotStaged(dir, ['link.md', 'b.md']), ['link.md']);
 });
 
 test('gitHasCommits distinguishes an empty repository from a failure', (t) => {
@@ -146,18 +161,23 @@ test('gitHasCommits distinguishes an empty repository from a failure', (t) => {
   assert.throws(() => gitHasCommits(temp(t)), /^Error: git rev-parse に失敗: [^\n]+$/);
 });
 
-test('gitHasStagedChanges and gitCommitAll work before and after the first commit', (t) => {
+test('gitHasStagedChanges works before and after the first commit', (t) => {
   const dir = repo(t);
+  gitAddAll(dir);
   assert.equal(gitHasStagedChanges(dir), false);
-  assert.equal(gitCommitAll(dir, 'nothing'), false);
-  assert.equal(gitHasCommits(dir), false);
 
   writeFileSync(join(dir, 'a.txt'), 'a\n');
-  assert.equal(gitCommitAll(dir, 'first'), true);
-  assert.equal(gitLastCommit(dir)?.subject, 'first');
+  gitAddAll(dir);
+  assert.equal(gitHasStagedChanges(dir), true);
+  gitCommit(dir, 'first');
   assert.equal(gitHasStagedChanges(dir), false);
-  assert.equal(gitCommitAll(dir, 'clean'), false);
-  assert.equal(gitLastCommit(dir)?.subject, 'first');
+  writeFileSync(join(dir, 'a.txt'), 'b\n');
+  gitAddAll(dir);
+  assert.equal(gitHasStagedChanges(dir), true);
+});
+
+test('git.ts has no gitCommitAll: commits go through commitRecords, which checks what is staged', () => {
+  assert.equal('gitCommitAll' in gitApi, false);
 });
 
 test('status, staging, and commits are limited to cwd and below', (t) => {
@@ -175,10 +195,13 @@ test('status, staging, and commits are limited to cwd and below', (t) => {
   execFileSync('git', ['rm', '-q', 'app/a.txt'], { cwd: top });
   const app = join(top, 'app');
   assert.deepEqual(gitStatus(app), ['D  app/a.txt', '?? app/']);
-  assert.equal(gitCommitAll(app, 'app only'), true);
+  gitAddAll(app);
+  assert.equal(gitHasStagedChanges(app), true);
+  gitCommit(app, 'app only');
   assert.deepEqual(gitStatus(app), []);
   assert.deepEqual(gitStatus(top), ['M  outside.txt', '?? untracked.txt']);
-  assert.equal(gitCommitAll(app, 'nothing in app'), false);
+  gitAddAll(app);
+  assert.equal(gitHasStagedChanges(app), false);
 });
 
 test('gitStatusExcluding leaves out the given paths literally, and gitChangedPaths tells which given paths changed', (t) => {
@@ -210,14 +233,14 @@ test('gitUnmergedCount counts conflicts in the whole repository', (t) => {
   const dir = repo(t);
   const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
   writeFileSync(join(dir, 'f.txt'), 'base\n');
-  gitCommitAll(dir, 'base');
+  commitAll(dir, 'base');
   assert.equal(gitUnmergedCount(dir), 0);
   git('checkout', '-q', '-b', 'side');
   writeFileSync(join(dir, 'f.txt'), 'side\n');
-  gitCommitAll(dir, 'side');
+  commitAll(dir, 'side');
   git('checkout', '-q', '-');
   writeFileSync(join(dir, 'f.txt'), 'main\n');
-  gitCommitAll(dir, 'main');
+  commitAll(dir, 'main');
   assert.throws(() => git('merge', '-q', 'side'));
   mkdirSync(join(dir, 'sub'));
   assert.equal(gitUnmergedCount(join(dir, 'sub')), 1);
@@ -227,7 +250,7 @@ test('gitIgnored reports ignored paths but not tracked files', (t) => {
   const dir = repo(t);
   mkdirSync(join(dir, '.soujo'));
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), '');
-  gitCommitAll(dir, 'track PLAN');
+  commitAll(dir, 'track PLAN');
   writeFileSync(join(dir, '.gitignore'), '.soujo/\n');
   assert.deepEqual(gitIgnored(dir, ['.soujo/PLAN.md', '.soujo/LOG.md', 'other.txt']), ['.soujo/LOG.md']);
   assert.throws(() => gitIgnored(temp(t), ['x']), /^Error: git check-ignore に失敗: /);
@@ -246,17 +269,24 @@ test('gitOperationInProgress reports an unfinished rebase or merge', (t) => {
   assert.equal(gitOperationInProgress(sequencing), 'cherry-pick / revert');
 });
 
-test('gitHeadFile reads a file at HEAD relative to cwd, or undefined', (t) => {
+test('gitHeadEntry reads a file or symlink at HEAD relative to cwd, literally, or undefined', { skip: process.platform === 'win32' }, (t) => {
   const dir = repo(t);
-  mkdirSync(join(dir, 'sub', '.soujo'), { recursive: true });
-  assert.equal(gitHeadFile(join(dir, 'sub'), '.soujo/PLAN.md'), undefined);
-  writeFileSync(join(dir, 'sub', '.soujo', 'PLAN.md'), 'committed\n');
-  writeFileSync(join(dir, 'other.txt'), '');
-  gitAddAll(dir);
-  gitCommit(dir, 'first');
-  writeFileSync(join(dir, 'sub', '.soujo', 'PLAN.md'), 'working tree\n');
-  assert.equal(gitHeadFile(join(dir, 'sub'), '.soujo/PLAN.md'), 'committed\n');
-  assert.equal(gitHeadFile(join(dir, 'sub'), '.soujo/LOG.md'), undefined);
+  const sub = join(dir, 'sub');
+  mkdirSync(join(sub, '.soujo'), { recursive: true });
+  assert.equal(gitHeadEntry(sub, '.soujo/PLAN.md'), undefined);
+  writeFileSync(join(sub, '.soujo', 'PLAN.md'), 'committed\n');
+  writeFileSync(join(sub, '.soujo', 'LOG-0[1].md'), 'bracket\n');
+  writeFileSync(join(dir, 'other.txt'), 'other\n');
+  symlinkSync('../../other.txt', join(sub, '.soujo', 'LOG.md'));
+  commitAll(dir, 'first');
+  writeFileSync(join(sub, '.soujo', 'PLAN.md'), 'working tree\n');
+  assert.deepEqual(gitHeadEntry(sub, '.soujo/PLAN.md'), { symlink: false, content: 'committed\n' });
+  assert.deepEqual(gitHeadEntry(sub, '.soujo/LOG.md'), { symlink: true, content: '../../other.txt' });
+  assert.deepEqual(gitHeadEntry(sub, '.soujo/LOG-0[1].md'), { symlink: false, content: 'bracket\n' });
+  assert.deepEqual(gitHeadEntry(sub, '.soujo/../../other.txt'), { symlink: false, content: 'other\n' });
+  for (const path of ['.soujo/NEXT.md', '.soujo', '.soujo/LOG-01.md', '../../outside.txt']) {
+    assert.equal(gitHeadEntry(sub, path), undefined, path);
+  }
 });
 
 test('gitAddedFiles lists files added by HEAD, including the root commit', (t) => {
@@ -289,13 +319,40 @@ test('gitFindCommitStarting finds the latest subject with the prefix, and gitCom
   assert.equal(gitFindCommitStarting(dir, 'layer: '), undefined);
   assert.deepEqual(gitCommitsAfter(dir), []);
   const date = new Date(2026, 8, 12, 9, 30);
-  for (const subject of ['layer: L1', 'fix: mention\tlayer: L9', 'layer: L2', 'fix: a', 'docs: b']) commitAll(dir, subject, date);
+  for (const subject of ['layer: L1', 'fix: mention\tlayer: L9', 'layer: L2', 'fix: a', 'docs: b']) {
+    writeFileSync(join(dir, 'f.txt'), subject);
+    commitAll(dir, subject, date);
+  }
   const layer = gitFindCommitStarting(dir, 'layer: ');
   assert.equal(layer?.subject, 'layer: L2');
   assert.equal(layer?.date.getTime(), Math.floor(date.getTime() / 1000) * 1000);
   assert.deepEqual(gitCommitsAfter(dir, layer?.hash).map((commit) => commit.subject), ['fix: a', 'docs: b']);
   assert.deepEqual(gitCommitsAfter(dir).map((commit) => commit.subject), ['layer: L1', 'fix: mention\tlayer: L9', 'layer: L2', 'fix: a', 'docs: b']);
   assert.equal(gitLastCommit(dir)?.subject, 'docs: b');
+});
+
+test('gitFindCommit, gitFindCommitStarting, and gitCommitsAfter see only the commits that change cwd and below', (t) => {
+  const top = repo(t);
+  const app = join(top, 'app');
+  const other = join(top, 'other');
+  mkdirSync(app);
+  mkdirSync(other);
+  const change = (dir: string, subject: string) => {
+    writeFileSync(join(dir, 'f.txt'), subject);
+    commitAll(top, subject);
+  };
+  change(app, 'layer: L1 app');
+  change(other, 'layer: L2 same');
+  change(app, 'fix: app');
+  change(other, 'layer: L3 other');
+  commitAll(top, 'chore: empty');
+  assert.equal(gitFindCommit(app, 'layer: L2 same'), undefined);
+  assert.equal(gitFindCommit(other, 'layer: L2 same')?.subject, 'layer: L2 same');
+  const layer = gitFindCommitStarting(app, 'layer: ');
+  assert.equal(layer?.subject, 'layer: L1 app');
+  assert.deepEqual(gitCommitsAfter(app, layer?.hash).map((commit) => commit.subject), ['fix: app']);
+  assert.deepEqual(gitCommitsAfter(app).map((commit) => commit.subject), ['layer: L1 app', 'fix: app']);
+  assert.equal(gitCommitsAfter(top).length, 4);
 });
 
 test('gitCommit with nothing to commit throws a one-line error', (t) => {

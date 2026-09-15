@@ -324,3 +324,8 @@ PLAN.md に 12層: L20 git-env〜L31 skills-docs（Codex 全体レビュー44件
 ## 2026-09-16 L20 git-env
 git の実行から GIT_DIR など別リポジトリを指す環境変数を外し、toplevel は not a git repository のときだけ undefined（他の失敗は throw、resume/brief/next check は縮退）
 git の出すパスは改行だけ除く。テストの git はグローバル・システム設定を読まない（REVIEW-FIX #4 #9 #23 #39）
+
+## 2026-09-16 L21 git-scope
+layer コミットの検索と brief の履歴を git log -- . でプロジェクトに限定（空コミットも数えない）
+headState は HEAD のエントリで読み symlink を HEAD のリンク先へ辿る。commitRecords は symlink 自身の staging も検証、gitCommitAll 削除
+全テストの1回だけ log rotate の既存テストが落ち、以後7回再発せず（要観察）

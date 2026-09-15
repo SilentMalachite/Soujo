@@ -1,7 +1,7 @@
 // Finding .soujo/ and reading/writing its files. Thin I/O layer: file contents are neither parsed nor validated here, and only
 // file names are checked (months through state.ts), so that no read or write leaves .soujo/.
 import { closeSync, existsSync, fchmodSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMonth, requireMonth } from './state.js';
 export const STATE_DIR = '.soujo';
@@ -77,6 +77,17 @@ export function trackedStatePath(root, file) {
     catch {
         return statePath(file);
     }
+}
+/**
+ * Where a symlink at path (relative to root, "/"-separated) with the link text link points, relative to root and "/"-separated;
+ * it may start with "..". A relative link is resolved without the file system, as it was committed. An absolute one is taken
+ * through the real paths of root and of the link's directory, so /tmp and /private/tmp compare equal.
+ */
+export function symlinkTargetPath(root, path, link) {
+    if (!isAbsolute(link))
+        return posix.normalize(posix.join(posix.dirname(path), link));
+    const target = join(realPathOfAncestor(dirname(link)), basename(link));
+    return relative(realPathOfAncestor(root), target).split(sep).join('/');
 }
 // The directories under which hosts keep install caches and marketplace clones of plugins, this repository included (SPEC §8).
 const PLUGIN_DIRS = ['.claude', '.codex'];

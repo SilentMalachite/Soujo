@@ -14,12 +14,18 @@ const NOW = new Date(2026, 8, 15, 12, 0);
 const LAYER_DAY = new Date(2026, 8, 11, 10, 0);
 const LAST_DAY = new Date(2026, 8, 12, 13, 0);
 
+/** Commits a change in dir as subject, dated date. */
+function change(dir: string, subject: string, date: Date): void {
+  writeFileSync(join(dir, 'work.txt'), subject);
+  commitAll(dir, subject, date);
+}
+
 test('brief prints progress, commits after the last layer, the last milestone, the gap, and the next step in five lines', (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': LOG });
-  commitAll(dir, 'layer: L1 scaffold', new Date(2026, 8, 10));
-  commitAll(dir, 'layer: L2 state', LAYER_DAY);
-  commitAll(dir, 'fix: resolve L2 review findings', LAYER_DAY);
-  commitAll(dir, 'docs: explain state', LAST_DAY);
+  change(dir, 'layer: L1 scaffold', new Date(2026, 8, 10));
+  change(dir, 'layer: L2 state', LAYER_DAY);
+  change(dir, 'fix: resolve L2 review findings', LAYER_DAY);
+  change(dir, 'docs: explain state', LAST_DAY);
   mkdirSync(join(dir, 'src'));
   assert.deepEqual(brief(join(dir, 'src'), NOW), [
     `進捗: PLAN 2/4 層完了・最終 layer: ${formatDate(LAYER_DAY)} L2 state`,
@@ -33,7 +39,7 @@ test('brief prints progress, commits after the last layer, the last milestone, t
 
 test('brief shows at most three subjects oldest first, clipped, and なし when the last commit is the layer commit', (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
-  commitAll(dir, 'layer: L2 state', LAYER_DAY);
+  change(dir, 'layer: L2 state', LAYER_DAY);
   assert.deepEqual(brief(dir, NOW).slice(1, 4), [
     '以後: なし',
     '節目: なし',
@@ -41,7 +47,7 @@ test('brief shows at most three subjects oldest first, clipped, and なし when 
   ]);
 
   const long = 'あ'.repeat(80);
-  for (const subject of ['fix: a', long, 'fix: c', 'fix: d']) commitAll(dir, subject, LAST_DAY);
+  for (const subject of ['fix: a', long, 'fix: c', 'fix: d']) change(dir, subject, LAST_DAY);
   assert.equal(brief(dir, NOW)[1], `以後: layer 後のコミット 4件: fix: a / ${'あ'.repeat(59)}… / fix: c / …`);
 });
 
@@ -53,11 +59,32 @@ test('brief counts every commit when there is no layer commit yet, and says so w
     '節目: 2026-09-11 — 4層に分けた',
     '空白: コミットがまだない',
   ]);
-  commitAll(dir, 'chore: init', LAST_DAY);
-  commitAll(dir, 'wip: L1 scaffold', LAST_DAY);
+  change(dir, 'chore: init', LAST_DAY);
+  change(dir, 'wip: L1 scaffold', LAST_DAY);
   assert.deepEqual(brief(dir, NOW).slice(0, 2), [
     '進捗: PLAN 2/4 層完了・最終 layer: なし',
     '以後: 最初からのコミット 2件: chore: init / wip: L1 scaffold',
+  ]);
+});
+
+test('brief counts only the commits that change the project: not other projects in the repository, not empty commits', (t) => {
+  const top = repo(t);
+  change(top, 'layer: L1 other', LAYER_DAY);
+  const dir = project(join(top, 'app'), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  assert.deepEqual(brief(dir, NOW).slice(0, 4), [
+    '進捗: PLAN 2/4 層完了・最終 layer: コミットがまだない',
+    '以後: コミットがまだない',
+    '節目: なし',
+    '空白: コミットがまだない',
+  ]);
+  commitAll(top, 'layer: L2 state', LAYER_DAY);
+  change(top, 'layer: L9 other', LAST_DAY);
+  commitAll(top, 'chore: empty', LAST_DAY);
+  assert.deepEqual(brief(dir, NOW).slice(0, 4), [
+    `進捗: PLAN 2/4 層完了・最終 layer: ${formatDate(LAYER_DAY)} L2 state`,
+    '以後: なし',
+    '節目: なし',
+    `空白: 最終コミットから 4日（${formatDate(LAYER_DAY)}）`,
   ]);
 });
 

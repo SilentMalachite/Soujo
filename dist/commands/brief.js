@@ -7,10 +7,12 @@ import { nextAndCommand } from './resume.js';
 import { LAYER_COMMIT, NO_LAYERS, attempt, clip, readGit } from './shared.js';
 // Subjects shown after the last layer commit, oldest first.
 const SHOWN_SUBJECTS = 3;
+// Only the commits that change the project count, so a repository with commits can still have none for the project.
 function readHistory(root) {
     return readGit(root, () => {
         const layer = gitFindCommitStarting(root, LAYER_COMMIT);
-        return { layer, after: gitCommitsAfter(root, layer?.hash) };
+        const after = gitCommitsAfter(root, layer?.hash);
+        return layer === undefined && after.length === 0 ? 'まだない' : { layer, after };
     });
 }
 function noCommit(reason) {

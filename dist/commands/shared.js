@@ -1,7 +1,7 @@
 // Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 import { join } from 'node:path';
-import { STATE_DIR, STATE_FILES, isSymlink, readState, requireState, requireStateDir, stateTarget, statePath, trackedStatePath, } from '../files.js';
-import { gitAddAll, gitCommit, gitHasCommits, gitHasStagedChanges, gitHeadFile, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, } from '../git.js';
+import { STATE_DIR, STATE_FILES, isSymlink, readState, requireState, requireStateDir, stateTarget, statePath, symlinkTargetPath, trackedStatePath, } from '../files.js';
+import { gitAddAll, gitCommit, gitHasCommits, gitHasStagedChanges, gitHeadEntry, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext } from '../state.js';
 const CLIP = 60;
 // The records a layer or wip commit must carry as written.
@@ -137,18 +137,31 @@ export function missingEntries(items, present, entryOf) {
         return left === 0;
     });
 }
-/** The state file as committed at HEAD (following a symlinked file to its target), or undefined when HEAD has none. */
+/**
+ * The state file as committed at HEAD, or undefined when HEAD has none. HEAD's entry decides: a symlink there is followed to
+ * its target at HEAD (through a chain, undefined for a loop), whatever the working tree has now, so moving PLAN.md behind a
+ * symlink, or replacing a symlink with the file, does not change what HEAD is taken to hold.
+ */
 export function headState(root, file) {
-    return gitHeadFile(root, trackedStatePath(root, file));
+    const seen = new Set();
+    for (let path = statePath(file); !seen.has(path);) {
+        seen.add(path);
+        const entry = gitHeadEntry(root, path);
+        if (entry?.symlink !== true)
+            return entry?.content;
+        path = symlinkTargetPath(root, path, entry.content);
+    }
+    return undefined;
 }
 /**
  * Stages everything in the project and commits it as subject. Returns false, without committing, when nothing ends up staged.
- * Nothing is committed while PLAN, LOG, NEXT, or an extra file is not staged as written (skip-worktree): the commit would lack
- * its records, and a re-run of layer done could not add them afterwards.
+ * Nothing is committed while PLAN, LOG, NEXT, or an extra file, or the symlink standing for one, is not staged as written
+ * (skip-worktree): the commit would lack its records, and a re-run of layer done could not add them afterwards.
  */
 export function commitRecords(root, subject, extra = []) {
     gitAddAll(root);
-    const unstaged = gitNotStaged(root, [...RECORDS, ...extra].map((file) => trackedStatePath(root, file)));
+    const paths = [...RECORDS, ...extra].flatMap((file) => [statePath(file), trackedStatePath(root, file)]);
+    const unstaged = gitNotStaged(root, [...new Set(paths)]);
     if (unstaged.length > 0)
         throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
     if (!gitHasStagedChanges(root))
