@@ -51,3 +51,14 @@
 | 12 | 同じ実体の一時ファイルを消さなくなった | `elsewhere`（プロジェクト外・`.git` の中）のときだけ消さない |
 | 15〜20 | テストの抜け | hard link・大小文字・`..`・多段・ループ・rotate がこれから作る書庫・init・close・resume・next check を追加。`isDotGit` / `pathKey` / `sameFile` は純粋関数として全プラットフォームで検証 |
 - 判断: 「同じ実体」は読み書きとも拒否し（一方を読むともう一方が返るため）SPEC に明記。「壊れた symlink の先」は書く前だけ拒否する。
+
+## L23 追加レビュー（reviewer 19件・Codex 3件・47d27c9 の後の fix コミットで直した）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| R2, 3 | 生存中 pid の temp を残すようにしたら、除外リストから外れて log rotate が DIRTY で落ちる | `stateTemps`（生存中も含む全 temp）を足し、コミット検査はそれを使う |
+| R4, C1 | copy の失敗で書きかけが残る／宛先を開く前の失敗で他プロセスのファイルを消す | `openSync(path, 'wx')` で自分が作ったと確定してから書き、その失敗のときだけ消す |
+| R5, 6, 7, 9, C2 | 固定 pid が実在し得る・`deadPid` が 0 に退化・生きた pid が `process.ppid`・作成時と検証時で pid を取り直す | 8箇所を `deadPid()` に、起動失敗で throw、`livePid(t)` を足し、パスを変数に持つ |
+| R11, 16 | copy 側の EEXIST 分岐と、読取り専用で1ファイル欠けたときのテストがない | 競合を再現する link を渡すテストと、欠けた init のテストを足す |
+| R12 | 巨大 pid・先頭ゼロの temp が消えなくなった（`git add -A` が拾う） | pid の綴りでないものは NaN にして消す側に倒す |
+| R13, 14, 15, 18, C3 | SPEC・doc の不正確（`.soujo/` 前提、FS の列挙、pid の限界、掃除の責務、copy 経路の例外） | 文面を実装に合わせる |
+- 見送り: R8（`deadPid` の使い回し）は取得時の生存確認で足りる。R10（`place` の `link` 引数）は `symlinkTargetParts` の `separator` と同じ既存の流儀。

@@ -504,12 +504,13 @@ test('removeLeftoverTemps deletes the temporary files of an archive refused for 
 test('removeLeftoverTemps leaves files next to a symlink target outside the project', { skip: process.platform === 'win32' }, (t) => {
   const elsewhere = temp(t);
   writeFileSync(join(elsewhere, 'LOG.md'), '');
-  writeFileSync(join(elsewhere, `.LOG.md.${deadPid()}.tmp`), 'not ours');
+  const kept = join(elsewhere, `.LOG.md.${deadPid()}.tmp`);
+  writeFileSync(kept, 'not ours');
   const root = temp(t);
   mkdirSync(join(root, '.soujo'));
   symlinkSync(join(elsewhere, 'LOG.md'), join(root, '.soujo', 'LOG.md'));
   removeLeftoverTemps(join(root, '.soujo'));
-  assert.ok(existsSync(join(elsewhere, `.LOG.md.${deadPid()}.tmp`)));
+  assert.ok(existsSync(kept));
 });
 
 test('requireState throws for a missing file', (t) => {
@@ -553,15 +554,17 @@ test('createFile never writes through an existing temporary path, and removeTemp
   assert.equal(createFile(join(dir, 'CLAUDE.md'), 'x'), true);
 });
 
+// A hard link on a file system that has none: it fails as FAT and exFAT do, so that place has to copy instead.
+function noLinks(): never {
+  const error = new Error('hard links are not supported') as NodeJS.ErrnoException;
+  error.code = 'EPERM';
+  throw error;
+}
+
 test('place copies where hard links cannot be made, and never puts the file over what is already there', (t) => {
   const dir = temp(t);
   const source = join(dir, `.fresh.md.${process.pid}.tmp`);
   writeFileSync(source, 'new\n');
-  const noLinks = (): never => {
-    const error = new Error('hard links are not supported') as NodeJS.ErrnoException;
-    error.code = 'EPERM';
-    throw error;
-  };
 
   const taken = join(dir, 'taken.md');
   writeFileSync(taken, 'keep\n');
@@ -580,6 +583,21 @@ test('place copies where hard links cannot be made, and never puts the file over
   assert.equal(place(source, fresh, noLinks), true);
   assert.equal(readFileSync(fresh, 'utf8'), 'new\n');
   assert.equal(readFileSync(source, 'utf8'), 'new\n');
+});
+
+test('place deletes only the file it created itself when the copy fails', (t) => {
+  const dir = temp(t);
+
+  // The copy cannot even open its own file: what is at path belongs to whoever put it there, so it is left alone.
+  const theirs = join(dir, 'theirs.md');
+  writeFileSync(theirs, 'keep\n');
+  assert.equal(place(join(dir, '.theirs.md.1.tmp'), theirs, noLinks), false);
+  assert.equal(readFileSync(theirs, 'utf8'), 'keep\n');
+
+  // The copy opens the file and then fails: the empty file it made is cleared rather than left as the created one.
+  const half = join(dir, 'half.md');
+  assert.throws(() => place(join(dir, '.half.md.1.tmp'), half, noLinks), /ENOENT/);
+  assert.equal(existsSync(half), false);
 });
 
 test('place refuses a file that appears between the hard link and the copy, and leaves it as it is', (t) => {

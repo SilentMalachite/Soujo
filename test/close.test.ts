@@ -276,9 +276,10 @@ test('stopped between next set --layer plan and layer done of the last layer, cl
 test('close keeps CRLF in LOG.md, flattens control characters, and removes leftover temporary files', (t) => {
   const dir = project(repo(t), { ...STATE, 'LOG.md': LOG.replaceAll('\n', '\r\n') });
   commitAll(dir);
-  writeFileSync(join(dir, '.soujo', `.LOG.md.${deadPid()}.tmp`), 'half');
+  const leftover = join(dir, '.soujo', `.LOG.md.${deadPid()}.tmp`);
+  writeFileSync(leftover, 'half');
   close(dir, 'a\rb\tc', NOW);
   assert.equal(read(dir, 'LOG.md'), `${LOG}${ENTRY}中断: a b c\n`.replaceAll('\n', '\r\n'));
-  assert.equal(existsSync(join(dir, '.soujo', `.LOG.md.${deadPid()}.tmp`)), false);
+  assert.equal(existsSync(leftover), false);
   assert.deepEqual(gitStatus(dir), []);
 });

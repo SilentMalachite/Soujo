@@ -4,8 +4,6 @@
 
 import {
   closeSync,
-  constants,
-  copyFileSync,
   existsSync,
   fchmodSync,
   linkSync,
@@ -589,10 +587,10 @@ export function ensureStateDir(root: string): string {
 
 /**
  * Puts temp at path unless anything, a dangling symlink included, is there; false says something was. A hard link fails by
- * itself in that case, and where hard links cannot be made (FAT, exFAT, and some FUSE and SMB mounts) the file is copied
- * with COPYFILE_EXCL, which fails the same way, rather than renamed, which would replace an entry appearing in between.
- * Either refusal is the operating system's, at the moment of writing, not a check made beforehand that an entry could slip
- * past. link is the hard link; a test standing in for a file system without them passes one that fails.
+ * itself in that case, and where hard links cannot be made (FAT, exFAT, and some FUSE and SMB mounts) temp is copied into a
+ * file opened exclusively there, which fails the same way, rather than renamed, which would replace an entry appearing in
+ * between. Either refusal is the operating system's, at the moment of writing, not a check made beforehand that an entry
+ * could slip past. link is the hard link; a test standing in for a file system without them passes one that fails.
  */
 export function place(temp: string, path: string, link: (temp: string, path: string) => void = linkSync): boolean {
   try {
@@ -604,15 +602,22 @@ export function place(temp: string, path: string, link: (temp: string, path: str
   }
 }
 
-// Copies temp into a file created at path and nowhere else: COPYFILE_EXCL opens it exclusively, so anything already there
-// (a directory or a dangling symlink included) fails with EEXIST. After any other failure the file may be there half
-// written, so it is deleted; only a killed process can leave one behind, and only on a file system without hard links.
+// Copies temp into a file this call creates at path and nowhere else: "wx" opens it exclusively, so anything already there
+// (a directory or a dangling symlink included) fails with EEXIST and is left untouched. Only once that open has succeeded
+// is the file ours to delete, which is what a write failing halfway leaves behind; a failure to open deletes nothing, since
+// what is at path then belongs to whoever put it there. Only a killed process can leave a half-written file, and only here.
 function copyExclusively(temp: string, path: string): boolean {
+  let fd: number;
   try {
-    copyFileSync(temp, path, constants.COPYFILE_EXCL);
-    return true;
+    fd = openSync(path, 'wx');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw error;
+  }
+  try {
+    writeFileSync(fd, readFileSync(temp));
+  } catch (error) {
+    closeSync(fd);
     try {
       rmSync(path, { force: true });
     } catch {
@@ -620,12 +625,15 @@ function copyExclusively(temp: string, path: string): boolean {
     }
     throw error;
   }
+  closeSync(fd);
+  return true;
 }
 
 /**
  * Creates the file only when nothing exists at path; returns false when something does. Nothing is written at all when the
  * entry is already there, so a directory that has every file it would be given may be read-only. Otherwise the text is
- * written to an exclusive temporary file first, as writeState does, so an interruption never leaves the file half-written.
+ * written to an exclusive temporary file first, as writeState does, and linked into place, so an interruption never leaves
+ * the file half-written — except where hard links cannot be made and place has to copy (see there).
  * Temporary files a killed write left next to path are not cleared here: the caller (init) removes them beforehand.
  */
 export function createFile(path: string, text: string): boolean {

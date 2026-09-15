@@ -271,10 +271,11 @@ test('a re-run finds its uncommitted LOG entry after later entries, and when LOG
 
 test('leftover temporary files from a killed write are removed, not committed', (t) => {
   const dir = workingProject(t);
-  writeFileSync(join(dir, '.soujo', `.PLAN.md.${deadPid()}.tmp`), 'half');
+  const leftover = join(dir, '.soujo', `.PLAN.md.${deadPid()}.tmp`);
+  writeFileSync(leftover, 'half');
   const [line] = layerDone(dir, 'L2 state', undefined, NOW);
   assert.match(line ?? '', /（追加: state\.ts）$/);
-  assert.equal(existsSync(join(dir, '.soujo', `.PLAN.md.${deadPid()}.tmp`)), false);
+  assert.equal(existsSync(leftover), false);
   assert.deepEqual(gitStatus(dir), []);
 });
 
