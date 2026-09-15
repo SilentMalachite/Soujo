@@ -104,7 +104,8 @@ function span(months, separator) {
  * - before not YYYY-MM, or not committable (see requireCommittable)                  → refuse
  * - uncommitted changes other than a stopped rotate's, or one of another before     → refuse (see stoppedRotation)
  * - an archive to write or to commit that git ignores                               → refuse
- * An archive whose real path leaves the project or enters .git is refused when it is read. Then leftover temporary files are
+ * An archive whose real path leaves the project, enters .git, or is another state file's or archive's is refused, when it is
+ * read or by the check of the archives, before anything is written. Then leftover temporary files are
  * removed; with nothing to move or commit that is all. Otherwise the entries of LOG.md dated before the month move (all but
  * the last entry and the last milestone), archives first and LOG.md last, and the project is committed as "log: rotate <months>". An entry the
  * archive of its month already has is not appended again, so re-running after any failure finishes the same rotation, also

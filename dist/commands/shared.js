@@ -1,6 +1,6 @@
 // Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 import { join, posix } from 'node:path';
-import { STATE_DIR, STATE_FILES, isSymlink, readState, requireState, requireStateDir, stateTarget, statePath, symlinkTargetParts, trackedStatePath, } from '../files.js';
+import { STATE_DIR, STATE_FILES, MAX_SYMLINKS, isSymlink, readState, requireState, requireStateDir, stateIdentities, stateTarget, statePath, symlinkTargetParts, trackedStatePath, } from '../files.js';
 import { gitAddAll, gitCommit, gitHasCommits, gitHasStagedChanges, gitHeadEntry, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext } from '../state.js';
 const CLIP = 60;
@@ -75,8 +75,8 @@ export function requireNext(dir, hint) {
 }
 /**
  * Throws unless committing the project at root is safe: a repository, .soujo/ not a symlink, every state file (a symlink's
- * target included) inside the project and outside .git, no unfinished merge/rebase/cherry-pick/revert, no unmerged files,
- * and no state file or symlink target ignored by git.
+ * target included) inside the project, outside .git, and not another state file or archive, no unfinished
+ * merge/rebase/cherry-pick/revert, no unmerged files, and no state file or symlink target ignored by git.
  */
 export function requireCommittable(root) {
     const toplevel = gitToplevel(root);
@@ -85,7 +85,7 @@ export function requireCommittable(root) {
     if (isSymlink(join(root, STATE_DIR))) {
         throw new Error(`${STATE_DIR}/ が symlink なので記録をコミットできない（実体のディレクトリにしてから）`);
     }
-    requireInProject(root, STATE_FILES);
+    requireSafeTargets(root, STATE_FILES);
     const operation = gitOperationInProgress(root);
     if (operation !== undefined)
         throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
@@ -94,12 +94,17 @@ export function requireCommittable(root) {
         throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
     requireNotIgnored(root, STATE_FILES);
 }
-/** Throws when a file's real path (a symlink's target) is outside the project or inside .git. */
-function requireInProject(root, files) {
+/**
+ * Throws when a file must not be written: its real path (a symlink's target) is outside the project or inside .git, or it is
+ * another state file or archive, which writing both of them would overwrite (see stateTarget).
+ */
+function requireSafeTargets(root, files) {
+    const dir = join(root, STATE_DIR);
+    const known = stateIdentities(dir, files);
     for (const file of files) {
-        const { problem } = stateTarget(join(root, STATE_DIR), file);
+        const { problem } = stateTarget(dir, file, known);
         if (problem !== undefined)
-            throw new Error(`${statePath(file)} の実体（symlink の先）が${problem}なので記録をコミットできない`);
+            throw new Error(`${statePath(file)} の${problem.text}なので記録をコミットできない`);
     }
 }
 /** Throws when git ignores a file or its symlink target, so that it would be missing from the commit. */
@@ -114,7 +119,7 @@ function requireNotIgnored(root, files) {
 export function requireCommittableFiles(root, files) {
     if (files.length === 0)
         return;
-    requireInProject(root, files);
+    requireSafeTargets(root, files);
     requireNotIgnored(root, files);
 }
 /**
@@ -137,8 +142,6 @@ export function missingEntries(items, present, entryOf) {
         return left === 0;
     });
 }
-// The most symlinks headState follows for one file before taking it as a loop, as Linux does for a path.
-const MAX_SYMLINKS = 40;
 /**
  * The state file as committed at HEAD, or undefined when HEAD has none. HEAD's entries decide: the path is resolved part by
  * part as realpath does, following each symlink at HEAD, a directory's included, to its target at HEAD (undefined beyond

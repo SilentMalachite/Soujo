@@ -365,12 +365,13 @@ test('layer done follows a symlinked PLAN.md to the committed target',{ skip: pr
   assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /は PLAN のチェックごとコミット済み/);
 });
 
-test('layer done refuses state files that are the same file before writing anything', { skip: process.platform === 'win32' }, (t) => {
+test('layer done refuses state files that are one file, naming the symlink, and writes and commits nothing', { skip: process.platform === 'win32' }, (t) => {
   const dir = workingProject(t);
+  const head = gitLastCommit(dir)?.hash;
   rmSync(join(dir, '.soujo', 'LOG.md'));
   symlinkSync('PLAN.md', join(dir, '.soujo', 'LOG.md'));
-  assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: \.soujo\/PLAN\.md の実体（symlink の先）がLOG\.md と同じなので記録をコミットできない$/);
-  assert.equal(read(dir, 'PLAN.md'), PLAN);
+  assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: \.soujo\/PLAN\.md の実体が LOG\.md（symlink）の先と同じなので記録をコミットできない$/);
+  assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'NEXT.md'), gitLastCommit(dir)?.hash], [PLAN, NEXT, head]);
 });
 
 test('layer done refuses a symlinked .soujo/ directory', { skip: process.platform === 'win32' }, (t) => {

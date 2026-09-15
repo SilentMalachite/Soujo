@@ -94,6 +94,22 @@ test('init refuses a .soujo/ or state file whose real path is outside the projec
   assert.equal(readFileSync(join(inside, 'records', 'NEXT.md'), 'utf8'), readTemplate('NEXT.md'));
 });
 
+test('init creates what is missing although two state files are one file, and refuses a dangling symlink to where one would be created', { skip: process.platform === 'win32' }, (t) => {
+  const same = repo(t);
+  mkdirSync(join(same, '.soujo'));
+  writeFileSync(join(same, '.soujo', 'PLAN.md'), 'plan\n');
+  symlinkSync('PLAN.md', join(same, '.soujo', 'LOG.md'));
+  assert.ok(init(same).includes('作成: .soujo/NEXT.md'));
+  assert.equal(readFileSync(join(same, '.soujo', 'PLAN.md'), 'utf8'), 'plan\n');
+
+  const dangling = repo(t);
+  mkdirSync(join(dangling, '.soujo'));
+  symlinkSync('SPEC.md', join(dangling, '.soujo', 'NEXT.md'));
+  assert.throws(() => init(dangling), /^Error: \.soujo\/SPEC\.md の場所が NEXT\.md（壊れた symlink）の先と同じなので init しない$/);
+  assert.deepEqual(readdirSync(join(dangling, '.soujo')), ['NEXT.md']);
+  assert.equal(existsSync(join(dangling, 'CLAUDE.md')), false);
+});
+
 test('templates: NEXT.md is valid, PLAN.md has no layers, CLAUDE.md / AGENTS.md are the repository copies without this repository\'s section', () => {
   assert.deepEqual(validateNext(readTemplate('NEXT.md')), []);
   assert.deepEqual(parsePlan(readTemplate('PLAN.md')), []);

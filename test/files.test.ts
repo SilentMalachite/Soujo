@@ -4,11 +4,13 @@ import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   realpathSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -21,7 +23,10 @@ import {
   createFile,
   ensureStateDir,
   findStateDir,
+  isDotGit,
   isSymlink,
+  pathKey,
+  sameFile,
   leftoverTemps,
   packageDir,
   pluginDir,
@@ -230,7 +235,7 @@ test('writeState refuses symlinks to files outside the project or inside .git an
   writeFileSync(join(root, '.git', 'config'), 'keep\n');
   symlinkSync(outside, join(dir, 'LOG.md'));
   symlinkSync('../.git/config', join(dir, 'NEXT.md'));
-  assert.deepEqual(stateTarget(dir, 'LOG.md'), { path: realpathSync(outside), problem: 'プロジェクトの外' });
+  assert.deepEqual(stateTarget(dir, 'LOG.md'), { path: realpathSync(outside), problem: { text: '実体（symlink の先）がプロジェクトの外', elsewhere: true } });
   assert.throws(() => writeState(dir, 'LOG.md', 'x'), /^Error: LOG\.md を書かない: 実体（symlink の先）がプロジェクトの外$/);
   assert.throws(() => writeState(dir, 'NEXT.md', 'x'), /^Error: NEXT\.md を書かない: 実体（symlink の先）が\.git の中$/);
   assert.equal(readFileSync(outside, 'utf8'), 'keep\n');
@@ -242,6 +247,31 @@ test('writeState refuses symlinks to files outside the project or inside .git an
   assert.equal(existsSync(join(dirname(outside), 'PLAN.md')), false);
 });
 
+test('isDotGit takes the names a file system may hand to .git, so that none of them is followed', () => {
+  for (const name of ['.git', '.GIT', '.Git', '.git.', '.git ', '.git. .', '.git::$INDEX_ALLOCATION', 'GIT~1', 'git~2', '.g‌it']) {
+    assert.equal(isDotGit(name), true, name);
+  }
+  for (const name of ['git', '.gitignore', '.github', '.gitmodules', 'agit', '.soujo', '.', '..', 'LOG.md', '']) {
+    assert.equal(isDotGit(name), false, name);
+  }
+});
+
+test('pathKey compares paths in NFC, and ignores letter case only where told to', () => {
+  assert.equal(pathKey('/p/Á.md', false), pathKey('/p/Á.md', false));
+  assert.notEqual(pathKey('/p/LOG.md', false), pathKey('/p/log.md', false));
+  assert.equal(pathKey('/p/LOG.md', true), pathKey('/p/log.md', true));
+});
+
+test('sameFile takes one inode for one file only when the path, or the size and creation time, agree as well', () => {
+  const file = { key: '/p/a.md', inode: '1:2', size: 10n, birthtime: 5n };
+  assert.equal(sameFile(file, { ...file }), true);
+  assert.equal(sameFile(file, { ...file, key: '/p/A.MD' }), true);
+  // An inode repeated by the file system (ReFS, some FUSE and SMB mounts) is not enough by itself.
+  assert.equal(sameFile(file, { ...file, key: '/p/b.md', size: 11n }), false);
+  assert.equal(sameFile({ key: '/p/a.md' }, { key: '/p/a.md' }), true);
+  assert.equal(sameFile({ key: '/p/a.md' }, { key: '/p/b.md' }), false);
+});
+
 test('stateTarget takes .git in any letter case as .git, since the file system may ignore case', { skip: process.platform === 'win32' }, (t) => {
   const root = temp(t);
   const dir = join(root, '.soujo');
@@ -249,13 +279,16 @@ test('stateTarget takes .git in any letter case as .git, since the file system m
   mkdirSync(join(root, '.GIT'));
   writeFileSync(join(root, '.GIT', 'config'), 'keep\n');
   symlinkSync('../.GIT/config', join(dir, 'NEXT.md'));
-  assert.deepEqual(stateTarget(dir, 'NEXT.md'), { path: realpathSync(join(root, '.GIT', 'config')), problem: '.git の中' });
+  assert.deepEqual(stateTarget(dir, 'NEXT.md'), {
+    path: realpathSync(join(root, '.GIT', 'config')),
+    problem: { text: '実体（symlink の先）が.git の中', elsewhere: true },
+  });
   assert.throws(() => readState(dir, 'NEXT.md'), /^Error: NEXT\.md を読まない: 実体（symlink の先）が\.git の中$/);
   assert.throws(() => writeState(dir, 'NEXT.md', 'x'), /^Error: NEXT\.md を書かない: 実体（symlink の先）が\.git の中$/);
   assert.equal(readFileSync(join(root, '.GIT', 'config'), 'utf8'), 'keep\n');
 });
 
-test('stateTarget refuses a state file or archive that is the same file as another one', { skip: process.platform === 'win32' }, (t) => {
+test('stateTarget refuses a state file or archive that is the same file as another one, naming the symlink', { skip: process.platform === 'win32' }, (t) => {
   const root = temp(t);
   const dir = join(root, '.soujo');
   mkdirSync(dir);
@@ -266,34 +299,83 @@ test('stateTarget refuses a state file or archive that is the same file as anoth
   symlinkSync('../docs/PLAN.md', join(dir, 'PLAN.md'));
   symlinkSync('docs', join(root, 'alias'));
   symlinkSync('../alias/PLAN.md', join(dir, 'NEXT.md'));
-  assert.deepEqual(stateTarget(dir, 'LOG-2026-08.md'), { path: realpathSync(join(dir, 'LOG.md')), problem: 'LOG.md と同じ' });
-  assert.equal(stateTarget(dir, 'LOG.md').problem, 'LOG-2026-08.md と同じ');
-  assert.throws(() => writeState(dir, 'LOG-2026-08.md', 'x'), /^Error: LOG-2026-08\.md を書かない: 実体（symlink の先）がLOG\.md と同じ$/);
-  assert.throws(() => writeState(dir, 'PLAN.md', 'x'), /^Error: PLAN\.md を書かない: 実体（symlink の先）がNEXT\.md と同じ$/);
-  assert.throws(() => readState(dir, 'NEXT.md'), /^Error: NEXT\.md を読まない: 実体（symlink の先）がPLAN\.md と同じ$/);
+  assert.deepEqual(stateTarget(dir, 'LOG-2026-08.md'), {
+    path: realpathSync(join(dir, 'LOG.md')),
+    problem: { text: '実体（symlink の先）が LOG.md と同じ' },
+  });
+  assert.equal(stateTarget(dir, 'LOG.md').problem?.text, '実体が LOG-2026-08.md（symlink）の先と同じ');
+  assert.throws(() => writeState(dir, 'LOG-2026-08.md', 'x'), /^Error: LOG-2026-08\.md を書かない: 実体（symlink の先）が LOG\.md と同じ$/);
+  assert.throws(() => writeState(dir, 'PLAN.md', 'x'), /^Error: PLAN\.md を書かない: 実体（symlink の先）が NEXT\.md と同じ$/);
+  assert.throws(() => readState(dir, 'NEXT.md'), /^Error: NEXT\.md を読まない: 実体（symlink の先）が PLAN\.md と同じ$/);
   assert.deepEqual([readFileSync(join(dir, 'LOG.md'), 'utf8'), readFileSync(join(root, 'docs', 'PLAN.md'), 'utf8')], ['log\n', 'plan\n']);
   assert.deepEqual(stateTarget(dir, 'SPEC.md'), { path: join(realpathSync(dir), 'SPEC.md') });
-  // A differently cased path to the same file, where the file system ignores case.
-  if (existsSync(join(root, 'DOCS'))) {
-    symlinkSync('../DOCS/PLAN.md', join(dir, 'SPEC.md'));
-    assert.equal(stateTarget(dir, 'SPEC.md').problem, 'PLAN.md と同じ');
-  }
 });
 
-test('stateTarget refuses a dangling symlink to where another state file or archive is created, which it would write through once that is', { skip: process.platform === 'win32' }, (t) => {
+test('stateTarget refuses state files a hard link makes one file, on every platform', (t) => {
+  const dir = temp(t);
+  writeFileSync(join(dir, 'PLAN.md'), 'plan\n');
+  linkSync(join(dir, 'PLAN.md'), join(dir, 'LOG.md'));
+  assert.equal(stateTarget(dir, 'LOG.md').problem?.text, '実体が PLAN.md と同じ（hard link）');
+  assert.throws(() => writeState(dir, 'LOG.md', 'x'), /^Error: LOG\.md を書かない: 実体が PLAN\.md と同じ（hard link）$/);
+  assert.throws(() => readState(dir, 'LOG.md'), /^Error: LOG\.md を読まない: 実体が PLAN\.md と同じ（hard link）$/);
+  assert.equal(readFileSync(join(dir, 'PLAN.md'), 'utf8'), 'plan\n');
+});
+
+test('stateTarget refuses a dangling symlink leading to where another state file or archive is created, only for writing', { skip: process.platform === 'win32' }, (t) => {
   const dir = join(temp(t), '.soujo');
   mkdirSync(dir);
   symlinkSync('missing.md', join(dir, 'LOG-2026-07.md'));
   symlinkSync('LOG-2026-07.md', join(dir, 'LOG-2026-08.md'));
   symlinkSync('SPEC.md', join(dir, 'NEXT.md'));
   symlinkSync('missing.md', join(dir, 'PLAN.md'));
-  assert.equal(stateTarget(dir, 'LOG-2026-07.md').problem, 'LOG-2026-08.md と同じ');
-  assert.equal(stateTarget(dir, 'LOG-2026-08.md').problem, 'LOG-2026-07.md と同じ');
-  assert.equal(stateTarget(dir, 'SPEC.md').problem, 'NEXT.md と同じ');
-  assert.throws(() => writeState(dir, 'LOG-2026-07.md', 'x'), /^Error: LOG-2026-07\.md を書かない: 実体（symlink の先）がLOG-2026-08\.md と同じ$/);
+  assert.deepEqual(stateTarget(dir, 'LOG-2026-07.md').problem, {
+    text: '場所が LOG-2026-08.md（壊れた symlink）の先と同じ',
+    whenWritten: true,
+  });
+  assert.deepEqual(stateTarget(dir, 'LOG-2026-08.md').problem, {
+    text: '壊れた symlink の先が LOG-2026-07.md（まだ無い）と同じ',
+    whenWritten: true,
+  });
+  assert.equal(stateTarget(dir, 'SPEC.md').problem?.text, '場所が NEXT.md（壊れた symlink）の先と同じ');
+  assert.throws(() => writeState(dir, 'LOG-2026-07.md', 'x'), /^Error: LOG-2026-07\.md を書かない: 場所が LOG-2026-08\.md（壊れた symlink）の先と同じ$/);
   assert.ok(lstatSync(join(dir, 'LOG-2026-07.md')).isSymbolicLink());
+  // Reading is left alone: nothing is shared until one of them is written, and a missing file stays missing.
+  assert.equal(readState(dir, 'SPEC.md'), undefined);
+  assert.equal(readState(dir, 'LOG-2026-08.md'), undefined);
   // Two dangling symlinks to one missing file are each replaced by a file of their own.
   assert.deepEqual(stateTarget(dir, 'PLAN.md'), { path: join(realpathSync(dir), 'PLAN.md') });
+});
+
+test('stateTarget follows a link part by part, through several links and past "..", as the operating system does', { skip: process.platform === 'win32' }, (t) => {
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(join(dir, 'sub'), { recursive: true });
+  symlinkSync('.soujo/sub', join(root, 'up'));
+  symlinkSync('../up/../LOG-2026-07.md', join(dir, 'LOG-2026-08.md'));
+  assert.equal(stateTarget(dir, 'LOG-2026-08.md').problem?.text, '壊れた symlink の先が LOG-2026-07.md（まだ無い）と同じ');
+
+  const chained = join(temp(t), '.soujo');
+  mkdirSync(chained);
+  symlinkSync('x.md', join(chained, 'LOG-2026-08.md'));
+  symlinkSync('LOG-2026-07.md', join(chained, 'x.md'));
+  assert.equal(stateTarget(chained, 'LOG-2026-08.md').problem?.text, '壊れた symlink の先が LOG-2026-07.md（まだ無い）と同じ');
+
+  const loop = join(temp(t), '.soujo');
+  mkdirSync(loop);
+  symlinkSync('SPEC.md', join(loop, 'NEXT.md'));
+  symlinkSync('NEXT.md', join(loop, 'SPEC.md'));
+  assert.equal(stateTarget(loop, 'NEXT.md').problem, undefined);
+});
+
+test('stateTarget takes a differently cased link target for the same place only where the file system ignores case', { skip: process.platform === 'win32' }, (t) => {
+  const dir = join(temp(t), '.soujo');
+  mkdirSync(dir);
+  writeFileSync(join(dir, 'probe'), '');
+  const ignoresCase = existsSync(join(dir, 'PROBE'));
+  rmSync(join(dir, 'probe'));
+  symlinkSync('log-2026-07.md', join(dir, 'LOG-2026-08.md'));
+  assert.equal(stateTarget(dir, 'LOG-2026-08.md').problem?.whenWritten, ignoresCase ? true : undefined);
+  assert.equal(stateTarget(dir, 'LOG-2026-07.md').problem?.whenWritten, ignoresCase ? true : undefined);
 });
 
 test('writeState never writes through an existing temporary path, and removes only what it created', { skip: process.platform === 'win32' }, (t) => {
@@ -395,6 +477,19 @@ test('leftoverTemps lists and removeLeftoverTemps deletes temporary files of arc
   assert.deepEqual(leftoverTemps(dir), []);
   assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
   assert.deepEqual(kept.filter((path) => !existsSync(path)), []);
+});
+
+test('removeLeftoverTemps deletes the temporary files of an archive refused for being another one, which are in .soujo/ all the same', { skip: process.platform === 'win32' }, (t) => {
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(dir);
+  writeFileSync(join(dir, 'LOG.md'), 'log\n');
+  symlinkSync('LOG-2026-07.md', join(dir, 'LOG-2026-08.md'));
+  const leftover = join(dir, `.LOG-2026-07.md.${process.pid}.tmp`);
+  writeFileSync(leftover, 'half');
+  assert.deepEqual(leftoverTemps(dir), [`.soujo/.LOG-2026-07.md.${process.pid}.tmp`]);
+  removeLeftoverTemps(dir);
+  assert.equal(existsSync(leftover), false);
 });
 
 test('removeLeftoverTemps leaves files next to a symlink target outside the project', { skip: process.platform === 'win32' }, (t) => {

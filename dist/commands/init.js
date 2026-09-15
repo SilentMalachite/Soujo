@@ -1,18 +1,21 @@
 // soujo init: copies templates into the project root without overwriting anything.
 import { join, resolve } from 'node:path';
-import { STATE_DIR, STATE_FILES, createFile, ensureStateDir, readTemplate, removeLeftoverTemps, removeTempsOf, stateTarget, statePath, } from '../files.js';
+import { STATE_DIR, STATE_FILES, createFile, ensureStateDir, readTemplate, removeLeftoverTemps, removeTempsOf, stateIdentities, stateTarget, statePath, } from '../files.js';
 import { gitToplevel } from '../git.js';
 const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'];
 export function init(cwd) {
     const toplevel = gitToplevel(cwd);
     const root = toplevel ?? resolve(cwd);
     const dir = ensureStateDir(root);
-    // The rule writeState follows, checked before anything is created: a symlinked .soujo/ or state file planted in a
-    // repository must not place files outside the project or inside .git.
+    // The rules writeState follows, checked before anything is created: a symlinked .soujo/ or state file planted in a
+    // repository must not place files outside the project, inside .git, or where a dangling symlink of another state file leads,
+    // which the next write would then go through. Two state files that are already one file are left to the commands that write
+    // them, since createFile never writes through an existing entry, and init has CLAUDE.md and AGENTS.md to restore.
+    const known = stateIdentities(dir);
     for (const file of STATE_FILES) {
-        const { problem } = stateTarget(dir, file);
-        if (problem !== undefined)
-            throw new Error(`${statePath(file)} の実体（symlink の先）が${problem}なので init しない`);
+        const { problem } = stateTarget(dir, file, known);
+        if (problem?.elsewhere === true || problem?.whenWritten === true)
+            throw new Error(`${statePath(file)} の${problem.text}なので init しない`);
     }
     removeLeftoverTemps(dir);
     for (const file of ROOT_FILES)

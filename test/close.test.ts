@@ -1,7 +1,7 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { close } from '../src/commands/close.js';
 import { layerDone } from '../src/commands/layer.js';
@@ -32,6 +32,15 @@ function workingProject(t: TestContext): string {
   writeFileSync(join(dir, 'resume.ts'), 'export {};\n');
   return dir;
 }
+
+test('close refuses state files that are one file and writes and commits nothing', { skip: process.platform === 'win32' }, (t) => {
+  const dir = workingProject(t);
+  const head = gitLastCommit(dir)?.hash;
+  rmSync(join(dir, '.soujo', 'LOG.md'));
+  symlinkSync('PLAN.md', join(dir, '.soujo', 'LOG.md'));
+  assert.throws(() => close(dir, '中断のわけ', NOW), /^Error: \.soujo\/PLAN\.md の実体が LOG\.md（symlink）の先と同じなので記録をコミットできない$/);
+  assert.deepEqual([read(dir, 'PLAN.md'), gitLastCommit(dir)?.hash], [PLAN, head]);
+});
 
 test('close after a rotate stopped before its commit logs the interruption once and commits the archive with it', { skip: process.platform === 'win32' }, (t) => {
   const dir = project(repo(t), { ...STATE, 'LOG.md': '# LOG\n\n## 2026-07-01 L0\nz\n\n## 2026-09-12 L6 layer-done\nold\n' });

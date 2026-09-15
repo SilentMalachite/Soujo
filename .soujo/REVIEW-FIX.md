@@ -37,3 +37,17 @@
 | L21-1 | headState が HEAD のパス途中のディレクトリ symlink を辿らない | `.soujo/PLAN.md → ../alias/PLAN.md`・`alias → docs` の PLAN を読む / `deep → docs/sub` の後の `..` を字句でなく辿った先で解く |
 | L21-2 | Windows の相対リンク `..\docs\PLAN.md` を `\` で区切らない | 区切り文字が `\` のとき `\` でも分け、`/` のときは分けない |
 - 判断: HEAD の上で realpath と同じく1要素ずつ解く（symlink は最大40回、超えたら undefined）。
+
+## L22 追加レビュー（reviewer・189a71f・20件・全部 fix コミットで直した）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| 1, 2 | 壊れた symlink の先を字句の `..` で解き、1段しか辿らない | `pathLeadsTo` が headState と同じく1要素ずつ・最大40回辿り、通った全パスを持つ |
+| 3 | `.git` 判定が小文字化だけ | `isDotGit` が NTFS の末尾ドット・空白・ストリーム・8.3、HFS+ の無視コードポイントも `.git` とする |
+| 4, 5 | パス比較が `toLowerCase` のみ、同一性が dev+ino のみ | `pathKey` は NFC＋大小文字無視はファイルシステムが無視するときだけ。`sameFile` は inode 一致をパスか size+作成時刻で裏づける |
+| 6 | stateTarget ごとに全ファイルの identity を計算 | `stateIdentities` を1回作って渡す（leftoverTemps・requireSafeTargets） |
+| 7 | エラーが symlink でない側を名指し | `sameText` が symlink・壊れた symlink・hard link を区別して名指す |
+| 8, 13 | 読み込みと init まで拒否 | 壊れた symlink の先は書き込みだけ拒否（`whenWritten`）。init は既存同士の重複では拒否しない |
+| 9, 10, 11, 14 | SPEC・CHANGELOG・コメントと実装の食い違い | 文面を実装に合わせ、`requireInProject` を `requireSafeTargets` に改名 |
+| 12 | 同じ実体の一時ファイルを消さなくなった | `elsewhere`（プロジェクト外・`.git` の中）のときだけ消さない |
+| 15〜20 | テストの抜け | hard link・大小文字・`..`・多段・ループ・rotate がこれから作る書庫・init・close・resume・next check を追加。`isDotGit` / `pathKey` / `sameFile` は純粋関数として全プラットフォームで検証 |
+- 判断: 「同じ実体」は読み書きとも拒否し（一方を読むともう一方が返るため）SPEC に明記。「壊れた symlink の先」は書く前だけ拒否する。

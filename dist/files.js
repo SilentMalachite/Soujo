@@ -1,5 +1,6 @@
-// Finding .soujo/ and reading/writing its files. Thin I/O layer: file contents are neither parsed nor validated here, and only
-// file names are checked (months through state.ts), so that no read or write leaves .soujo/.
+// Finding .soujo/ and reading/writing its files. Thin I/O layer: file contents are neither parsed nor validated here. What is
+// checked is where a name and a symlink lead (months through state.ts), so that no read or write leaves the project, enters
+// .git, or lands on another state file.
 import { closeSync, existsSync, fchmodSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -165,8 +166,9 @@ export function readState(dir, file) {
             return undefined;
         throw new Error(`${file} を読めない: ${error.message}`);
     }
-    if (target.problem !== undefined)
-        throw new Error(`${file} を読まない: 実体（symlink の先）が${target.problem}`);
+    // A problem only writing has (a dangling symlink leading to a file not created yet) leaves nothing to read through.
+    if (target.problem !== undefined && target.problem.whenWritten !== true)
+        throw new Error(`${file} を読まない: ${target.problem.text}`);
     try {
         if (!statSync(target.path).isFile())
             throw new Error('通常のファイルではない');
@@ -184,50 +186,181 @@ export function requireState(dir, file) {
         throw new Error(`${file} がない（soujo init で作る）`);
     return text;
 }
-/** Where writeState writes the file. Throws when .soujo/ or the project cannot be resolved. */
-export function stateTarget(dir, file) {
+// The names a file system may hand to .git, which git itself refuses through core.protectNTFS and core.protectHFS: the code
+// points HFS+ leaves out of a name, the stream and the trailing dots and spaces NTFS drops, and the 8.3 short name.
+const HFS_IGNORED = /[‌-‏‪-‮⁪-⁯﻿]/g;
+/** Whether a path part names .git, in any letter case and under any of the names a file system may accept for it. */
+export function isDotGit(part) {
+    const name = (part.replace(HFS_IGNORED, '').split(':')[0] ?? '').replace(/[. ]+$/, '').toLowerCase();
+    return name === '.git' || /^git~\d+$/.test(name);
+}
+/** How paths are compared: in NFC, since a file system may store either form, and in one letter case only where it ignores case. */
+export function pathKey(path, foldCase) {
+    const normalized = path.normalize('NFC');
+    return foldCase ? normalized.toLowerCase() : normalized;
+}
+/**
+ * Whether two identities are one file: the same inode, confirmed by the path or by size and creation time, since inodes are
+ * neither unique nor stable everywhere. Files that do not exist are one when they would be created at the same path.
+ */
+export function sameFile(a, b) {
+    if (a.inode !== undefined && a.inode === b.inode)
+        return a.key === b.key || (a.size === b.size && a.birthtime === b.birthtime);
+    return a.key === b.key;
+}
+// The most symlinks followed for one path before taking it as a loop, as Linux does.
+export const MAX_SYMLINKS = 40;
+function attempt(step) {
+    try {
+        return step();
+    }
+    catch {
+        return undefined;
+    }
+}
+/**
+ * The paths the entry at path (relative to root, "/"-separated) leads through, in order, each part resolved in turn and every
+ * symlink on the way followed, as the operating system does, so that ".." after a symlink is taken from where that points.
+ * The last one is where it lands, which need not exist. Empty beyond MAX_SYMLINKS, as for a loop.
+ */
+function pathLeadsTo(root, path) {
+    const visited = [];
+    const pending = path.split('/');
+    let dir = '';
+    for (let links = 0; pending.length > 0;) {
+        const part = pending.shift() ?? '';
+        if (part === '' || part === '.')
+            continue;
+        const next = posix.join(dir, part);
+        if (part === '..') {
+            dir = next === '.' ? '' : next;
+            continue;
+        }
+        const full = join(root, ...next.split('/'));
+        visited.push(full);
+        if (isSymlink(full)) {
+            if (++links > MAX_SYMLINKS)
+                return [];
+            const link = attempt(() => readlinkSync(full));
+            if (link === undefined)
+                return visited;
+            pending.unshift(...symlinkTargetParts(root, next, link));
+            dir = '';
+        }
+        else if (pending.length === 0) {
+            return visited;
+        }
+        else {
+            dir = next;
+        }
+    }
+    return visited;
+}
+// Whether the file system of dir ignores letter case, told by looking for .soujo/ itself under an upper-cased name.
+function ignoresCase(dir) {
+    const upper = join(dirname(dir), basename(dir).toUpperCase());
+    if (upper === dir)
+        return false;
+    const own = attempt(() => statSync(dir, { bigint: true }));
+    const other = attempt(() => statSync(upper, { bigint: true }));
+    return own !== undefined && other !== undefined && own.dev === other.dev && own.ino === other.ino;
+}
+function identityOf(dir, file, foldCase) {
+    const path = join(dir, file);
+    const link = isSymlink(path) ? true : undefined;
+    if (existsSync(path)) {
+        const { dev, ino, size, birthtimeMs } = statSync(path, { bigint: true });
+        const inode = ino === 0n ? undefined : `${dev}:${ino}`;
+        return { key: pathKey(realpathSync(path), foldCase), inode, size, birthtime: birthtimeMs, link };
+    }
+    const own = { key: pathKey(join(realpathSync(dir), file), foldCase), link };
+    if (link === undefined)
+        return own;
+    return { ...own, leadsTo: pathLeadsTo(realpathSync(dirname(dir)), `${basename(dir)}/${file}`) };
+}
+/** The identities of the state files, the archives in .soujo/, and extra, so that stateTarget can check them all at once. */
+export function stateIdentities(dir, extra = []) {
+    const foldCase = ignoresCase(dir);
+    const of = new Map();
+    for (const file of new Set([...STATE_FILES, ...archiveFiles(dir), ...extra])) {
+        // A file that cannot be resolved is left out; reading or writing it fails by itself.
+        const identity = attempt(() => identityOf(dir, file, foldCase));
+        if (identity !== undefined)
+            of.set(file, identity);
+    }
+    return { foldCase, of };
+}
+/**
+ * Where writeState writes the file, and why it must not be written (or, unless whenWritten is set, read): its real path is
+ * outside the project or inside .git, or it is another state file or archive (see sameStateFile). Throws when .soujo/ or the
+ * project cannot be resolved. Pass known from stateIdentities to check several files without resolving the others each time.
+ */
+export function stateTarget(dir, file, known) {
     requireStateFile(file);
     const path = join(dir, file);
     const real = existsSync(path) ? realpathSync(path) : join(realpathSync(dir), file);
     const inProject = relative(realpathSync(dirname(dir)), real);
+    const elsewhere = (where) => ({ path: real, problem: { text: `実体（symlink の先）が${where}`, elsewhere: true } });
     if (inProject === '..' || inProject.startsWith(`..${sep}`) || isAbsolute(inProject))
-        return { path: real, problem: 'プロジェクトの外' };
-    if (inProject.split(sep).some((part) => part.toLowerCase() === '.git'))
-        return { path: real, problem: '.git の中' };
-    const same = sameFileAs(dir, file);
-    return same === undefined ? { path: real } : { path: real, problem: `${same} と同じ` };
-}
-// Paths are compared in any letter case, since the file system may ignore it; inodes catch other spellings of an existing file.
-function identity(dir, file) {
-    const path = join(dir, file);
-    if (existsSync(path)) {
-        const { dev, ino } = statSync(path, { bigint: true });
-        return { file: ino === 0n ? `path:${realpathSync(path).toLowerCase()}` : `inode:${dev}:${ino}` };
-    }
-    const own = `path:${join(realpathSync(dir), file).toLowerCase()}`;
-    if (!isSymlink(path))
-        return { file: own };
-    return { file: own, pointsTo: `path:${realPathOfAncestor(resolve(realpathSync(dir), readlinkSync(path))).toLowerCase()}` };
+        return elsewhere('プロジェクトの外');
+    if (inProject.split(sep).some(isDotGit))
+        return elsewhere('.git の中');
+    const problem = sameStateFile(dir, file, known ?? stateIdentities(dir, [file]));
+    return problem === undefined ? { path: real } : { path: real, problem };
 }
 /**
- * The first other state file or archive in .soujo/ that reading or writing the file would reach: the same file (a symlink,
- * possibly through a differently cased path, or a hard link), or, for a dangling symlink, the file one of them creates where it
- * points (or the other way round). Refusing it keeps a command writing several of them, as layer done and log rotate do, from
- * overwriting what it has just written. Other files that cannot be resolved are skipped; using them fails by itself.
+ * Why the file is another state file or archive in .soujo/: they are one file (a symlink, a differently cased path, or a hard
+ * link), so reading one returns the other's contents and writing one overwrites them; or one of them is a dangling symlink
+ * leading to where the other is created, which the next write would then go through. Refusing both keeps a command writing
+ * several of them, as layer done and log rotate do, from overwriting what it has just written.
  */
-function sameFileAs(dir, file) {
-    const own = identity(dir, file);
-    return [...STATE_FILES, ...archiveFiles(dir)].find((other) => {
+function sameStateFile(dir, file, known) {
+    const { foldCase, of } = known;
+    const own = of.get(file) ?? attempt(() => identityOf(dir, file, foldCase));
+    if (own === undefined)
+        return undefined;
+    const leads = (identity, key) => identity.leadsTo?.some((step) => pathKey(step, foldCase) === key) === true;
+    for (const [other, them] of of) {
         if (other === file)
-            return false;
-        try {
-            const them = identity(dir, other);
-            return own.file === them.file || own.pointsTo === them.file || them.pointsTo === own.file;
-        }
-        catch {
-            return false;
-        }
-    });
+            continue;
+        if (sameFile(own, them))
+            return { text: sameText(own, them, other) };
+        if (leads(own, them.key))
+            return ledTo(other);
+        if (leads(them, own.key))
+            return { text: `場所が ${other}（壊れた symlink）の先と同じ`, whenWritten: true };
+    }
+    // A state file with no entry in .soujo/ yet has no identity to compare, so its name in .soujo/ is what tells it.
+    const led = (own.leadsTo ?? []).map((step) => namedStateFile(dir, step, foldCase)).find((name) => name !== undefined && name !== file);
+    return led === undefined ? undefined : ledTo(led);
+}
+function ledTo(other) {
+    return { text: `壊れた symlink の先が ${other}（まだ無い）と同じ`, whenWritten: true };
+}
+// The state file path is, when it is in .soujo/ (dir): its name there, spelled as Soujo writes it where the file system
+// ignores letter case, or undefined when it names no state file.
+function namedStateFile(dir, path, foldCase) {
+    const real = attempt(() => realpathSync(dir));
+    if (real === undefined || pathKey(dirname(path), foldCase) !== pathKey(real, foldCase))
+        return undefined;
+    const name = basename(path);
+    if (isStateFile(name))
+        return name;
+    if (!foldCase)
+        return undefined;
+    const known = STATE_FILES.find((file) => file.toLowerCase() === name.toLowerCase());
+    if (known !== undefined)
+        return known;
+    const month = /^log-(.+)\.md$/i.exec(name)?.[1] ?? '';
+    return isMonth(month) ? archiveFile(month) : undefined;
+}
+// Names the symlink, so that what has to be changed is the file named; without one, a hard link is what is left.
+function sameText(own, them, other) {
+    if (own.link === true)
+        return `実体（symlink の先）が ${other} と同じ`;
+    if (them.link === true)
+        return `実体が ${other}（symlink）の先と同じ`;
+    return `実体が ${other} と同じ（hard link）`;
 }
 // The temporary file writeState and createFile use for target: ".<name>.<pid>.tmp" next to it.
 function tempOf(target) {
@@ -270,7 +403,7 @@ export function writeState(dir, file, text) {
         throw new Error(`${file} を書けない: ${error.message}`);
     }
     if (target.problem !== undefined)
-        throw new Error(`${file} を書かない: 実体（symlink の先）が${target.problem}`);
+        throw new Error(`${file} を書かない: ${target.problem.text}`);
     const temp = tempOf(target.path);
     let created = false;
     try {
@@ -317,14 +450,16 @@ export function removeTempsOf(target) {
         rmSync(path, { force: true });
 }
 // The leftovers of the four state files, and of archives that exist or whose temporary file is in .soujo/; none next to a
-// target stateTarget refuses.
+// target outside the project or inside .git. A target that is another state file is still inside the project, so its leftovers
+// are deleted as before; leaving them would let `git add -A` commit them.
 function leftoverTempPaths(dir) {
     const named = entryNames(dir).flatMap((name) => TEMP.exec(name)?.[1] ?? []).filter(isArchive);
-    const archives = new Set([...archiveFiles(dir), ...named]);
-    return [...STATE_FILES, ...archives].flatMap((file) => {
+    const files = [...new Set([...STATE_FILES, ...archiveFiles(dir), ...named])];
+    const known = attempt(() => stateIdentities(dir, files));
+    return files.flatMap((file) => {
         try {
-            const target = stateTarget(dir, file);
-            return target.problem === undefined ? tempsOf(target.path) : [];
+            const target = stateTarget(dir, file, known);
+            return target.problem?.elsewhere === true ? [] : tempsOf(target.path);
         }
         catch {
             return [];

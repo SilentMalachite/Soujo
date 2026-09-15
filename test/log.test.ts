@@ -244,16 +244,29 @@ test('log rotate refuses an archive that is LOG.md, or that becomes another arch
   const dir = logProject(t);
   symlinkSync('LOG.md', join(dir, '.soujo', 'LOG-2026-08.md'));
   commitAll(dir);
-  assert.throws(() => logRotate(dir, undefined, SEPTEMBER), /^Error: \.soujo\/LOG\.md の実体（symlink の先）がLOG-2026-08\.md と同じなので記録をコミットできない$/);
+  assert.throws(() => logRotate(dir, undefined, SEPTEMBER), /^Error: \.soujo\/LOG\.md の実体が LOG-2026-08\.md（symlink）の先と同じなので記録をコミットできない$/);
   assert.equal(state(dir, 'LOG.md'), ROTATING);
 
   const chained = logProject(t);
   symlinkSync('missing.md', join(chained, '.soujo', 'LOG-2026-07.md'));
   symlinkSync('LOG-2026-07.md', join(chained, '.soujo', 'LOG-2026-08.md'));
   commitAll(chained);
-  assert.throws(() => logRotate(chained, undefined, SEPTEMBER), /^Error: LOG-2026-07\.md を読まない: 実体（symlink の先）がLOG-2026-08\.md と同じ$/);
+  assert.throws(
+    () => logRotate(chained, undefined, SEPTEMBER),
+    /^Error: \.soujo\/LOG-2026-07\.md の場所が LOG-2026-08\.md（壊れた symlink）の先と同じなので記録をコミットできない$/,
+  );
   assert.equal(state(chained, 'LOG.md'), ROTATING);
   assert.ok(lstatSync(join(chained, '.soujo', 'LOG-2026-07.md')).isSymbolicLink());
+
+  // The archive the rotation is about to create, which another archive's dangling symlink leads to.
+  const created = logProject(t);
+  symlinkSync('LOG-2026-07.md', join(created, '.soujo', 'LOG-2026-08.md'));
+  commitAll(created);
+  assert.throws(
+    () => logRotate(created, undefined, SEPTEMBER),
+    /^Error: \.soujo\/LOG-2026-07\.md の場所が LOG-2026-08\.md（壊れた symlink）の先と同じなので記録をコミットできない$/,
+  );
+  assert.deepEqual([state(created, 'LOG.md'), existsSync(join(created, '.soujo', 'LOG-2026-07.md'))], [ROTATING, false]);
 });
 
 test('log rotate re-run after a failed commit commits the same rotation without moving entries twice', { skip: process.platform === 'win32' }, (t) => {

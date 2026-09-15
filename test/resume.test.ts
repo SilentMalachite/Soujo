@@ -26,6 +26,15 @@ test('resume prints the next step, the last LOG entry, the last commit, and the 
   ]);
 });
 
+test('resume degrades the lines of state files that are one file instead of failing', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'LOG.md': LOG });
+  symlinkSync('LOG.md', join(dir, '.soujo', 'PLAN.md'));
+  commitAll(dir, 'wip: L3 io');
+  const lines = resume(dir);
+  assert.equal(lines.length, 4);
+  assert.equal(lines[1], '前回: LOG.md を読めない');
+});
+
 test('resume reads CRLF files, counts uncommitted changes, and clips long values', (t) => {
   const long = 'あ'.repeat(80);
   const crlf = (text: string) => text.replaceAll('\n', '\r\n');

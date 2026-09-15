@@ -209,6 +209,11 @@ test('next check reports an unreadable LOG.md together with the other warnings',
   const linked = project(temp(t), { 'PLAN.md': PLAN });
   symlinkSync(secret, join(linked, '.soujo', 'LOG.md'));
   assert.deepEqual(nextCheck(linked, false), ['soujo 警告: NEXT.md がない / LOG.md を読まない: 実体（symlink の先）がプロジェクトの外']);
+
+  // A state file that is another one is refused the same way, as one warning among the others.
+  const shared = project(temp(t), { 'LOG.md': `# LOG\n\n${PLAN}` });
+  symlinkSync('LOG.md', join(shared, '.soujo', 'PLAN.md'));
+  assert.deepEqual(nextCheck(shared, false), ['soujo 警告: 確認できない: PLAN.md を読まない: 実体（symlink の先）が LOG.md と同じ']);
 });
 
 test('next check reports a git failure together with the other warnings', (t) => {
