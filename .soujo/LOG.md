@@ -335,4 +335,5 @@ Codex レビュー L21 の2件を修正: headState は HEAD のパスを realpat
 symlinkTargetPath を symlinkTargetParts にし、Windows では相対リンクを \ でも区切る。SPEC(+ja)・CHANGELOG(+ja) 同期、指摘は REVIEW-FIX.md
 
 ## 2026-09-16 L22 state-targets
+.git を大小文字問わず拒否し、状態ファイル・書庫の実体の重複（symlink・大小文字違い・hardlink・壊れた symlink の先）を stateTarget で拒否
 読み込みも同じ規則で拒否（stateTarget を共有）
