@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { archiveFile, archiveFiles, archiveMonth, leftoverTemps, readState, removeLeftoverTemps, requireStateDir, statePath, trackedStatePath, writeState, } from '../files.js';
 import { gitChangedPaths, gitLastCommit, gitStatusExcluding, gitToplevel } from '../git.js';
 import { appendLog, appendedEntries, archiveLog, formatDate, isMonth, lastLog, logMonth, logMonths, removedEntries, parseLog, rotateLog, } from '../state.js';
-import { commitRecords, headState, missingEntries, requireCommittable, requireCommittableFiles, resumable, uncommittedLogs, } from './shared.js';
+import { attempt, commitRecords, headState, missingEntries, requireCommittable, requireCommittableFiles, resumable, uncommittedLogs, } from './shared.js';
 /**
  * Appends the entry, unless LOG.md already ends with the same entry (date, layer, and lines) and HEAD does not have that copy:
  * a re-run of a line like "log add 節目 → next set" after its later command failed must not write the entry twice.
@@ -22,12 +22,15 @@ export function logAdd(cwd, layer, lines, now = new Date()) {
     writeState(dir, 'LOG.md', text);
     return [`LOG.md に追記: ${date} ${added.layer}（${added.lines.length}行）`];
 }
-// Whether log ends with entry and HEAD lacks that copy. Git is asked only when the last entry is the same.
+// Whether log ends with entry and HEAD lacks that copy. Git is asked only when the last entry is the same; when git fails,
+// HEAD is unknown and counts as lacking it, as outside a repository.
 function repeated(root, log, entry) {
     const last = lastLog(log);
     if (last === undefined || missingEntries([entry], [last], identity).length > 0)
         return false;
-    const head = gitToplevel(root) === undefined ? undefined : headState(root, 'LOG.md');
+    const head = attempt(() => (gitToplevel(root) === undefined ? undefined : headState(root, 'LOG.md')));
+    if (head instanceof Error)
+        return true;
     return missingEntries([entry], uncommittedLogs(log, head), identity).length === 0;
 }
 const DIRTY = '未コミットの変更がある（soujo layer done か soujo close で締めてから）';

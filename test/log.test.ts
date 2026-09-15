@@ -54,6 +54,12 @@ test('log add does not repeat the last entry while it is uncommitted, so re-runn
   assert.match(logAdd(committed, '節目', milestone, NOW)[0] ?? '', /^LOG\.md に追記: /);
   assert.match(logAdd(committed, '節目', milestone, NOW)[0] ?? '', /^LOG\.md に同じエントリが未コミット/);
   assert.equal(parseLog(state(committed, 'LOG.md')).length, 2);
+
+  // A git failure leaves HEAD unknown, as outside a repository: the entry is appended once and not repeated.
+  const broken = project(repo(t), { 'LOG.md': '# LOG\n' });
+  writeFileSync(join(broken, '.git', 'config'), '[broken\n');
+  assert.match(logAdd(broken, '節目', milestone, NOW)[0] ?? '', /^LOG\.md に追記: /);
+  assert.match(logAdd(broken, '節目', milestone, NOW)[0] ?? '', /^LOG\.md に同じエントリが未コミット/);
 });
 
 test('log add writes nothing when the lines are missing or too many', (t) => {

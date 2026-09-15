@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { brief } from '../src/commands/brief.js';
 import { resume } from '../src/commands/resume.js';
 import { gitLastCommit } from '../src/git.js';
 import { readTemplate } from '../src/files.js';
@@ -96,6 +97,14 @@ test('resume falls back to the next layer of PLAN when NEXT.md is missing, inval
     'コミット: git リポジトリではない',
     `再開: NEXT.md の次「L2 state」は PLAN で完了済み → soujo next set で書いてから ${GO.slice(4)}`,
   ]);
+});
+
+test('resume and brief degrade only their git lines when git fails in a repository', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  commitAll(dir, 'wip: L3 io');
+  writeFileSync(join(dir, '.git', 'config'), '[broken\n');
+  assert.equal(resume(dir)[2], 'コミット: git の状態を読めない');
+  assert.deepEqual(brief(dir).slice(0, 2), ['進捗: PLAN 2/4 層完了・最終 layer: git の状態を読めない', '以後: git の状態を読めない']);
 });
 
 test('resume points to spec or plan when PLAN has no layer to do', (t) => {

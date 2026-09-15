@@ -24,7 +24,10 @@ export function attempt(step) {
 }
 /** Reads git history with read in a repository that has commits; otherwise, or when git fails, why there is nothing to show. */
 export function readGit(root, read) {
-    if (gitToplevel(root) === undefined)
+    const toplevel = attempt(() => gitToplevel(root));
+    if (toplevel instanceof Error)
+        return 'git の状態を読めない';
+    if (toplevel === undefined)
         return 'git リポジトリではない';
     const hasCommits = attempt(() => gitHasCommits(root));
     if (hasCommits instanceof Error)

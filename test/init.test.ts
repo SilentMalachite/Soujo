@@ -19,6 +19,15 @@ test('init creates state files and instruction files at the git top level', (t) 
   assert.equal(existsSync(join(dir, 'sub', '.soujo')), false);
 });
 
+test('init refuses and creates nothing when git fails for a reason other than being outside a repository', (t) => {
+  const dir = repo(t);
+  mkdirSync(join(dir, 'sub'));
+  writeFileSync(join(dir, '.git', 'config'), '[broken\n');
+  assert.throws(() => init(join(dir, 'sub')), /^Error: git rev-parse に失敗: [^\n]+$/);
+  assert.equal(existsSync(join(dir, '.soujo')), false);
+  assert.equal(existsSync(join(dir, 'sub', '.soujo')), false);
+});
+
 test('init outside git uses the current directory, never overwrites, and lists skipped files on one line', (t) => {
   const dir = temp(t);
   mkdirSync(join(dir, '.soujo'));

@@ -1,5 +1,5 @@
-次: L20 git-env
-前提: PLAN に L20〜L31 を追加（Codex 全体レビューの修正、.soujo/REVIEW-FIX.md）
-確認: git 呼び出しがリポジトリの位置を変える環境変数を落とし、「リポジトリ外」のときだけ toplevel が undefined になり、git の返すパスは改行だけ除かれ、テストの git がユーザー設定から隔離されることがテストで通る（REVIEW-FIX #4 #9 #23 #39）
-注意: なし
-effort: medium
+次: L21 git-scope
+前提: L20 git-env 完了（git の環境変数の除去・toplevel の失敗の区別・テストの git 隔離）
+確認: layer コミットの検索と brief の履歴がプロジェクトのパスに限られ、HEAD の状態を HEAD のエントリ（symlink ならその時点のリンク先）で読み、symlink 自身の staging も検証し、gitCommitAll がないことがテストで通る（#5 #6 #7 #42）
+注意: 指摘の詳細と判断は .soujo/REVIEW-FIX.md。各指摘は失敗するテストを先に書く
+effort: high

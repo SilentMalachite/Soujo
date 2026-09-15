@@ -320,3 +320,7 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.1 にし、
 ## 2026-09-16 節目
 PLAN.md に 12層: L20 git-env〜L31 skills-docs（Codex 全体レビュー44件の TDD 修正、対応表は .soujo/REVIEW-FIX.md）
 外したもの: Windows の CI ジョブ、#40 の挙動変更（SPEC に制約として書く）
+
+## 2026-09-16 L20 git-env
+git の実行から GIT_DIR など別リポジトリを指す環境変数を外し、toplevel は not a git repository のときだけ undefined（他の失敗は throw、resume/brief/next check は縮退）
+git の出すパスは改行だけ除く。テストの git はグローバル・システム設定を読まない（REVIEW-FIX #4 #9 #23 #39）

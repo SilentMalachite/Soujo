@@ -4,6 +4,14 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
+## 未リリース
+
+### 修正
+
+- git を `GIT_DIR`・`GIT_WORK_TREE`・`GIT_INDEX_FILE` など別のリポジトリを指す環境変数を外して実行するので、git のフックから起動した `soujo` がカレントディレクトリ以外のリポジトリを読んだりコミットしたりしない。
+- 「not a git repository」以外の git の失敗（git がない・設定が壊れている）を git 管理外とみなさない：`soujo init` はカレントディレクトリに `.soujo/` を作らずに拒否し、`resume` と `brief` は `git の状態を読めない` と出し、`next check` はほかの警告と並べて警告する。
+- git が出すパスで、ディレクトリ名の先頭や末尾の空白を削らない。
+
 ## 0.3.1 — 2026-09-15
 
 リリース：[v0.3.1](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.1)。

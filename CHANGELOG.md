@@ -4,6 +4,14 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- git runs without `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, and the other variables that point it at another repository, so a `soujo` started from a git hook no longer reads or commits a repository other than the current directory's.
+- A git failure other than "not a git repository" (git missing, a broken config) is no longer taken for a directory outside a repository: `soujo init` refuses instead of creating `.soujo/` in the current directory, `resume` and `brief` say `git の状態を読めない`, and `next check` warns with the other warnings.
+- Paths that git prints keep spaces at the start or end of a directory name.
+
 ## 0.3.1 — 2026-09-15
 
 Release: [v0.3.1](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.1).

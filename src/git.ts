@@ -20,8 +20,43 @@ function firstLine(text: string | undefined, from: 'first' | 'last'): string | u
   return from === 'first' ? lines[0] : lines[lines.length - 1];
 }
 
-function run(cwd: string, args: string[]): SpawnSyncReturns<string> {
-  return spawnSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: MAX_OUTPUT });
+/**
+ * The variables that point git at another repository, work tree, index, or object store, or carry `git -c` settings: the
+ * list of `git rev-parse --local-env-vars`.
+ */
+export const REPOSITORY_ENV = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_COMMON_DIR',
+] as const;
+
+// The environment without REPOSITORY_ENV, so that a soujo started from a git hook or a shell that set them reads and
+// commits the repository of cwd, not another one.
+function environment(extra: Record<string, string>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  for (const name of REPOSITORY_ENV) delete env[name];
+  return env;
+}
+
+function run(cwd: string, args: string[], extra: Record<string, string> = {}): SpawnSyncReturns<string> {
+  return spawnSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: MAX_OUTPUT, env: environment(extra) });
+}
+
+// A path printed by git on one line: only the line break is dropped, since a directory name may start or end with a space.
+function pathLine(output: string): string {
+  return output.endsWith('\n') ? output.slice(0, -1) : output;
 }
 
 function failure(args: string[], result: SpawnSyncReturns<string>): Error {
@@ -46,13 +81,19 @@ function exitCode(cwd: string, args: string[]): 0 | 1 {
   throw failure(args, result);
 }
 
-/** Repository top level, or undefined outside a git repository. */
+// What git says when cwd is in no repository, read in the C locale so that a translated git says it the same way.
+const NOT_A_REPOSITORY = /not a git repository/i;
+
+/**
+ * Repository top level, or undefined outside a git repository. Any other failure (git missing, a broken config) throws, so
+ * that a repository git cannot read is never taken for a directory without one.
+ */
 export function gitToplevel(cwd: string): string | undefined {
-  try {
-    return git(cwd, ['rev-parse', '--show-toplevel']).trim();
-  } catch {
-    return undefined;
-  }
+  const args = ['rev-parse', '--show-toplevel'];
+  const result = run(cwd, args, { LC_ALL: 'C' });
+  if (result.error === undefined && result.status === 0) return pathLine(result.stdout);
+  if (result.error === undefined && NOT_A_REPOSITORY.test(result.stderr)) return undefined;
+  throw failure(args, result);
 }
 
 /** Whether HEAD points to a commit. Throws outside a repository or when git itself fails. */
@@ -84,7 +125,7 @@ export function gitStatusExcluding(cwd: string, excluded: readonly string[]): st
 /** The given paths (relative to cwd, taken literally) with uncommitted changes, untracked and deleted files included, in the given order. */
 export function gitChangedPaths(cwd: string, paths: readonly string[]): string[] {
   if (paths.length === 0) return [];
-  const prefix = git(cwd, ['rev-parse', '--show-prefix']).trim();
+  const prefix = pathLine(git(cwd, ['rev-parse', '--show-prefix']));
   const pathspecs = paths.map((path) => `:(literal)${path}`);
   // -z keeps paths unquoted; --no-renames keeps one path per record. Porcelain paths are relative to the top level.
   const output = git(cwd, ['status', '--porcelain', '-z', '--no-renames', '--untracked-files=all', '--', ...pathspecs]);
@@ -104,7 +145,7 @@ const OPERATIONS = [
 
 /** The unfinished git operation (merge, rebase, cherry-pick, revert), or undefined. */
 export function gitOperationInProgress(cwd: string): string | undefined {
-  const gitDir = git(cwd, ['rev-parse', '--absolute-git-dir']).trim();
+  const gitDir = pathLine(git(cwd, ['rev-parse', '--absolute-git-dir']));
   return OPERATIONS.find(([marker]) => existsSync(join(gitDir, marker)))?.[1];
 }
 

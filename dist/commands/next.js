@@ -82,13 +82,20 @@ function problems(dir, now) {
     }
     found.push(...validatePlan(plan ?? ''));
     found.push(...logProblems(dir, now));
-    const root = dirname(dir);
-    if (gitToplevel(root) !== undefined) {
-        const changes = gitStatus(root).length;
-        if (changes > 0)
-            found.push(`未コミットの変更 ${changes}件`);
-    }
+    found.push(...changeProblems(dirname(dir)));
     return found;
+}
+// Kept apart like logProblems, so that a git failure does not hide the other warnings.
+function changeProblems(root) {
+    try {
+        if (gitToplevel(root) === undefined)
+            return [];
+        const changes = gitStatus(root).length;
+        return changes > 0 ? [`未コミットの変更 ${changes}件`] : [];
+    }
+    catch (error) {
+        return [`未コミットの変更を確認できない: ${error.message}`];
+    }
 }
 /** One warning line when the project is not safely resumable; nothing otherwise or outside Soujo projects. Never throws. */
 export function nextCheck(cwd, hook, now = new Date()) {

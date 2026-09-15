@@ -211,6 +211,13 @@ test('next check reports an unreadable LOG.md together with the other warnings',
   assert.deepEqual(nextCheck(linked, false), ['soujo 警告: NEXT.md がない / LOG.md を読まない: 実体（symlink の先）がプロジェクトの外']);
 });
 
+test('next check reports a git failure together with the other warnings', (t) => {
+  const dir = project(repo(t), { 'PLAN.md': PLAN });
+  writeFileSync(join(dir, '.git', 'config'), '[broken\n');
+  const [line] = nextCheck(dir, false);
+  assert.match(line ?? '', /^soujo 警告: NEXT\.md がない \/ 未コミットの変更を確認できない: git rev-parse に失敗: .+$/);
+});
+
 test('next check --hook returns a systemMessage JSON line', (t) => {
   const dir = project(temp(t));
   assert.deepEqual(nextCheck(dir, true), [JSON.stringify({ systemMessage: 'soujo 警告: NEXT.md がない' })]);

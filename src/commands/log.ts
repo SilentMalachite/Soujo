@@ -31,6 +31,7 @@ import {
   type LogEntry,
 } from '../state.js';
 import {
+  attempt,
   commitRecords,
   headState,
   missingEntries,
@@ -57,11 +58,13 @@ export function logAdd(cwd: string, layer: string, lines: string[], now: Date = 
   return [`LOG.md に追記: ${date} ${added.layer}（${added.lines.length}行）`];
 }
 
-// Whether log ends with entry and HEAD lacks that copy. Git is asked only when the last entry is the same.
+// Whether log ends with entry and HEAD lacks that copy. Git is asked only when the last entry is the same; when git fails,
+// HEAD is unknown and counts as lacking it, as outside a repository.
 function repeated(root: string, log: string, entry: LogEntry): boolean {
   const last = lastLog(log);
   if (last === undefined || missingEntries([entry], [last], identity).length > 0) return false;
-  const head = gitToplevel(root) === undefined ? undefined : headState(root, 'LOG.md');
+  const head = attempt(() => (gitToplevel(root) === undefined ? undefined : headState(root, 'LOG.md')));
+  if (head instanceof Error) return true;
   return missingEntries([entry], uncommittedLogs(log, head), identity).length === 0;
 }
 

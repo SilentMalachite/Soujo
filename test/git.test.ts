@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  REPOSITORY_ENV,
   gitAddAll,
   gitAddedFiles,
   gitChangedPaths,
@@ -31,6 +32,55 @@ test('gitToplevel finds the repository root from a subdirectory, or undefined ou
   mkdirSync(join(dir, 'sub'));
   assert.equal(gitToplevel(join(dir, 'sub')), realpathSync(dir));
   assert.equal(gitToplevel(temp(t)), undefined);
+});
+
+test('gitToplevel is undefined only outside a repository; other git failures throw', (t) => {
+  const dir = repo(t);
+  writeFileSync(join(dir, '.git', 'config'), '[broken\n');
+  assert.throws(() => gitToplevel(dir), /^Error: git rev-parse に失敗: [^\n]+$/);
+  const outside = temp(t);
+  const path = process.env.PATH;
+  t.after(() => {
+    process.env.PATH = path;
+  });
+  process.env.PATH = '';
+  assert.throws(() => gitToplevel(outside), /^Error: git rev-parse に失敗: [^\n]+$/);
+});
+
+test('paths from git keep the spaces at the ends of directory names', (t) => {
+  const dir = join(temp(t), 'proj ');
+  const app = join(dir, ' app');
+  mkdirSync(app, { recursive: true });
+  execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'ignore' });
+  writeFileSync(join(app, 'a.md'), '');
+  assert.equal(gitToplevel(app), realpathSync(dir));
+  assert.deepEqual(gitChangedPaths(app, ['a.md']), ['a.md']);
+});
+
+test('git calls ignore the variables that point git at another repository', (t) => {
+  const dir = repo(t);
+  const other = repo(t);
+  writeFileSync(join(other, 'o.txt'), 'o\n');
+  commitAll(other, 'other');
+  t.after(() => {
+    for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete process.env[name];
+  });
+  Object.assign(process.env, { GIT_DIR: join(other, '.git'), GIT_WORK_TREE: other, GIT_INDEX_FILE: join(other, '.git', 'index') });
+  assert.equal(gitToplevel(dir), realpathSync(dir));
+  writeFileSync(join(dir, 'a.txt'), 'a\n');
+  assert.deepEqual(gitStatus(dir), ['?? a.txt']);
+  gitAddAll(dir);
+  gitCommit(dir, 'mine');
+  assert.equal(gitLastCommit(dir)?.subject, 'mine');
+  assert.equal(gitLastCommit(other)?.subject, 'other');
+});
+
+test('tests run git without the user or system configuration and without repository variables', (t) => {
+  const dir = repo(t);
+  const list = execFileSync('git', ['config', '--list', '--show-origin'], { cwd: dir, encoding: 'utf8' });
+  const origins = new Set(list.split('\n').filter(Boolean).map((line) => line.split('\t')[0]));
+  assert.deepEqual([...origins], ['file:.git/config']);
+  for (const name of REPOSITORY_ENV) assert.equal(process.env[name], undefined, name);
 });
 
 test('gitStatus, gitAddAll, gitCommit, and gitLastCommit record a layer', (t) => {

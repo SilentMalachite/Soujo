@@ -2,13 +2,20 @@ import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { devNull, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StateFile } from '../src/files.js';
+import { REPOSITORY_ENV } from '../src/git.js';
 import { EFFORTS } from '../src/state.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+
+// Git in tests, and the soujo runs they start, read no user or system configuration (core.hooksPath, signing, filters) and no
+// variable pointing at another repository, so the results do not depend on the machine.
+process.env.GIT_CONFIG_GLOBAL = devNull;
+process.env.GIT_CONFIG_NOSYSTEM = '1';
+for (const name of REPOSITORY_ENV) delete process.env[name];
 
 /** A temporary directory removed after the test. */
 export function temp(t: TestContext): string {

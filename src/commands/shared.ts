@@ -58,7 +58,9 @@ export type NoCommit = 'git リポジトリではない' | 'まだない' | 'git
 
 /** Reads git history with read in a repository that has commits; otherwise, or when git fails, why there is nothing to show. */
 export function readGit<T>(root: string, read: () => T): T | NoCommit {
-  if (gitToplevel(root) === undefined) return 'git リポジトリではない';
+  const toplevel = attempt(() => gitToplevel(root));
+  if (toplevel instanceof Error) return 'git の状態を読めない';
+  if (toplevel === undefined) return 'git リポジトリではない';
   const hasCommits = attempt(() => gitHasCommits(root));
   if (hasCommits instanceof Error) return 'git の状態を読めない';
   if (!hasCommits) return 'まだない';
