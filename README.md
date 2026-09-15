@@ -6,12 +6,12 @@
 
 **Interruptible development, resumable AI coding, low-context development** — a spec → plan → layer workflow for Claude Code and Codex.
 
-AI coding sessions end mid-task: a usage limit, a compacted context, a meeting, the end of the day, a move to the other host. When the plan and the decisions live only in the conversation, the next session starts by reconstructing them. Soujo keeps them in four short files under `.soujo/` and commits each finished layer, so the next session — in either host — continues from the files alone.
+AI coding sessions end mid-task: a usage limit, a compacted context, a meeting, the end of the day, a move to the other host, weeks on other things. When the plan and the decisions live only in the conversation, the next session starts by reconstructing them. Soujo keeps them in four short files under `.soujo/` and commits each finished layer, so the next session — in either host — continues from the files alone.
 
 | | What it means | How Soujo does it |
 |---|---|---|
 | Interruptible development | Stopping at any moment loses no work and no decision | Layers of ≤30 minutes, one commit each; `close` commits unfinished work as `wip:` |
-| Resumable AI coding | A new session needs no conversation history, in either host | `NEXT.md` (≤5 lines) names the next step; `resume` prints a four-line status |
+| Resumable AI coding | A new session needs no conversation history, in either host, even weeks later | `NEXT.md` (≤5 lines) names the next step; `resume` prints a four-line status; after days away, `brief` adds progress, the last `節目` (milestone) entry, and the gap |
 | Low-context development | Neither you nor the model has to keep much in mind | Each file has a line limit; one question at a time; the CLI updates the records |
 
 The name: in an excavation, strata (層) are removed one at a time in order (序), and each removed layer is recorded. With the records, anyone can continue the dig.
@@ -22,7 +22,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 
 ```
 /soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:plan (when layers run out)
-                                 ↑ /soujo:resume after a break (soujo brief after days away) · /soujo:close before stopping
+                                 ↑ /soujo:resume after a break (soujo brief after days or weeks away) · /soujo:close before stopping
 ```
 
 | Skill | Claude Code | Codex | Result |
@@ -120,7 +120,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md` as they are, keeping the last entry and the last `節目` entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
 | `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>` |
 | `soujo resume` | Four-line status; from 3 days after the last commit, `再開:` points to `soujo brief` |
-| `soujo brief` | Five lines for returning after days away: PLAN progress and the last layer, commits since it, the last `節目` entry, days since the last commit, the next step; writes nothing |
+| `soujo brief` | Five lines for returning after days or weeks away: PLAN progress and the last layer, commits since it, the last `節目` entry, days since the last commit, the next step; writes nothing |
 | `soujo close [--note '<note>']` | Logs the interruption → commits `wip: <layer>` |
 | `soujo map plan` / `soujo map code [<dir>]` | ASCII plan diagram / Mermaid import graph or directory tree |
 
