@@ -179,6 +179,22 @@ test('resume shows a git failure instead of claiming there is no commit', { skip
   assert.equal(resume(dir)[2], 'コミット: git の状態を読めない');
 });
 
+test('resume points to soujo brief from three days after the last commit, whatever 再開 says', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  const last = new Date(2026, 8, 12, 18, 0);
+  commitAll(dir, 'layer: L2 state', last);
+  assert.equal(resume(dir, new Date(2026, 8, 15, 17, 59))[3], GO);
+  assert.equal(resume(dir, new Date(2026, 8, 15, 18, 0))[3], `${GO}・3日ぶり: 先に soujo brief`);
+  assert.equal(resume(dir, new Date(2026, 9, 1))[3], `${GO}・18日ぶり: 先に soujo brief`);
+
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN.replace('- [ ] L3 io', '- [x] L3 io'));
+  assert.equal(
+    resume(dir, new Date(2026, 8, 20))[3],
+    '再開: 「L3 io」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done "L3 io" を再実行・7日ぶり: 先に soujo brief',
+  );
+  assert.equal(resume(project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN }), new Date(2030, 0, 1))[3], GO);
+});
+
 test('resume outside Soujo projects throws', (t) => {
   assert.throws(() => resume(temp(t)), /\.soujo\/ が見つからない/);
 });

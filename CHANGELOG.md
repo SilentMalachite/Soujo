@@ -4,6 +4,13 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- `soujo brief` prints five lines for returning after days away, derived from the records without writing anything: PLAN progress with the last `layer:` commit, the commits after it, the last `節目` entry of `LOG.md`, the days since the last commit, and the next step as `soujo resume` shows it. An unreadable file or a git failure degrades only its line.
+- `soujo resume` ends `再開:` with `・N日ぶり: 先に soujo brief` when the last commit is 3 or more days old.
+
 ## 0.2.0 — 2026-09-15
 
 Release: [v0.2.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.2.0).

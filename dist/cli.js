@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Entry point: parses arguments, runs the command, prints its lines to stdout, and turns any error into one stderr line with exit 1.
 import { parseArgs } from 'node:util';
+import { brief } from './commands/brief.js';
 import { close } from './commands/close.js';
 import { init } from './commands/init.js';
 import { layerDone } from './commands/layer.js';
@@ -100,6 +101,7 @@ const COMMANDS = {
         },
     },
     resume: noArguments('resume', resume),
+    brief: noArguments('brief', brief),
     close: {
         usage: 'close [--note <1〜3行>]',
         run: (args, cwd, usage) => {

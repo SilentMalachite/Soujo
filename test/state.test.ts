@@ -4,11 +4,13 @@ import {
   appendLog,
   appendedEntries,
   archiveLog,
+  daysBetween,
   formatDate,
   formatItem,
   formatNext,
   isMonth,
   lastLog,
+  lastMilestone,
   logLines,
   logMonth,
   logMonths,
@@ -344,6 +346,21 @@ test('newlyDone lists layers checked only in the later PLAN', () => {
   assert.deepEqual(newlyDone(head, working).map((item) => item.layer), ['L2', 'L4']);
   assert.deepEqual(newlyDone(working, head), []);
   assert.deepEqual(newlyDone([], head).map((item) => item.layer), ['L1']);
+});
+
+test('lastMilestone returns the last 節目 entry wherever it is, or undefined', () => {
+  const log = '# LOG\n\n## 2026-09-10 節目\nSPEC を書いた\n\n## 2026-09-12 節目\n12層に分けた\n未決: map\n\n## 2026-09-13 L1\na\n';
+  assert.deepEqual(lastMilestone(log), { date: '2026-09-12', layer: '節目', lines: ['12層に分けた', '未決: map'] });
+  assert.equal(lastMilestone('# LOG\n\n## 2026-09-13 L1 節目\na\n'), undefined);
+  assert.equal(lastMilestone(''), undefined);
+});
+
+test('daysBetween counts whole days rounded down, and 0 when the end is not later', () => {
+  const from = new Date(2026, 8, 12, 18, 0);
+  assert.equal(daysBetween(from, new Date(2026, 8, 15, 17, 59)), 2);
+  assert.equal(daysBetween(from, new Date(2026, 8, 15, 18, 0)), 3);
+  assert.equal(daysBetween(from, from), 0);
+  assert.equal(daysBetween(from, new Date(2026, 8, 1)), 0);
 });
 
 test('formatDate pads month and day in local time', () => {

@@ -4,6 +4,8 @@ export const NEXT_MAX_LINES = 5;
 export const LOG_MAX_LINES = 3;
 /** Steps outside PLAN's layers, matched exactly after trimming: spec and plan before the first layer, plan after the last. */
 export const PHASES = ['spec', 'plan'];
+/** The layer name of a LOG entry that marks a milestone: what phase ended and what is open. */
+export const MILESTONE = '節目';
 const NEXT_KEYS = [
     ['layer', '次'],
     ['premise', '前提'],
@@ -246,6 +248,10 @@ export function parseLog(text) {
 export function lastLog(text) {
     return parseLog(text).at(-1);
 }
+/** The last milestone entry (layer 節目) of LOG.md, or undefined when there is none. */
+export function lastMilestone(text) {
+    return parseLog(text).filter((entry) => entry.layer === MILESTONE).at(-1);
+}
 /** Whether value is a month as log rotation names it: YYYY-MM, the month from 01 to 12. */
 export function isMonth(value) {
     return MONTH.test(value);
@@ -350,6 +356,11 @@ export function removedEntries(before, after) {
             removed.push(entry);
     }
     return at === now.length ? removed : undefined;
+}
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** The whole days from from to to, rounded down; 0 when to is not after from. */
+export function daysBetween(from, to) {
+    return Math.max(0, Math.floor((to.getTime() - from.getTime()) / DAY_MS));
 }
 /** YYYY-MM-DD in local time. */
 export function formatDate(date) {

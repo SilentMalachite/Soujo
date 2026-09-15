@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 // spawnSync fails beyond 1 MB by default; `git status` in a large working tree can exceed that.
 const MAX_OUTPUT = 256 * 1024 * 1024;
-const COMMIT_FORMAT = '--format=%h%x09%s';
+const COMMIT_FORMAT = '--format=%h%x09%ct%x09%s';
 function firstLine(text, from) {
     const lines = (text ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
     return from === 'first' ? lines[0] : lines[lines.length - 1];
@@ -139,8 +139,13 @@ export function gitUnmergedCount(cwd) {
     return git(cwd, ['status', '--porcelain']).split('\n').filter((line) => UNMERGED.test(line)).length;
 }
 function parseCommit(line) {
-    const tab = line.indexOf('\t');
-    return tab === -1 ? undefined : { hash: line.slice(0, tab), subject: line.slice(tab + 1) };
+    const match = /^([^\t]+)\t(\d+)\t(.*)$/.exec(line);
+    if (match === null)
+        return undefined;
+    return { hash: match[1] ?? '', subject: match[3] ?? '', date: new Date(Number(match[2]) * 1000) };
+}
+function parseCommits(output) {
+    return output.split('\n').flatMap((line) => parseCommit(line) ?? []);
 }
 /** The latest commit for display, or undefined when there is none (or git fails). */
 export function gitLastCommit(cwd) {
@@ -156,12 +161,20 @@ export function gitFindCommit(cwd, subject) {
     if (!gitHasCommits(cwd))
         return undefined;
     const output = git(cwd, ['log', COMMIT_FORMAT, '--fixed-strings', `--grep=${subject}`]);
-    for (const line of output.split('\n')) {
-        const commit = parseCommit(line);
-        if (commit?.subject === subject)
-            return commit;
-    }
-    return undefined;
+    return parseCommits(output).find((commit) => commit.subject === subject);
+}
+/** The latest commit whose subject starts with prefix, or undefined (also when there are no commits). Git failures throw. */
+export function gitFindCommitStarting(cwd, prefix) {
+    if (!gitHasCommits(cwd))
+        return undefined;
+    const output = git(cwd, ['log', COMMIT_FORMAT, '--fixed-strings', `--grep=${prefix}`]);
+    return parseCommits(output).find((commit) => commit.subject.startsWith(prefix));
+}
+/** The commits reachable from HEAD but not from since (every commit without since), oldest first. Git failures throw. */
+export function gitCommitsAfter(cwd, since) {
+    if (!gitHasCommits(cwd))
+        return [];
+    return parseCommits(git(cwd, ['log', '--reverse', COMMIT_FORMAT, since === undefined ? 'HEAD' : `${since}..HEAD`, '--']));
 }
 /** The file at HEAD, or undefined when there are no commits or HEAD does not contain it. path is relative to cwd. */
 export function gitHeadFile(cwd, path) {

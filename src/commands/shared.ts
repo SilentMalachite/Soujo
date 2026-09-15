@@ -16,13 +16,16 @@ import {
 import {
   gitAddAll,
   gitCommit,
+  gitHasCommits,
   gitHasStagedChanges,
   gitHeadFile,
   gitIgnored,
+  gitLastCommit,
   gitNotStaged,
   gitOperationInProgress,
   gitToplevel,
   gitUnmergedCount,
+  type Commit,
 } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext, type LogEntry, type Next, type PlanItem } from '../state.js';
 
@@ -32,11 +35,45 @@ const RECORDS = ['PLAN.md', 'LOG.md', 'NEXT.md'] as const;
 
 export const NO_LAYERS = 'PLAN.md に層がない';
 
+/** The start of the subject of a layer done commit. */
+export const LAYER_COMMIT = 'layer: ';
+
 /** The start of the first line of a LOG entry written by close. */
 export const INTERRUPTED = '中断: ';
 
 /** A note starting like a 中断 entry, in any spelling close accepts. */
 export const INTERRUPTION_NOTE = /^\s*中断\s*[:：]/;
+
+/** A failure becomes a value, so one unreadable file or git failure degrades one line of a status instead of the whole status. */
+export function attempt<T>(step: () => T): T | Error {
+  try {
+    return step();
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+/** Why git has no commit to show, as a status line says it. */
+export type NoCommit = 'git リポジトリではない' | 'まだない' | 'git の状態を読めない';
+
+/** Reads git history with read in a repository that has commits; otherwise, or when git fails, why there is nothing to show. */
+export function readGit<T>(root: string, read: () => T): T | NoCommit {
+  if (gitToplevel(root) === undefined) return 'git リポジトリではない';
+  const hasCommits = attempt(() => gitHasCommits(root));
+  if (hasCommits instanceof Error) return 'git の状態を読めない';
+  if (!hasCommits) return 'まだない';
+  const result = attempt(read);
+  return result instanceof Error ? 'git の状態を読めない' : result;
+}
+
+/** The last commit, or why there is none to show. */
+export function readHead(root: string): Commit | NoCommit {
+  return readGit(root, () => {
+    const commit = gitLastCommit(root);
+    if (commit === undefined) throw new Error('git log');
+    return commit;
+  });
+}
 
 /** The layers of PLAN.md in the project above cwd; throws outside Soujo projects or without PLAN.md. */
 export function readPlan(cwd: string): PlanItem[] {

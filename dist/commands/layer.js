@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
 import { gitAddedFiles, gitFindCommit, gitLastCommit } from '../git.js';
 import { appendLog, formatDate, logLines, markDone, parsePlan, validatePlan } from '../state.js';
-import { INTERRUPTED, INTERRUPTION_NOTE, commitRecords, headState, requireCommittable, requireNext, resumable, uncommittedLogs, } from './shared.js';
+import { INTERRUPTED, INTERRUPTION_NOTE, LAYER_COMMIT, commitRecords, headState, requireCommittable, requireNext, resumable, uncommittedLogs, } from './shared.js';
 const SHOWN_FILES = 5;
 function isChecked(plan, layer) {
     return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
@@ -53,7 +53,7 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     const item = parsePlan(plan).find((candidate) => candidate.layer === name);
     if (item === undefined)
         throw new Error(`PLAN.md に層「${name}」がない`);
-    const subject = `layer: ${name}`;
+    const subject = `${LAYER_COMMIT}${name}`;
     const committed = gitFindCommit(root, subject);
     if (committed !== undefined)
         throw new Error(`層「${name}」はコミット済み（${committed.hash}）`);

@@ -29,10 +29,16 @@ export function repo(t: TestContext): string {
   return dir;
 }
 
-/** Stages and commits everything in the repository. */
-export function commitAll(dir: string, message = 'test commit'): void {
-  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
-  execFileSync('git', ['commit', '-q', '-m', message], { cwd: dir, stdio: 'ignore' });
+/** Stages and commits everything in the repository, dated date when given (author and committer). */
+export function commitAll(dir: string, message = 'test commit', date?: Date): void {
+  const stamp = date === undefined ? {} : { GIT_AUTHOR_DATE: gitDate(date), GIT_COMMITTER_DATE: gitDate(date) };
+  const env = { ...process.env, ...stamp };
+  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore', env });
+  execFileSync('git', ['commit', '-q', '--allow-empty', '-m', message], { cwd: dir, stdio: 'ignore', env });
+}
+
+function gitDate(date: Date): string {
+  return `@${Math.floor(date.getTime() / 1000)} +0000`;
 }
 
 /** Writes .soujo/ with the given files into dir and returns dir. */

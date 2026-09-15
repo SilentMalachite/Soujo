@@ -2,18 +2,12 @@
 
 import { dirname } from 'node:path';
 import { readState, readTemplate, requireStateDir } from '../files.js';
-import { gitHasCommits, gitLastCommit, gitStatus, gitToplevel } from '../git.js';
-import { lastLog, newlyDone, nextLayer, nextStatus, parseNext, parsePlan, validateNext, type PlanItem } from '../state.js';
-import { clip, describeInvalidNext, headState, skill } from './shared.js';
+import { gitStatus, type Commit } from '../git.js';
+import { daysBetween, lastLog, newlyDone, nextLayer, nextStatus, parseNext, parsePlan, validateNext, type PlanItem } from '../state.js';
+import { attempt, clip, describeInvalidNext, headState, readHead, skill, type NoCommit } from './shared.js';
 
-// A failure becomes a value, so one unreadable file degrades one line instead of the whole status.
-function attempt<T>(step: () => T): T | Error {
-  try {
-    return step();
-  } catch (error) {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-}
+// From this many days since the last commit, 再開 points to soujo brief first.
+const AWAY_DAYS = 3;
 
 function normalized(text: string): string {
   return text.replace(/\r\n/g, '\n').trim();
@@ -31,9 +25,11 @@ function checkOf(item: PlanItem): string {
   return clip(item.condition || '未記入');
 }
 
-// 次 and 再開 from NEXT.md; PLAN's next layer when NEXT.md is missing, unreadable, invalid, or points to a finished layer.
-// Layer names are clipped like other values, except inside a command, which must stay runnable.
-function nextAndCommand(dir: string, plan: string | undefined | Error): [string, string] {
+/**
+ * 次 and 再開 from NEXT.md; PLAN's next layer when NEXT.md is missing, unreadable, invalid, or points to a finished layer.
+ * Layer names are clipped like other values, except inside a command, which must stay runnable.
+ */
+export function nextAndCommand(dir: string, plan: string | undefined | Error): [string, string] {
   const items = typeof plan === 'string' ? parsePlan(plan) : [];
   const text = attempt(() => readState(dir, 'NEXT.md'));
   const next = typeof text === 'string' ? parseNext(text) : undefined;
@@ -83,26 +79,28 @@ function logLine(dir: string): string {
   return `前回: ${entry.date} ${clip(entry.layer)}${first === undefined ? '' : ` — ${clip(first)}`}`;
 }
 
-function commitLine(root: string): string {
-  if (gitToplevel(root) === undefined) return 'コミット: git リポジトリではない';
-  const head = attempt(() => {
-    if (!gitHasCommits(root)) return 'まだない';
-    const commit = gitLastCommit(root);
-    if (commit === undefined) throw new Error('git log');
-    return `${commit.hash} ${clip(commit.subject)}`;
-  });
-  if (head instanceof Error) return 'コミット: git の状態を読めない';
+function commitLine(root: string, head: Commit | NoCommit): string {
+  if (head === 'git リポジトリではない' || head === 'git の状態を読めない') return `コミット: ${head}`;
+  const shown = typeof head === 'string' ? head : `${head.hash} ${clip(head.subject)}`;
   const changes = attempt(() => gitStatus(root).length);
-  if (changes instanceof Error) return `コミット: ${head}（未コミットの変更を数えられない）`;
-  return `コミット: ${head}${changes > 0 ? `（未コミット ${changes}件）` : ''}`;
+  if (changes instanceof Error) return `コミット: ${shown}（未コミットの変更を数えられない）`;
+  return `コミット: ${shown}${changes > 0 ? `（未コミット ${changes}件）` : ''}`;
+}
+
+// The hint appended to 再開 when the last commit is AWAY_DAYS or more days old.
+function awayHint(head: Commit | NoCommit, now: Date): string {
+  if (typeof head === 'string') return '';
+  const days = daysBetween(head.date, now);
+  return days >= AWAY_DAYS ? `・${days}日ぶり: 先に soujo brief` : '';
 }
 
 /** Four lines: 次 / 前回 / コミット / 再開. Unreadable files and git failures degrade their line; only a missing .soujo/ throws. */
-export function resume(cwd: string): string[] {
+export function resume(cwd: string, now: Date = new Date()): string[] {
   const dir = requireStateDir(cwd);
   const root = dirname(dir);
   const plan = attempt(() => readState(dir, 'PLAN.md'));
   const [next, command] = nextAndCommand(dir, plan);
   const items = typeof plan === 'string' ? parsePlan(plan) : [];
-  return [next, logLine(dir), commitLine(root), unfinishedLayerDone(root, items) ?? command];
+  const head = readHead(root);
+  return [next, logLine(dir), commitLine(root, head), `${unfinishedLayerDone(root, items) ?? command}${awayHint(head, now)}`];
 }

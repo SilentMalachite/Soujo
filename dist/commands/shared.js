@@ -1,16 +1,48 @@
 // Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 import { join } from 'node:path';
 import { STATE_DIR, STATE_FILES, isSymlink, readState, requireState, requireStateDir, stateTarget, statePath, trackedStatePath, } from '../files.js';
-import { gitAddAll, gitCommit, gitHasStagedChanges, gitHeadFile, gitIgnored, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, } from '../git.js';
+import { gitAddAll, gitCommit, gitHasCommits, gitHasStagedChanges, gitHeadFile, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext } from '../state.js';
 const CLIP = 60;
 // The records a layer or wip commit must carry as written.
 const RECORDS = ['PLAN.md', 'LOG.md', 'NEXT.md'];
 export const NO_LAYERS = 'PLAN.md に層がない';
+/** The start of the subject of a layer done commit. */
+export const LAYER_COMMIT = 'layer: ';
 /** The start of the first line of a LOG entry written by close. */
 export const INTERRUPTED = '中断: ';
 /** A note starting like a 中断 entry, in any spelling close accepts. */
 export const INTERRUPTION_NOTE = /^\s*中断\s*[:：]/;
+/** A failure becomes a value, so one unreadable file or git failure degrades one line of a status instead of the whole status. */
+export function attempt(step) {
+    try {
+        return step();
+    }
+    catch (error) {
+        return error instanceof Error ? error : new Error(String(error));
+    }
+}
+/** Reads git history with read in a repository that has commits; otherwise, or when git fails, why there is nothing to show. */
+export function readGit(root, read) {
+    if (gitToplevel(root) === undefined)
+        return 'git リポジトリではない';
+    const hasCommits = attempt(() => gitHasCommits(root));
+    if (hasCommits instanceof Error)
+        return 'git の状態を読めない';
+    if (!hasCommits)
+        return 'まだない';
+    const result = attempt(read);
+    return result instanceof Error ? 'git の状態を読めない' : result;
+}
+/** The last commit, or why there is none to show. */
+export function readHead(root) {
+    return readGit(root, () => {
+        const commit = gitLastCommit(root);
+        if (commit === undefined)
+            throw new Error('git log');
+        return commit;
+    });
+}
 /** The layers of PLAN.md in the project above cwd; throws outside Soujo projects or without PLAN.md. */
 export function readPlan(cwd) {
     return parsePlan(requireState(requireStateDir(cwd), 'PLAN.md'));

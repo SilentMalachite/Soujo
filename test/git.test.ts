@@ -9,7 +9,9 @@ import {
   gitChangedPaths,
   gitCommit,
   gitCommitAll,
+  gitCommitsAfter,
   gitFindCommit,
+  gitFindCommitStarting,
   gitHasCommits,
   gitHasStagedChanges,
   gitHeadFile,
@@ -22,7 +24,7 @@ import {
   gitToplevel,
   gitUnmergedCount,
 } from '../src/git.js';
-import { repo, temp } from './helpers.js';
+import { commitAll, repo, temp } from './helpers.js';
 
 test('gitToplevel finds the repository root from a subdirectory, or undefined outside', (t) => {
   const dir = repo(t);
@@ -230,6 +232,20 @@ test('gitFindCommit matches the whole subject only', (t) => {
   }
   assert.equal(gitFindCommit(dir, 'layer: L1'), undefined);
   assert.equal(gitFindCommit(dir, 'layer: L10 later')?.subject, 'layer: L10 later');
+});
+
+test('gitFindCommitStarting finds the latest subject with the prefix, and gitCommitsAfter lists later commits oldest first', (t) => {
+  const dir = repo(t);
+  assert.equal(gitFindCommitStarting(dir, 'layer: '), undefined);
+  assert.deepEqual(gitCommitsAfter(dir), []);
+  const date = new Date(2026, 8, 12, 9, 30);
+  for (const subject of ['layer: L1', 'fix: mention\tlayer: L9', 'layer: L2', 'fix: a', 'docs: b']) commitAll(dir, subject, date);
+  const layer = gitFindCommitStarting(dir, 'layer: ');
+  assert.equal(layer?.subject, 'layer: L2');
+  assert.equal(layer?.date.getTime(), Math.floor(date.getTime() / 1000) * 1000);
+  assert.deepEqual(gitCommitsAfter(dir, layer?.hash).map((commit) => commit.subject), ['fix: a', 'docs: b']);
+  assert.deepEqual(gitCommitsAfter(dir).map((commit) => commit.subject), ['layer: L1', 'fix: mention\tlayer: L9', 'layer: L2', 'fix: a', 'docs: b']);
+  assert.equal(gitLastCommit(dir)?.subject, 'docs: b');
 });
 
 test('gitCommit with nothing to commit throws a one-line error', (t) => {

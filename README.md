@@ -119,7 +119,8 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md` |
 | `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md` as they are, keeping the last entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
 | `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>` |
-| `soujo resume` | Four-line status |
+| `soujo resume` | Four-line status; from 3 days after the last commit, `再開:` points to `soujo brief` |
+| `soujo brief` | Five lines for returning after days away: PLAN progress and the last layer, commits since it, the last `節目` entry, days since the last commit, the next step; writes nothing |
 | `soujo close [--note '<note>']` | Logs the interruption → commits `wip: <layer>` |
 | `soujo map plan` / `soujo map code [<dir>]` | ASCII plan diagram / Mermaid import graph or directory tree |
 

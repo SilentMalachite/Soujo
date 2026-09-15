@@ -7,6 +7,7 @@ import { appendLog, formatDate, logLines, markDone, parsePlan, validatePlan } fr
 import {
   INTERRUPTED,
   INTERRUPTION_NOTE,
+  LAYER_COMMIT,
   commitRecords,
   headState,
   requireCommittable,
@@ -65,7 +66,7 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   const item = parsePlan(plan).find((candidate) => candidate.layer === name);
   if (item === undefined) throw new Error(`PLAN.md に層「${name}」がない`);
 
-  const subject = `layer: ${name}`;
+  const subject = `${LAYER_COMMIT}${name}`;
   const committed = gitFindCommit(root, subject);
   if (committed !== undefined) throw new Error(`層「${name}」はコミット済み（${committed.hash}）`);
   if (isChecked(headState(root, 'PLAN.md'), name)) {

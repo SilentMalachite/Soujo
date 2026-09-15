@@ -119,7 +119,8 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記 |
 | `soujo log rotate [--before <YYYY-MM>]` | 今月（か `--before`）より前の月のエントリをそのままの形で `LOG-YYYY-MM.md` へ移し（最後のエントリは残す）、`log: rotate <月>` でコミット。ほかの未コミットの変更があれば拒否し、失敗後の再実行は同じ移動を仕上げる |
 | `soujo layer done '<層>' [--note '<メモ>']` | PLAN の層にチェック → LOG に追記 → `layer: <層>` でコミット |
-| `soujo resume` | 4行の現在地 |
+| `soujo resume` | 4行の現在地。最終コミットから3日以上なら `再開:` が `soujo brief` を指す |
+| `soujo brief` | 何日か離れた後に戻るための5行：PLAN の進捗と最後の層、その後のコミット、最後の `節目` エントリ、最終コミットからの日数、次の一手。何も書かない |
 | `soujo close [--note '<メモ>']` | 中断を記録 → `wip: <層>` でコミット |
 | `soujo map plan` / `soujo map code [<ディレクトリ>]` | 計画の ASCII 図 / import の Mermaid 図かディレクトリ木 |
 
