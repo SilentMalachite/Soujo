@@ -312,3 +312,7 @@ skills テストで順序と条件を固定。SPEC(+ja) §3・§7・§14、READM
 grok レビュー L19 の15件を修正: resume スキルは 再開: で始まる行が 日ぶり: 先に soujo brief で終わるときだけ4行の後に brief、失敗時の出力を resume/brief で分けた
 go・CLAUDE/AGENTS(+templates) は go の中で brief を走らせない。skills テストで CLI の実出力・条件・否定・失敗の形・go の非実行を固定。SPEC §7・README・CHANGELOG(+ja) 同期
 訂正: L19 の SPEC(+ja) §3・§7・§14 は親の docs: plan L19 で記載（L19 のコミットは README・CHANGELOG・スキル・テスト）
+
+## 2026-09-15 release-0.3.1
+0.3.1 をリリース（2026-09-15）: resume スキルが 再開: の brief 案内に従い4行の後に brief の5行を返し、go とテンプレートは go の中で brief を走らせない
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.1 にし、CHANGELOG(+ja) の未リリース節を 0.3.1 — 2026-09-15 にした
