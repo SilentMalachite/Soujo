@@ -75,7 +75,7 @@ Soujo/
 ├── templates/                        # soujo init が導入先に複製するファイル
 │   ├── CLAUDE.md（Opus 5 版）  AGENTS.md（Astra 版）
 │   └── SPEC.md  PLAN.md  LOG.md  NEXT.md
-├── CLAUDE.md  AGENTS.md              # このリポジトリ自身の指示（templates と同一内容）
+├── CLAUDE.md  AGENTS.md              # このリポジトリ自身の指示（templates の内容＋このリポジトリの節）
 ├── README.md  SPEC.md  CHANGELOG.md  CONTRIBUTING.md  SECURITY.md  CODE_OF_CONDUCT.md  LICENSE  （＋ .ja.md の日本語訳）
 ├── .github/                          # Issue フォーム、プルリクエストのテンプレート、CI（npm test）、Dependabot
 └── package.json  tsconfig.json  tsconfig.test.json
@@ -112,26 +112,26 @@ effort: <low|medium|high|xhigh>
 - 出力は常に短く、日本語。標準出力は原則5行以内（`--help` と `map` は超える）。エラーは標準エラーに1行、終了コード1。
 - どのホストから呼ばれても同じ動作。ホスト判定はしない（`--hook` だけが Claude Code のフック向けの出力に切り替える）。
 - `.soujo/` はカレントディレクトリから親へ辿って探し、git のトップレベル（`.git` のあるディレクトリ）で止める。
-- `.soujo/` のファイルは、実体の隣に排他的に作った一時ファイルで置き換え、権限を保つ。それらを書くかコミットするコマンドは、先に中断された書き込みが残した一時ファイルを消す。symlink（ファイルのものも `.soujo/` のものも）はプロジェクト内かつ `.git` の外のファイルへだけ辿り、それ以外への書き込みは拒否する。
+- `.soujo/` のファイルは、実体の隣に排他的に作った一時ファイルで置き換え、権限を保つ。`init` はその一時ファイルを置き先へリンクして作る（CLAUDE.md / AGENTS.md も）ので、書きかけのファイルを残さず、既存のものを置き換えない。それらを書くかコミットするコマンドは、先に中断された書き込みが残した一時ファイルを消す。symlink（ファイルのものも `.soujo/` のものも）はプロジェクト内かつ `.git` の外のファイルへだけ辿り、それ以外への読み書きは拒否する。読むのは通常のファイルだけ。
 
 | コマンド | 動作 | 出力 |
 |---|---|---|
 | `soujo --help` / `soujo <コマンド> --help` | 使い方の行を標準出力に出して終了0：最初の引数なら全コマンド、コマンドの後ならそのコマンドの1行、2語コマンドの1語目（`next`・`plan`・`log`・`layer`・`map`）の後ならその語で始まるコマンド（後に不明な語が続いても）。`-h` も同じ。`--` より前の単独の引数だけが対象（`--note=--help` や `--` の後は普通の引数）で、ほかの引数より先に判定するので、何も検査・実行しない（`--hook` 付きの `next show` / `next check` でも）。各行はそのコマンドの使い方エラーが示すのと同じ `soujo …` の文字列（`next check` には使い方エラーがない）。不明なコマンドは従来どおり、打たれた名前を示すエラーで、コマンドなし・不明なコマンドのエラーは `soujo --help` を案内する | 1コマンド1行 |
-| `soujo init` | templates から `.soujo/` を作り、CLAUDE.md / AGENTS.md がなければ複製する。git 管理下ならトップレベルに作る。既存ファイルは上書きしない | 作成したファイル＋作らなかったファイルの1行。git 管理外なら `git init` が要る旨の1行 |
+| `soujo init` | templates から `.soujo/` を作り、CLAUDE.md / AGENTS.md がなければ複製する。git 管理下ならトップレベルに作る。既存ファイルは上書きしない。状態ファイルの実体（ファイルか `.soujo/` の symlink の先）がプロジェクトの外か `.git` の中なら、何も作らずに拒否 | 作成したファイル＋作らなかったファイルの1行。git 管理外なら `git init` が要る旨の1行 |
 | `soujo next show [--hook]` | `NEXT.md` を表示。なければ「NEXT.md なし」。`--hook` 時は NEXT.md がなければ何も出さない | 5行 |
-| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。層 `spec` / `plan`（前後の空白を除き、大文字小文字も含めて完全一致で比べる）の effort は `high`（§7）：`high` 以外の `--effort` は拒否して何も書かず、エラーは `--effort` を外すよう示す。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否 | 1行 |
-| `soujo next check [--hook]` | NEXT.md がない・無効・PLAN で `[x]` 済みの層か未チェックの層より後ろを指す（`plan` はすべての層より後ろ）、またはプロジェクト内に未コミット変更があれば警告（未追跡のディレクトリは `status.showUntrackedFiles` の設定によらず1件と数える）。Soujo を使っていないプロジェクトでは無音。`--hook` 時は `{"systemMessage": "..."}`。**終了コードは常に0** | 0〜1行 |
+| `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。層 `spec` / `plan`（前後の空白を除き、大文字小文字も含めて完全一致で比べる）の effort は `high`（§7）：`high` 以外の `--effort` は拒否して何も書かず、エラーは `--effort` を外すよう示す。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否。PLAN に同じ層名が複数あるか `spec` / `plan` という層がある間は、どの層も何も書かずに拒否 | 1行 |
+| `soujo next check [--hook]` | NEXT.md がない・無効・PLAN で `[x]` 済みの層か未チェックの層より後ろを指す（`plan` はすべての層より後ろ）、PLAN に同じ層名が複数あるか `spec` / `plan` という層がある、またはプロジェクト内に未コミット変更があれば警告（未追跡のディレクトリは `status.showUntrackedFiles` の設定によらず1件と数える）。Soujo を使っていないプロジェクトでは無音。`--hook` 時は `{"systemMessage": "..."}`。**終了コードは常に0** | 0〜1行 |
 | `soujo plan list` | 層の一覧と完了状態 | 層数分 |
 | `soujo plan next` | 最初の未完了層と完了条件 | 2行 |
 | `soujo log add <層名> --line ...` | `LOG.md` に追記（1〜3行） | 1行 |
-| `soujo layer done <層名> [--note ...]` | PLAN にチェック → LOG 追記 → プロジェクトのディレクトリで `git add -A -- .` と `git commit -m "layer: <層名>" -- .`（サブディレクトリのプロジェクトはそこだけをコミット）。次のときは何も書かずに拒否する：層が PLAN にない・note が LOG の上限を破るか `中断:` で始まる（`close` 専用）／NEXT.md がない・無効・`次:` がまだこの層／git リポジトリでない、`.soujo/` が symlink、状態ファイルの実体（symlink の先）がプロジェクトの外か `.git` の中、merge・rebase・cherry-pick・revert の途中（残った `sequencer/` を含む）、競合が未解決、`.soujo/` のファイルかその symlink の先が git に無視されている／コミット済み（`layer: <層名>` のコミットがある、または HEAD の PLAN でチェック済み）。チェックが作業ツリーにだけある（前回が途中で止まった）ときは、HEAD にまだないこの層の完了エントリが LOG のどこにもなければ（`close` の「中断」エントリは数えない）追記してコミットする。PLAN・LOG・NEXT が書いたとおりにステージされていない（skip-worktree など）間は何もコミットしない。書いた後の失敗は記録済みの範囲を示し、原因を直して再実行すれば続きから進む | 1行（追加ファイルを最大5件添える） |
+| `soujo layer done <層名> [--note ...]` | PLAN にチェック → LOG 追記 → プロジェクトのディレクトリで `git add -A -- .` と `git commit -m "layer: <層名>" -- .`（サブディレクトリのプロジェクトはそこだけをコミット）。次のときは何も書かずに拒否する：層が PLAN にない・PLAN に同じ層名が複数あるか `spec` / `plan` という層がある・note が LOG の上限を破るか `中断:` で始まる（`close` 専用）／NEXT.md がない・無効・`次:` がまだこの層／git リポジトリでない、`.soujo/` が symlink、状態ファイルの実体（symlink の先）がプロジェクトの外か `.git` の中、merge・rebase・cherry-pick・revert の途中（残った `sequencer/` を含む）、競合が未解決、`.soujo/` のファイルかその symlink の先が git に無視されている／コミット済み（`layer: <層名>` のコミットがある、または HEAD の PLAN でチェック済み）。チェックが作業ツリーにだけある（前回が途中で止まった）ときは、HEAD にまだないこの層の完了エントリが LOG のどこにもなければ（`close` の「中断」エントリは数えない）追記してコミットする。PLAN・LOG・NEXT が書いたとおりにステージされていない（skip-worktree など）間は何もコミットしない。書いた後の失敗は記録済みの範囲を示し、原因を直して再実行すれば続きから進む | 1行（追加ファイルを最大5件添える） |
 | `soujo resume` | `次: <層>（effort: <e>）確認: <確認>`（NEXT.md）／`前回: <日付> <層> — <1行目>`（LOG.md 末尾エントリ）／`コミット: <hash> <件名>（未コミット N件）`／`再開: /soujo:go（Codex は $go）`。値は層名も含めて60文字で `…` に切る。ただしコマンドの中の層名は切らない。NEXT.md がない・読めない・無効・チェック済みの層を指すとき：`次:` は PLAN の次の層、`再開:` に理由と `soujo next set`。残りの層がなければ `/soujo:spec`（SPEC.md がないかテンプレートのまま）か `/soujo:plan`。NEXT.md が未チェックの層より後ろを指すとき（`次: plan` を含む）：`次:` はその層、`再開:` は `soujo layer done` を示す。PLAN のチェックが未コミット（layer done が途中）なら `再開:` はその再実行。読めないファイルや git の失敗はその行だけを縮退させる | 4行 |
 | `soujo close [--note ...]` | `--note` を LOG に「中断: ...」で記録 → プロジェクトを `wip: <層名>` でコミット → 再開方法。次のときは何も書かずに終了1：layer done と同じコミット不能条件／NEXT.md がない・無効・チェック済みの層を指す／PLAN のチェックが未コミット（先に layer done を再実行）／note が空・LOG の上限を破る。PLAN・LOG・NEXT が書いたとおりにステージされていない（skip-worktree など）間は何もコミットしない。層は `次:`、ただし `次:` が未チェックの層より後ろを指すとき（next set と layer done の間で止まった）はその未チェックの層。HEAD にまだないその層の「中断」エントリが LOG のどこかにあれば追記せず残すので、コミット失敗後の再実行はコミットだけやり直す | 2行 |
 | `soujo map plan` | `PLAN.md` を縦の ASCII 図に（完了 `[x]`／次 `←次`、完了条件を縦線 `\|` の横に）。全層完了なら末尾に `全層完了` | 層数×2行 |
 | `soujo map code [dir]` | `dir`（既定はプロジェクトのルート、Soujo 外では cwd）の主言語（ファイル数が最多）の相対 import を Mermaid `graph LR` にする。言語は `src/map.ts` の `LANGUAGES` に1行ずつ。import 規則を持つ行（初期は TS/JS）だけを図にし、主言語が規則なし・認識できるファイルがないときは ASCII のディレクトリ木。パッケージとパス別名の import と、固定の文字列1つでない指定（`'./a' + b`）は線にしない。指定の中のエスケープは復号する。`node_modules`・`dist`・`build`・`target`・`vendor`・`deps`・`_build`・`__pycache__`・`venv`・`coverage`・ドットで始まるもの・symlink は除外。読めないサブディレクトリとファイルは飛ばして件数を示す。上限は走査5000件・ファイル100（つながりの多い順に残す）・線300・木200行で、超えたら注記 | Mermaid か木 |
 
 `state.ts` の公開関数（純粋関数、それぞれテストあり）：
-`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `formatItem` / `nextLayer` / `nextStatus` / `newlyDone` / `markDone` / `printable` / `logLines` / `appendLog` / `parseLog` / `lastLog` / `formatDate`。
+`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `validatePlan` / `formatItem` / `nextLayer` / `nextStatus` / `newlyDone` / `markDone` / `printable` / `logLines` / `appendLog` / `parseLog` / `lastLog` / `formatDate`。
 
 ## 7. スキル（`skills/`、両ホスト共有）
 
@@ -254,7 +254,9 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - `layer done` と `close` はコミット前に PLAN・LOG・NEXT が書いたとおりにステージされたかを確かめる。それらを欠いたままコミットすると、`layer done` の再実行はコミット済みとして拒否され、`close` は「中断」エントリのない、または古い `NEXT.md` の `wip:` コミットを残すため。
 - git の状態はユーザーの設定によらず同じに読む：未追跡のファイルは `status.showUntrackedFiles` によらず数え、残った `sequencer/` は `git status` と同じく cherry-pick か revert の途中とみなす。
 - プラグインも CLI も GitHub から直接入れる（§8）。CLI はアーカイブの URL `https://github.com/SilentMalachite/Soujo/archive/refs/heads/main.tar.gz` から入れる。npm 10 は `github:SilentMalachite/Soujo` を、あとで消す一時的な複製へのリンクとして入れ、入れ直しではその git 依存の準備をやり直して失敗するため。`.claude-plugin/plugin.json` は `version` を持たず、コミットごとに `claude plugin update` が届く。Codex のマニフェストは `package.json` の版を保つ。
-- 書き込みはプロジェクトの外に出ない（§6）。取得したリポジトリに仕込まれた symlink で、ふだんの記録操作がユーザーのファイルを上書きしうるため。
+- 読み書きはプロジェクトの外に出ない（§6）。取得したリポジトリに仕込まれた symlink で、ふだんの記録操作がユーザーのファイルを上書きしたり、モデルに届くフックの出力や警告に載せたりしうるため。
+- 層名は PLAN に1回だけ現れ、`spec` / `plan` にしない：そうでなければ `next set` と `layer done` は拒否し、`next check` は警告する。重複した層は自分の `layer:` コミットを持てず、`次: plan` はフェーズと同名の層を区別できないため。フェーズは PLAN の層と照合しない。
+- `templates/CLAUDE.md` / `templates/AGENTS.md` はどのプロジェクトにも当てはまる内容だけを持ち、このリポジトリの写しは末尾に Soujo 本体の節を足す。`soujo init` がどのスタックのプロジェクトにもテンプレートを複製するため。
 
 未決：
 - `LOG.md` が長くなったときの巻き取り（月ごとに `LOG-YYYY-MM.md` へ退避する `soujo log rotate`）。

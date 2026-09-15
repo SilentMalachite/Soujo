@@ -3,7 +3,7 @@
 import { dirname } from 'node:path';
 import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
 import { gitAddedFiles, gitFindCommit, gitLastCommit } from '../git.js';
-import { appendLog, formatDate, logLines, markDone, parsePlan } from '../state.js';
+import { appendLog, formatDate, logLines, markDone, parsePlan, validatePlan } from '../state.js';
 import {
   INTERRUPTED,
   INTERRUPTION_NOTE,
@@ -42,6 +42,7 @@ function describeAdded(root: string): string {
 /**
  * States, decided before anything is written:
  * - not committable (no repository, unfinished merge/rebase, unmerged files, ignored .soujo/ files) → refuse
+ * - PLAN with a repeated layer name or a layer named like a phase (see validatePlan) → refuse
  * - committed ("layer: <layer>" exists)                       → refuse
  * - checked in PLAN at HEAD (committed under another subject), even if unchecked again in the working tree → refuse
  * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
@@ -59,6 +60,8 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
 
   const name = layer.trim();
   const plan = requireState(dir, 'PLAN.md');
+  const planProblems = validatePlan(plan);
+  if (planProblems.length > 0) throw new Error(`${planProblems.join('、')}（PLAN.md の層名を直してから）`);
   const item = parsePlan(plan).find((candidate) => candidate.layer === name);
   if (item === undefined) throw new Error(`PLAN.md に層「${name}」がない`);
 

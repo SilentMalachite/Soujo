@@ -2,7 +2,7 @@
 import { dirname } from 'node:path';
 import { findStateDir, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitStatus, gitToplevel } from '../git.js';
-import { formatNext, nextStatus, parseNext, parsePlan, validateNext } from '../state.js';
+import { PHASES, formatNext, nextStatus, parseNext, parsePlan, validateNext, validatePlan } from '../state.js';
 /** NEXT.md as lines. With hook, silent when there is nothing to show (no project, no file, unreadable). */
 export function nextShow(cwd, hook) {
     try {
@@ -19,14 +19,12 @@ export function nextShow(cwd, hook) {
         throw error;
     }
 }
-// Steps outside PLAN's layers, matched exactly after trimming: spec and plan before the first layer, plan after the last.
-const PHASES = ['spec', 'plan'];
 // The effort of the spec and plan skills (SPEC §7), so that it is not chosen anew after the last layer.
 const PHASE_EFFORT = 'high';
 /**
  * Rewrites NEXT.md. Writes nothing when the result would be invalid, when a phase gets an effort other than
- * PHASE_EFFORT, or when PLAN.md has layers and the layer is neither one of them nor a phase: a mistyped name would
- * otherwise pass next check and resume until layer done.
+ * PHASE_EFFORT, when PLAN.md has ambiguous layer names, or when PLAN.md has layers and the layer is neither one of them
+ * nor a phase: a mistyped name would otherwise pass next check and resume until layer done.
  */
 export function nextSet(cwd, input) {
     const dir = requireStateDir(cwd);
@@ -40,7 +38,11 @@ export function nextSet(cwd, input) {
     if (phase && parseNext(text)?.effort !== PHASE_EFFORT) {
         throw new Error(`NEXT.md を書かない: 層「${layer}」の effort は ${PHASE_EFFORT} 固定（--effort を外して再実行）`);
     }
-    const items = parsePlan(readState(dir, 'PLAN.md') ?? '');
+    const plan = readState(dir, 'PLAN.md') ?? '';
+    const planProblems = validatePlan(plan);
+    if (planProblems.length > 0)
+        throw new Error(`NEXT.md を書かない: ${planProblems.join('、')}（PLAN.md の層名を直してから）`);
+    const items = parsePlan(plan);
     if (items.length > 0 && !phase && !items.some((item) => item.layer === layer)) {
         throw new Error(`NEXT.md を書かない: PLAN.md に層「${layer}」がない（PLAN の層名をそのまま、または ${PHASES.join(' / ')}）`);
     }
@@ -52,19 +54,20 @@ export function nextSet(cwd, input) {
 function problems(dir) {
     const found = [];
     const next = readState(dir, 'NEXT.md');
+    const plan = readState(dir, 'PLAN.md');
     if (next === undefined) {
         found.push('NEXT.md がない');
     }
     else {
         found.push(...validateNext(next));
         const layer = parseNext(next)?.layer;
-        const plan = readState(dir, 'PLAN.md');
         const status = layer === undefined || plan === undefined ? undefined : nextStatus(layer, parsePlan(plan));
         if (status?.state === 'done')
             found.push(`NEXT.md の次「${layer}」は PLAN で完了済み`);
         if (status?.state === 'skipped')
             found.push(`NEXT.md の次「${layer}」より前の「${status.unfinished.layer}」が PLAN で未完了`);
     }
+    found.push(...validatePlan(plan ?? ''));
     const root = dirname(dir);
     if (gitToplevel(root) !== undefined) {
         const changes = gitStatus(root).length;

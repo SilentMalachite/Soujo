@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nextCheck, nextSet, nextShow } from '../src/commands/next.js';
 import { commitAll, project, repo, temp } from './helpers.js';
@@ -105,6 +105,22 @@ test('next set writes effort high for spec and plan, and refuses any other effor
   assert.throws(() => nextSet(temp(t), { ...base, layer: 'plan', effort: 'medium' }), /\.soujo\/ が見つからない/);
 });
 
+test('next set refuses while PLAN.md repeats a layer name or names a layer like a phase, and writes nothing', (t) => {
+  const base = { premise: 'p', check: 'c' };
+  const repeated = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': `${PLAN}- [ ] L2 state — again\n` });
+  for (const layer of ['L2 state', 'plan']) {
+    assert.throws(
+      () => nextSet(repeated, { ...base, layer }),
+      /^Error: NEXT\.md を書かない: PLAN\.md の層「L2 state」が重複（PLAN\.md の層名を直してから）$/,
+    );
+  }
+  assert.equal(readNext(repeated), NEXT);
+
+  const phase = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': `${PLAN}- [ ] plan — PLAN を書く\n` });
+  assert.throws(() => nextSet(phase, { ...base, layer: 'L2 state' }), /PLAN\.md の層名「plan」がフェーズ名と同じ/);
+  assert.equal(readNext(phase), NEXT);
+});
+
 test('next check is silent for a clean tree with a valid NEXT.md, and outside Soujo projects', (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
   commitAll(dir);
@@ -134,6 +150,28 @@ test('next check warns when NEXT.md moved past a layer that was never closed', (
 
   const plan = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'plan'), 'PLAN.md': PLAN });
   assert.deepEqual(nextCheck(plan, false), ['soujo 警告: NEXT.md の次「plan」より前の「L2 state」が PLAN で未完了']);
+});
+
+test('next check warns about repeated layer names and layers named like a phase, even without NEXT.md', (t) => {
+  const done = '- [x] L1 scaffold — build\n- [x] plan — PLAN\n- [x] L1 scaffold — again\n';
+  const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'plan'), 'PLAN.md': done });
+  assert.deepEqual(nextCheck(dir, false), [
+    'soujo 警告: PLAN.md の層名「plan」がフェーズ名と同じ / PLAN.md の層「L1 scaffold」が重複',
+  ]);
+  const missing = project(temp(t), { 'PLAN.md': done });
+  assert.match(nextCheck(missing, false)[0] ?? '', /^soujo 警告: NEXT\.md がない \/ PLAN\.md の層名「plan」/);
+});
+
+test('next show --hook and next check never read a state file through a symlink leaving the project', { skip: process.platform === 'win32' }, (t) => {
+  const secret = join(temp(t), 'secret');
+  writeFileSync(secret, '次: token-123\n');
+  const dir = project(temp(t), { 'PLAN.md': PLAN });
+  symlinkSync(secret, join(dir, '.soujo', 'NEXT.md'));
+  assert.deepEqual(nextShow(dir, true), []);
+  assert.throws(() => nextShow(dir, false), /^Error: NEXT\.md を読まない: 実体（symlink の先）がプロジェクトの外$/);
+  const [line] = nextCheck(dir, true);
+  assert.doesNotMatch(line ?? '', /token-123/);
+  assert.match(line ?? '', /確認できない: NEXT\.md を読まない/);
 });
 
 test('next check counts untracked files even when git hides them from status', (t) => {

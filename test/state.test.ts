@@ -16,6 +16,7 @@ import {
   parsePlan,
   printable,
   validateNext,
+  validatePlan,
 } from '../src/state.js';
 
 const NEXT = '次: L2 state\n前提: L1 完了\n確認: npm test が通る\n注意: なし\neffort: medium\n';
@@ -208,6 +209,22 @@ test('nextStatus puts plan after every layer, so an unchecked layer before it wa
   assert.deepEqual(nextStatus('plan', []), { state: 'ok' });
   assert.deepEqual(nextStatus('spec', last), { state: 'ok' });
   assert.deepEqual(nextStatus('L9', last), { state: 'ok' });
+});
+
+test('nextStatus never takes a phase for a PLAN layer of the same name', () => {
+  const named = parsePlan('- [x] spec — a\n- [x] plan — b\n- [ ] L3 — c\n');
+  assert.deepEqual(nextStatus('spec', named), { state: 'ok' });
+  assert.deepEqual(nextStatus('plan', named), { state: 'skipped', unfinished: { layer: 'L3', condition: 'c', done: false } });
+});
+
+test('validatePlan reports repeated layer names and layers named like a phase, once each', () => {
+  assert.deepEqual(validatePlan(PLAN), []);
+  assert.deepEqual(validatePlan(''), []);
+  assert.deepEqual(validatePlan('- [x] L1 — a\n- [ ] L1 — b\n- [ ] L1\n- [ ] plan — c\n- [x] spec\n- [ ] Plan — d\n'), [
+    'PLAN.md の層「L1」が重複',
+    'PLAN.md の層名「plan」がフェーズ名と同じ',
+    'PLAN.md の層名「spec」がフェーズ名と同じ',
+  ]);
 });
 
 test('newlyDone lists layers checked only in the later PLAN', () => {

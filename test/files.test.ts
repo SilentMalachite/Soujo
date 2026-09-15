@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -22,6 +23,7 @@ import {
   readState,
   readTemplate,
   removeLeftoverTemps,
+  removeTempsOf,
   requireState,
   requireStateDir,
   stateTarget,
@@ -62,8 +64,38 @@ test('findStateDir returns undefined and requireStateDir throws outside Soujo pr
 test('readState returns undefined for a missing file and the text otherwise', (t) => {
   const dir = temp(t);
   assert.equal(readState(dir, 'NEXT.md'), undefined);
+  assert.equal(readState(join(dir, 'missing'), 'NEXT.md'), undefined);
   writeFileSync(join(dir, 'NEXT.md'), '次: L1\n');
   assert.equal(readState(dir, 'NEXT.md'), '次: L1\n');
+});
+
+test('readState follows symlinks only inside the project and outside .git, and reads only regular files', { skip: process.platform === 'win32' }, (t) => {
+  const outside = temp(t);
+  writeFileSync(join(outside, 'secret'), 'token\n');
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(dir);
+  mkdirSync(join(root, '.git'));
+  writeFileSync(join(root, '.git', 'config'), 'token\n');
+  writeFileSync(join(root, 'PLAN.md'), 'plan\n');
+  symlinkSync('../PLAN.md', join(dir, 'PLAN.md'));
+  symlinkSync(join(outside, 'secret'), join(dir, 'LOG.md'));
+  symlinkSync('../.git/config', join(dir, 'NEXT.md'));
+  symlinkSync('/dev/null', join(dir, 'SPEC.md'));
+  assert.equal(readState(dir, 'PLAN.md'), 'plan\n');
+  assert.throws(() => readState(dir, 'LOG.md'), /^Error: LOG\.md を読まない: 実体（symlink の先）がプロジェクトの外$/);
+  assert.throws(() => readState(dir, 'NEXT.md'), /^Error: NEXT\.md を読まない: 実体（symlink の先）が\.git の中$/);
+  assert.throws(() => readState(dir, 'SPEC.md'), /^Error: SPEC\.md を読まない: 実体（symlink の先）がプロジェクトの外$/);
+
+  const fifo = temp(t);
+  mkdirSync(join(fifo, '.soujo'));
+  execFileSync('mkfifo', [join(fifo, '.soujo', 'NEXT.md')]);
+  assert.throws(() => readState(join(fifo, '.soujo'), 'NEXT.md'), /^Error: NEXT\.md を読めない: 通常のファイルではない$/);
+
+  const linkedDir = temp(t);
+  symlinkSync(outside, join(linkedDir, '.soujo'));
+  writeFileSync(join(outside, 'NEXT.md'), 'token\n');
+  assert.throws(() => readState(join(linkedDir, '.soujo'), 'NEXT.md'), /を読まない: 実体（symlink の先）がプロジェクトの外$/);
 });
 
 test('writeState replaces the file without leaving temporary files', (t) => {
@@ -188,13 +220,31 @@ test('ensureStateDir creates .soujo/ once and fails in one line when a file is i
   assert.throws(() => ensureStateDir(blocked), /^Error: \.soujo\/ を作れない: [^\n]+$/);
 });
 
-test('createFile creates only when nothing exists, including symlinks', (t) => {
+test('createFile creates only when nothing exists, including symlinks, and leaves no temporary file', (t) => {
   const dir = temp(t);
   assert.equal(createFile(join(dir, 'a.md'), 'first\n'), true);
   assert.equal(createFile(join(dir, 'a.md'), 'second\n'), false);
   assert.equal(readFileSync(join(dir, 'a.md'), 'utf8'), 'first\n');
   symlinkSync('missing-target.md', join(dir, 'link.md'));
   assert.equal(createFile(join(dir, 'link.md'), 'x'), false);
+  assert.deepEqual(readdirSync(dir).sort(), ['a.md', 'link.md']);
+  assert.equal(statSync(join(dir, 'a.md')).nlink, 1);
+});
+
+test('createFile never writes through an existing temporary path, and removeTempsOf clears it', { skip: process.platform === 'win32' }, (t) => {
+  const outside = join(temp(t), 'victim');
+  writeFileSync(outside, 'keep\n');
+  const dir = temp(t);
+  const planted = join(dir, `.CLAUDE.md.${process.pid}.tmp`);
+  symlinkSync(outside, planted);
+  writeFileSync(join(dir, '.CLAUDE.md.77.tmp'), 'half');
+  assert.throws(() => createFile(join(dir, 'CLAUDE.md'), 'x'), /^Error: CLAUDE\.md を作れない: [^\n]*EEXIST/);
+  assert.equal(readFileSync(outside, 'utf8'), 'keep\n');
+  assert.equal(existsSync(join(dir, 'CLAUDE.md')), false);
+
+  removeTempsOf(join(dir, 'CLAUDE.md'));
+  assert.deepEqual(readdirSync(dir), []);
+  assert.equal(createFile(join(dir, 'CLAUDE.md'), 'x'), true);
 });
 
 test('packageDir finds the soujo package root and readTemplate reads from templates/', () => {

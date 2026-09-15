@@ -1,7 +1,17 @@
 // soujo init: copies templates into the project root without overwriting anything.
 
 import { join, resolve } from 'node:path';
-import { STATE_DIR, STATE_FILES, createFile, ensureStateDir, readTemplate, removeLeftoverTemps } from '../files.js';
+import {
+  STATE_DIR,
+  STATE_FILES,
+  createFile,
+  ensureStateDir,
+  readTemplate,
+  removeLeftoverTemps,
+  removeTempsOf,
+  stateTarget,
+  statePath,
+} from '../files.js';
 import { gitToplevel } from '../git.js';
 
 const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'];
@@ -9,7 +19,16 @@ const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'];
 export function init(cwd: string): string[] {
   const toplevel = gitToplevel(cwd);
   const root = toplevel ?? resolve(cwd);
-  removeLeftoverTemps(ensureStateDir(root));
+  const dir = ensureStateDir(root);
+  // The rule writeState follows, checked before anything is created: a symlinked .soujo/ or state file planted in a
+  // repository must not place files outside the project or inside .git.
+  for (const file of STATE_FILES) {
+    const { problem } = stateTarget(dir, file);
+    if (problem !== undefined) throw new Error(`${statePath(file)} の実体（symlink の先）が${problem}なので init しない`);
+  }
+  removeLeftoverTemps(dir);
+  for (const file of ROOT_FILES) removeTempsOf(join(root, file));
+
   const targets = [
     ...STATE_FILES.map((file) => ({ template: file, path: `${STATE_DIR}/${file}` })),
     ...ROOT_FILES.map((file) => ({ template: file, path: file })),

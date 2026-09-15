@@ -1,6 +1,6 @@
 # AGENTS.md（GPT-6 Astra 版）
 
-Codex でこのリポジトリを扱うときの指示。`templates/AGENTS.md` と同一内容。
+Codex でこのリポジトリを扱うときの指示。
 Claude Code 用の `CLAUDE.md` より短いのは意図的（Astra は指示が多いほど文脈を浪費し、止まりやすくなる）。
 
 ## 相手
@@ -31,6 +31,10 @@ Claude Code 用の `CLAUDE.md` より短いのは意図的（Astra は指示が�
 
 ## スタック
 
-- 本体：TypeScript / Node 20+ / ESM、実行時依存ゼロ、`node:test`。ロジックは `src/`、SKILL.md には `soujo` の呼び方だけ。`dist/` はコミットする。
-- 導入先の言語・フレームワークは `.soujo/SPEC.md` の技術判断とリポジトリの設定ファイルから読み取る。決めつけない。既存の慣習を優先する。
+- 言語・フレームワークは `.soujo/SPEC.md` の技術判断とリポジトリの設定ファイルから読み取る。決めつけない。既存の慣習を優先する。
 - 秘匿情報（認証情報・セッション URL・個人情報・ホームディレクトリの絶対パス）をコード・ログ・コミットメッセージに含めない。
+
+## Soujo 本体（このリポジトリだけ）
+
+- ここより上は `soujo init` が導入先へ複製する `templates/AGENTS.md` と同一。この節は複製しない。
+- TypeScript / Node 20+ / ESM、実行時依存ゼロ、`node:test`。ロジックは `src/`、SKILL.md には `soujo` の呼び方だけ。`dist/` はコミットする。

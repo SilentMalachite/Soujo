@@ -4,6 +4,7 @@ import {
   closeSync,
   existsSync,
   fchmodSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -81,12 +82,29 @@ export function requireStateDir(start: string = process.cwd()): string {
   return dir;
 }
 
-/** File contents, or undefined when the file does not exist. */
+function isMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
+/**
+ * File contents, or undefined when the file (or .soujo/) does not exist. Symlinks are followed only as writeState follows
+ * them, so a symlink planted in a repository cannot put other files into hook output or warnings, and only regular files
+ * are read, so a FIFO or device cannot block a hook.
+ */
 export function readState(dir: string, file: StateFile): string | undefined {
+  let target: StateTarget;
   try {
-    return readFileSync(join(dir, file), 'utf8');
+    target = stateTarget(dir, file);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    if (isMissing(error)) return undefined;
+    throw new Error(`${file} を読めない: ${(error as Error).message}`);
+  }
+  if (target.problem !== undefined) throw new Error(`${file} を読まない: 実体（symlink の先）が${target.problem}`);
+  try {
+    if (!statSync(target.path).isFile()) throw new Error('通常のファイルではない');
+    return readFileSync(target.path, 'utf8');
+  } catch (error) {
+    if (isMissing(error)) return undefined;
     throw new Error(`${file} を読めない: ${(error as Error).message}`);
   }
 }
@@ -114,10 +132,24 @@ export function stateTarget(dir: string, file: StateFile): StateTarget {
   return { path: real };
 }
 
-// writeState's temporary file for target: ".<name>.<pid>.tmp" next to it.
+// The temporary file writeState and createFile use for target: ".<name>.<pid>.tmp" next to it.
+function tempOf(target: string): string {
+  return join(dirname(target), `.${basename(target)}.${process.pid}.tmp`);
+}
+
 function isTempOf(target: string, name: string): boolean {
   const prefix = `.${basename(target)}.`;
   return name.startsWith(prefix) && /^\d+\.tmp$/.test(name.slice(prefix.length));
+}
+
+// Anything at path, a dangling symlink included (existsSync follows symlinks).
+function hasEntry(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function modeOf(path: string): number | undefined {
@@ -141,7 +173,7 @@ export function writeState(dir: string, file: StateFile, text: string): void {
     throw new Error(`${file} を書けない: ${(error as Error).message}`);
   }
   if (target.problem !== undefined) throw new Error(`${file} を書かない: 実体（symlink の先）が${target.problem}`);
-  const temp = join(dirname(target.path), `.${basename(target.path)}.${process.pid}.tmp`);
+  const temp = tempOf(target.path);
   let created = false;
   try {
     const mode = modeOf(target.path);
@@ -164,23 +196,31 @@ export function writeState(dir: string, file: StateFile, text: string): void {
   }
 }
 
+/** Deletes the temporary files (or symlinks in their place) of target that a killed write left next to it. */
+export function removeTempsOf(target: string): void {
+  let entries;
+  try {
+    entries = readdirSync(dirname(target), { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if ((entry.isFile() || entry.isSymbolicLink()) && isTempOf(target, entry.name)) {
+      rmSync(join(dirname(target), entry.name), { force: true });
+    }
+  }
+}
+
 /** Deletes temporary files (or symlinks in their place) that a killed writeState left behind, so that `git add -A` never commits them. */
 export function removeLeftoverTemps(dir: string): void {
   for (const file of STATE_FILES) {
     let target: StateTarget;
-    let entries;
     try {
       target = stateTarget(dir, file);
-      if (target.problem !== undefined) continue;
-      entries = readdirSync(dirname(target.path), { withFileTypes: true });
     } catch {
       continue;
     }
-    for (const entry of entries) {
-      if ((entry.isFile() || entry.isSymbolicLink()) && isTempOf(target.path, entry.name)) {
-        rmSync(join(dirname(target.path), entry.name), { force: true });
-      }
-    }
+    if (target.problem === undefined) removeTempsOf(target.path);
   }
 }
 
@@ -194,14 +234,38 @@ export function ensureStateDir(root: string): string {
   return dir;
 }
 
-/** Creates the file only when nothing exists at path. Returns false when it already exists. */
-export function createFile(path: string, text: string): boolean {
+// Puts temp at path unless anything, a dangling symlink included, is there. A hard link fails in that case by itself;
+// file systems without hard links (FAT, exFAT) rename instead, which replaces, so only after checking that nothing is there.
+function place(temp: string, path: string): boolean {
   try {
-    writeFileSync(path, text, { flag: 'wx' });
+    linkSync(temp, path);
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST' || hasEntry(path)) return false;
+    renameSync(temp, path);
+    return true;
+  }
+}
+
+/**
+ * Creates the file only when nothing exists at path; returns false when something does. The text is written to an exclusive
+ * temporary file first, as writeState does, so an interruption never leaves the file empty or half-written.
+ */
+export function createFile(path: string, text: string): boolean {
+  const temp = tempOf(path);
+  let created = false;
+  try {
+    writeFileSync(temp, text, { flag: 'wx' });
+    created = true;
+    return place(temp, path);
+  } catch (error) {
     throw new Error(`${basename(path)} を作れない: ${(error as Error).message}`);
+  } finally {
+    try {
+      if (created) rmSync(temp, { force: true });
+    } catch {
+      // Cleanup is best effort; a leftover is removed by the next init.
+    }
   }
 }
 

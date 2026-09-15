@@ -1,7 +1,6 @@
 # CLAUDE.md（Opus 5 版）
 
 Claude Code でこのリポジトリを扱うときの指示。
-このファイルは `soujo init` が導入先へ複製する `templates/CLAUDE.md` と同一内容。
 Codex 用の `AGENTS.md` は**写しではない**（GPT-6 Astra 向けに文面が違う）。規約を変えるときは両方を直す。
 
 ## 1. 相手について（ユーザー）
@@ -36,7 +35,7 @@ Codex 用の `AGENTS.md` は**写しではない**（GPT-6 Astra 向けに文面
 - 作業単位は「層（layer）」＝ `.soujo/PLAN.md` の1チェック項目。1層は30分以内。
 - **1層 = 1コミット。** テストが通らない状態で `layer done` しない。層の途中で止まるときは `soujo close`（WIP コミット）。
 - 層を終える手順は固定：
-  1. 次の層の `NEXT.md` を書く：`soujo next set --layer ... --premise ... --check ... [--caution ...] [--effort ...]`
+  1. 次の層の `NEXT.md` を書く：`soujo next set --layer ... --premise ... --check ... [--caution ...] [--effort ...]`（`--effort` は PLAN の層にだけ付ける。`spec` / `plan` は CLI が high にする）
   2. 締める：`soujo layer done "<層名>" --note "<1〜3行>"`（PLAN チェック → LOG 追記 → コミットまで一括）
 - 中断の恐れが出たら、止まる前に `soujo close --note "<一言>"`。
 - 再開は `soujo resume` の4行だけを根拠にする。会話履歴に依存しない。
@@ -49,13 +48,6 @@ Codex 用の `AGENTS.md` は**写しではない**（GPT-6 Astra 向けに文面
 
 ## 6. 技術スタック
 
-このリポジトリ（Soujo 本体）：
-- TypeScript / Node 20+ / ESM。**実行時依存ゼロ**（`node:*` のみ）。devDependencies は `typescript` と `@types/node` だけ。
-- テストは `node:test`。`state.ts` は純粋関数中心にし、ファイル I/O と git は薄い層に分離する。
-- `skills/*/SKILL.md` にロジックを書かない。判断・整形・検証は `src/` に置き、SKILL.md は `soujo` の呼び方だけを書く。
-- `dist/` はコミットする（`hooks/hooks.json` が `dist/cli.js` を直接呼ぶ）。`npm run build` を忘れたら `next check` が壊れる。
-
-導入先プロジェクト：
 - 言語・フレームワーク・テスト方法は決めつけない。`.soujo/SPEC.md` の「技術判断」に書かれたものに従う。書かれていなければ、リポジトリにある設定ファイル（`mix.exs` / `gleam.toml` / `go.mod` / `*.csproj` / `package.json` など）から読み取り、それでも不明なら1問だけ聞く。
 - 既存のリポジトリでは、そこにある慣習（フォーマッタ、テストランナー、ディレクトリ構成）を優先する。新しい流儀を持ち込まない。
 - 依存追加は、追加前に「何のために・代替は何か」を1行で示す。

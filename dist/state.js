@@ -2,6 +2,8 @@
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 export const NEXT_MAX_LINES = 5;
 export const LOG_MAX_LINES = 3;
+/** Steps outside PLAN's layers, matched exactly after trimming: spec and plan before the first layer, plan after the last. */
+export const PHASES = ['spec', 'plan'];
 const NEXT_KEYS = [
     ['layer', '次'],
     ['premise', '前提'],
@@ -121,6 +123,22 @@ export function parsePlan(text) {
     }
     return items;
 }
+/**
+ * Problems that make a layer name of PLAN.md ambiguous; empty when valid. A repeated name cannot get its own "layer: <layer>"
+ * commit, and a layer named like a phase cannot be told from that phase in NEXT.md.
+ */
+export function validatePlan(text) {
+    const problems = new Set();
+    const seen = new Set();
+    for (const { layer } of parsePlan(text)) {
+        if (PHASES.includes(layer))
+            problems.add(`PLAN.md の層名「${layer}」がフェーズ名と同じ`);
+        else if (seen.has(layer))
+            problems.add(`PLAN.md の層「${layer}」が重複`);
+        seen.add(layer);
+    }
+    return [...problems];
+}
 /** "[x] <layer>" or "[ ] <layer>", as plan list and map plan show a layer. */
 export function formatItem(item) {
     return `[${item.done ? 'x' : ' '}] ${item.layer}`;
@@ -131,14 +149,14 @@ export function nextLayer(items) {
 }
 /**
  * How NEXT.md's layer stands in PLAN: 'done' when it is checked, 'skipped' when an unchecked layer comes before it
- * (NEXT.md was moved on but that layer was never closed), 'ok' otherwise. "plan" comes after every layer, since the go
- * skill writes it after the last one; other layers not in PLAN, such as "spec", are 'ok'.
+ * (NEXT.md was moved on but that layer was never closed), 'ok' otherwise. Phases are never matched to PLAN's layers: "plan"
+ * comes after every layer, since the go skill writes it after the last one; "spec" and other layers not in PLAN are 'ok'.
  */
 export function nextStatus(layer, items) {
-    const found = items.findIndex((item) => item.layer === layer);
+    const found = PHASES.includes(layer) ? -1 : items.findIndex((item) => item.layer === layer);
     if (items[found]?.done)
         return { state: 'done' };
-    const position = found === -1 && layer === 'plan' ? items.length : found;
+    const position = layer === 'plan' ? items.length : found;
     const unfinished = items.findIndex((item) => !item.done);
     const item = items[unfinished];
     return item !== undefined && unfinished < position ? { state: 'skipped', unfinished: item } : { state: 'ok' };

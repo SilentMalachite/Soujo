@@ -27,7 +27,7 @@ claude --plugin-dir .   # try the plugin from the working tree without installin
 - **Logic lives in `src/`.** `state.ts` and `map.ts` are pure functions; file and git access stay in the thin `files.ts` and `git.ts`. `skills/*/SKILL.md` only says when to call `soujo` (`test/skills.test.ts` checks the format).
 - **Tests use `node:test`.** Run `npm run build` and commit `dist/` with the source change.
 - **Documentation is English first.** User documentation (README, CHANGELOG, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT) is English with a Japanese translation of the same blocks (`test/docs.test.ts` compares them). Text read at run time — CLI output, skills, templates, CLAUDE.md, AGENTS.md — is Japanese.
-- **CLAUDE.md and AGENTS.md differ on purpose.** A rule change edits both, and their copies in `templates/`.
+- **CLAUDE.md and AGENTS.md differ on purpose.** A rule change edits both, and their copies in `templates/`, which lack only the last section on this repository.
 - **Commit messages** are English: `<type>: <description>` with `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, or `ci`.
 - **No private data.** Credentials, session links, home directory paths, and personal email addresses never enter files or commit messages (`test/privacy.test.ts` checks tracked files and commit messages).
 
