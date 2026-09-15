@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nextCheck, nextSet, nextShow } from '../src/commands/next.js';
-import { commitAll, project, repo, temp } from './helpers.js';
+import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 
 const NEXT = '次: L2 state\n前提: L1 完了\n確認: npm test が通る\n注意: なし\neffort: medium\n';
 const PLAN = '- [x] L1 scaffold — build\n- [ ] L2 state — test\n';
@@ -44,7 +44,7 @@ test('next set rewrites NEXT.md with defaults', (t) => {
 
 test('next set removes temporary files a killed write left, one with its own process id included', (t) => {
   const dir = project(temp(t), { 'NEXT.md': 'old\n' });
-  const leftovers = [`.NEXT.md.${process.pid}.tmp`, '.LOG.md.99999.tmp'].map((name) => join(dir, '.soujo', name));
+  const leftovers = [`.NEXT.md.${process.pid}.tmp`, `.LOG.md.${deadPid()}.tmp`].map((name) => join(dir, '.soujo', name));
   for (const path of leftovers) writeFileSync(path, 'half');
   nextSet(dir, { layer: 'L2 state', premise: 'L1 完了', check: 'npm test が通る' });
   assert.equal(readNext(dir), NEXT);

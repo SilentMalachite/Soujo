@@ -4,6 +4,8 @@
 
 import {
   closeSync,
+  constants,
+  copyFileSync,
   existsSync,
   fchmodSync,
   linkSync,
@@ -419,9 +421,34 @@ function tempOf(target: string): string {
   return join(dirname(target), `.${basename(target)}.${process.pid}.tmp`);
 }
 
-function isTempOf(target: string, name: string): boolean {
+// The pid in the name of a temporary file of target, or undefined when the name is not one of its temporary files at all.
+// A number no process of ours can have (a leading zero, or past the safe integer range) is NaN, which isRunning takes as
+// not running, so that the file is still deleted as a leftover rather than left for `git add -A` to commit.
+function tempPid(target: string, name: string): number | undefined {
   const prefix = `.${basename(target)}.`;
-  return name.startsWith(prefix) && /^\d+\.tmp$/.test(name.slice(prefix.length));
+  if (!name.startsWith(prefix)) return undefined;
+  const digits = /^(\d+)\.tmp$/.exec(name.slice(prefix.length))?.[1];
+  if (digits === undefined) return undefined;
+  const pid = Number(digits);
+  return Number.isSafeInteger(pid) && String(pid) === digits ? pid : Number.NaN;
+}
+
+/**
+ * Whether a process with pid is running, so that a temporary file it may still be writing is left where it is. The own pid
+ * is not one: by the time leftovers are removed, a write of this process has either finished or cleaned up after itself.
+ * The pid says this only on the machine and in the pid namespace that wrote it: across a shared mount (NFS, SMB, a bind
+ * mount into a container) the number belongs to another process table, and a pid the system has since handed out again
+ * keeps a leftover of a killed write for as long as the new process lives.
+ */
+export function isRunning(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: the process is there, it just belongs to someone else.
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }
 
 // Anything at path, a dangling symlink included (existsSync follows symlinks).
@@ -479,8 +506,10 @@ export function writeState(dir: string, file: StateFile, text: string): void {
   }
 }
 
-// The temporary files (or symlinks in their place) of target that a killed write left next to it, as absolute paths.
-function tempsOf(target: string): string[] {
+// The temporary files (or symlinks in their place) of target that a killed write left next to it, as absolute paths. One
+// named after a process that is still running is left out: that process may be writing it right now. Pass running for every
+// temporary file whatever wrote it, which is what the commit checks exclude from the working tree.
+function tempsOf(target: string, running = false): string[] {
   let entries;
   try {
     entries = readdirSync(dirname(target), { withFileTypes: true });
@@ -488,7 +517,11 @@ function tempsOf(target: string): string[] {
     return [];
   }
   return entries
-    .filter((entry) => (entry.isFile() || entry.isSymbolicLink()) && isTempOf(target, entry.name))
+    .filter((entry) => {
+      if (!entry.isFile() && !entry.isSymbolicLink()) return false;
+      const pid = tempPid(target, entry.name);
+      return pid !== undefined && (running || !isRunning(pid));
+    })
     .map((entry) => join(dirname(target), entry.name));
 }
 
@@ -500,31 +533,45 @@ export function removeTempsOf(target: string): void {
 // The leftovers of the four state files, and of archives that exist or whose temporary file is in .soujo/; none next to a
 // target outside the project or inside .git. A target that is another state file is still inside the project, so its leftovers
 // are deleted as before; leaving them would let `git add -A` commit them.
-function leftoverTempPaths(dir: string): string[] {
+function leftoverTempPaths(dir: string, running = false): string[] {
   const named = entryNames(dir).flatMap((name) => TEMP.exec(name)?.[1] ?? []).filter(isArchive);
   const files = [...new Set<StateFile>([...STATE_FILES, ...archiveFiles(dir), ...named])];
   const known = attempt(() => stateIdentities(dir, files));
   return files.flatMap((file) => {
     try {
       const target = stateTarget(dir, file, known);
-      return target.problem?.elsewhere === true ? [] : tempsOf(target.path);
+      return target.problem?.elsewhere === true ? [] : tempsOf(target.path, running);
     } catch {
       return [];
     }
   });
 }
 
-/** The temporary files removeLeftoverTemps would delete, relative to the project root (the directory above .soujo/), with "/". */
-export function leftoverTemps(dir: string): string[] {
-  const paths = leftoverTempPaths(dir);
+function relativeTemps(dir: string, running: boolean): string[] {
+  const paths = leftoverTempPaths(dir, running);
   if (paths.length === 0) return [];
   const root = realpathSync(dirname(dir));
   return paths.map((path) => relative(root, path).split(sep).join('/'));
 }
 
+/** The temporary files removeLeftoverTemps would delete, relative to the project root (the directory above .soujo/), with "/". */
+export function leftoverTemps(dir: string): string[] {
+  return relativeTemps(dir, false);
+}
+
 /**
- * Deletes temporary files (or symlinks in their place) that a killed writeState left behind, so that `git add -A` never commits
- * them: those of the four state files, and those of archives that exist or whose temporary file is in .soujo/.
+ * Every temporary file of a state file or archive, the ones a running write owns included, so that a command checking for
+ * uncommitted changes counts none of them: the ones it will delete, nor the ones it leaves for another soujo to finish.
+ */
+export function stateTemps(dir: string): string[] {
+  return relativeTemps(dir, true);
+}
+
+/**
+ * Deletes temporary files (or symlinks in their place) that a killed writeState left behind, so that `git add -A` does not
+ * commit them: those of the four state files, and those of archives that exist or whose temporary file is in .soujo/. One
+ * named after a process that is still running is kept, since another soujo may be writing it — a commit made while it is
+ * there takes it along, which is the price of not deleting a write in progress.
  */
 export function removeLeftoverTemps(dir: string): void {
   for (const path of leftoverTempPaths(dir)) rmSync(path, { force: true });
@@ -540,24 +587,49 @@ export function ensureStateDir(root: string): string {
   return dir;
 }
 
-// Puts temp at path unless anything, a dangling symlink included, is there. A hard link fails in that case by itself;
-// file systems without hard links (FAT, exFAT) rename instead, which replaces, so only after checking that nothing is there.
-function place(temp: string, path: string): boolean {
+/**
+ * Puts temp at path unless anything, a dangling symlink included, is there; false says something was. A hard link fails by
+ * itself in that case, and where hard links cannot be made (FAT, exFAT, and some FUSE and SMB mounts) the file is copied
+ * with COPYFILE_EXCL, which fails the same way, rather than renamed, which would replace an entry appearing in between.
+ * Either refusal is the operating system's, at the moment of writing, not a check made beforehand that an entry could slip
+ * past. link is the hard link; a test standing in for a file system without them passes one that fails.
+ */
+export function place(temp: string, path: string, link: (temp: string, path: string) => void = linkSync): boolean {
   try {
-    linkSync(temp, path);
+    link(temp, path);
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST' || hasEntry(path)) return false;
-    renameSync(temp, path);
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    return copyExclusively(temp, path);
+  }
+}
+
+// Copies temp into a file created at path and nowhere else: COPYFILE_EXCL opens it exclusively, so anything already there
+// (a directory or a dangling symlink included) fails with EEXIST. After any other failure the file may be there half
+// written, so it is deleted; only a killed process can leave one behind, and only on a file system without hard links.
+function copyExclusively(temp: string, path: string): boolean {
+  try {
+    copyFileSync(temp, path, constants.COPYFILE_EXCL);
     return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    try {
+      rmSync(path, { force: true });
+    } catch {
+      // Cleanup is best effort; report the copy's failure.
+    }
+    throw error;
   }
 }
 
 /**
- * Creates the file only when nothing exists at path; returns false when something does. The text is written to an exclusive
- * temporary file first, as writeState does, so an interruption never leaves the file empty or half-written.
+ * Creates the file only when nothing exists at path; returns false when something does. Nothing is written at all when the
+ * entry is already there, so a directory that has every file it would be given may be read-only. Otherwise the text is
+ * written to an exclusive temporary file first, as writeState does, so an interruption never leaves the file half-written.
+ * Temporary files a killed write left next to path are not cleared here: the caller (init) removes them beforehand.
  */
 export function createFile(path: string, text: string): boolean {
+  if (hasEntry(path)) return false;
   const temp = tempOf(path);
   let created = false;
   try {

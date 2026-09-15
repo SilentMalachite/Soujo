@@ -8,7 +8,7 @@ import { logRotate } from '../src/commands/log.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
 import { parseLog } from '../src/state.js';
 import { markDone } from '../src/state.js';
-import { commitAll, project, repo, temp } from './helpers.js';
+import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 
 const NOW = new Date(2026, 8, 13, 12, 0);
 const PLAN = '# PLAN\n\n- [x] L1 scaffold — build\n- [ ] L2 state — test\n- [ ] L10 later — c\n';
@@ -271,10 +271,10 @@ test('a re-run finds its uncommitted LOG entry after later entries, and when LOG
 
 test('leftover temporary files from a killed write are removed, not committed', (t) => {
   const dir = workingProject(t);
-  writeFileSync(join(dir, '.soujo', '.PLAN.md.99999.tmp'), 'half');
+  writeFileSync(join(dir, '.soujo', `.PLAN.md.${deadPid()}.tmp`), 'half');
   const [line] = layerDone(dir, 'L2 state', undefined, NOW);
   assert.match(line ?? '', /（追加: state\.ts）$/);
-  assert.equal(existsSync(join(dir, '.soujo', '.PLAN.md.99999.tmp')), false);
+  assert.equal(existsSync(join(dir, '.soujo', `.PLAN.md.${deadPid()}.tmp`)), false);
   assert.deepEqual(gitStatus(dir), []);
 });
 

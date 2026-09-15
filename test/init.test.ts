@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { init } from '../src/commands/init.js';
 import { packageDir, readTemplate } from '../src/files.js';
 import { parsePlan, validateNext } from '../src/state.js';
-import { repo, temp } from './helpers.js';
+import { deadPid, repo, temp } from './helpers.js';
 
 const ALL = ['.soujo/SPEC.md', '.soujo/PLAN.md', '.soujo/LOG.md', '.soujo/NEXT.md', 'CLAUDE.md', 'AGENTS.md'];
 
@@ -46,10 +46,43 @@ test('init outside git uses the current directory, never overwrites, and lists s
   assert.deepEqual(init(dir), [`既存のため作らず: ${ALL.join(', ')}`, 'git リポジトリではない: layer done / close の前に git init が要る']);
 });
 
+test('init succeeds in a read-only directory that already has every file', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
+  const root = temp(t);
+  mkdirSync(join(root, '.soujo'));
+  for (const path of ALL) writeFileSync(join(root, path), 'mine\n');
+  chmodSync(join(root, '.soujo'), 0o555);
+  chmodSync(root, 0o555);
+  try {
+    assert.deepEqual(init(root), [
+      `既存のため作らず: ${ALL.join(', ')}`,
+      'git リポジトリではない: layer done / close の前に git init が要る',
+    ]);
+  } finally {
+    chmodSync(root, 0o755);
+    chmodSync(join(root, '.soujo'), 0o755);
+  }
+});
+
+test('init in a read-only directory missing one file fails at that file and creates nothing', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
+  const root = temp(t);
+  mkdirSync(join(root, '.soujo'));
+  for (const path of ALL.filter((file) => file !== 'CLAUDE.md')) writeFileSync(join(root, path), 'mine\n');
+  chmodSync(join(root, '.soujo'), 0o555);
+  chmodSync(root, 0o555);
+  try {
+    assert.throws(() => init(root), /^Error: CLAUDE\.md を作れない: [^\n]*EACCES/);
+    assert.deepEqual(readdirSync(root).sort(), ['.soujo', 'AGENTS.md']);
+    assert.deepEqual(readdirSync(join(root, '.soujo')).sort(), ['LOG.md', 'NEXT.md', 'PLAN.md', 'SPEC.md']);
+  } finally {
+    chmodSync(root, 0o755);
+    chmodSync(join(root, '.soujo'), 0o755);
+  }
+});
+
 test('init removes temporary files left by a killed write, next to CLAUDE.md and AGENTS.md too', (t) => {
   const dir = repo(t);
   mkdirSync(join(dir, '.soujo'));
-  const leftovers = [join(dir, '.soujo', '.PLAN.md.99999.tmp'), join(dir, `.CLAUDE.md.${process.pid}.tmp`), join(dir, '.AGENTS.md.7.tmp')];
+  const leftovers = [join(dir, '.soujo', `.PLAN.md.${deadPid()}.tmp`), join(dir, `.CLAUDE.md.${process.pid}.tmp`), join(dir, `.AGENTS.md.${deadPid()}.tmp`)];
   for (const path of leftovers) writeFileSync(path, 'half');
   writeFileSync(join(dir, '.soujo', 'notes.tmp'), 'mine');
   assert.deepEqual(init(dir), ALL.map((path) => `作成: ${path}`));

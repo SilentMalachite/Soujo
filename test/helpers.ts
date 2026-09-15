@@ -1,11 +1,11 @@
 import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { devNull, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { StateFile } from '../src/files.js';
+import { isRunning, type StateFile } from '../src/files.js';
 import { REPOSITORY_ENV } from '../src/git.js';
 import { EFFORTS } from '../src/state.js';
 
@@ -16,6 +16,31 @@ const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 process.env.GIT_CONFIG_GLOBAL = devNull;
 process.env.GIT_CONFIG_NOSYSTEM = '1';
 for (const name of REPOSITORY_ENV) delete process.env[name];
+
+let exited: number | undefined;
+
+/**
+ * The pid of a process that has exited, so that a temporary file named after it counts as a leftover of a killed write.
+ * Taken again when the system has handed the number out since, which would make the file one of a running write instead.
+ */
+export function deadPid(): number {
+  if (exited === undefined || isRunning(exited)) {
+    const { pid } = spawnSync(process.execPath, ['-e', ''], { stdio: 'ignore' });
+    if (pid === undefined || pid <= 0) throw new Error('deadPid: 子プロセスを起動できない');
+    exited = pid;
+  }
+  return exited;
+}
+
+/** The pid of a process that runs until the test is over, so that a temporary file named after it must be left alone. */
+export function livePid(t: TestContext): number {
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 600000)'], { stdio: 'ignore' });
+  child.unref();
+  t.after(() => child.kill());
+  const { pid } = child;
+  if (pid === undefined || pid <= 0) throw new Error('livePid: 子プロセスを起動できない');
+  return pid;
+}
 
 /** A temporary directory removed after the test. */
 export function temp(t: TestContext): string {

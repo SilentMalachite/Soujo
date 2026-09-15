@@ -337,3 +337,6 @@ symlinkTargetPath を symlinkTargetParts にし、Windows では相対リンク�
 ## 2026-09-16 L22 state-targets
 .git を大小文字問わず拒否し、状態ファイル・書庫の実体の重複（symlink・大小文字違い・hardlink・壊れた symlink の先）を stateTarget で拒否
 読み込みも同じ規則で拒否（stateTarget を共有）
+
+## 2026-09-16 L23 file-create
+hardlink を張れない FS では copyFileSync(COPYFILE_EXCL) で複製し、rename で既存を置き換えない。生存中 pid の一時ファイルは消さず、stateTemps がコミット検査から除く。createFile は既存があれば何も書かないので、揃った読取り専用ディレクトリで init が成功する。

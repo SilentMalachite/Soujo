@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { logAdd, logRotate } from '../src/commands/log.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
 import { parseLog } from '../src/state.js';
-import { commitAll, project, repo, temp } from './helpers.js';
+import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 
 const NOW = new Date(2026, 8, 13, 10, 0);
 
@@ -29,7 +29,7 @@ test('log add creates LOG.md when it is missing', (t) => {
 
 test('log add removes temporary files a killed write left, one with its own process id included', (t) => {
   const dir = project(temp(t), { 'LOG.md': '# LOG\n' });
-  const leftovers = [`.LOG.md.${process.pid}.tmp`, '.NEXT.md.99999.tmp'].map((name) => join(dir, '.soujo', name));
+  const leftovers = [`.LOG.md.${process.pid}.tmp`, `.NEXT.md.${deadPid()}.tmp`].map((name) => join(dir, '.soujo', name));
   for (const path of leftovers) writeFileSync(path, 'half');
   logAdd(dir, 'L1', ['a'], NOW);
   assert.equal(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), '# LOG\n\n## 2026-09-13 L1\na\n');
@@ -212,7 +212,7 @@ test('log rotate refuses uncommitted changes a rotate does not make, writing and
   for (const [label, change] of changes) {
     const dir = logProject(t, { 'LOG.md': ROTATING, 'LOG-2026-06.md': june });
     change(dir);
-    const leftover = join(dir, '.soujo', '.LOG.md.99999.tmp');
+    const leftover = join(dir, '.soujo', `.LOG.md.${deadPid()}.tmp`);
     writeFileSync(leftover, 'half');
     const before = gitStatus(dir);
     assert.throws(() => logRotate(dir, undefined, SEPTEMBER), DIRTY, label);
@@ -278,7 +278,7 @@ test('log rotate re-run after a failed commit commits the same rotation without 
     /^Error: git commit に失敗: [^\n]*（書いた分は再実行で二重に移さない。原因を直して同じコマンドを再実行する）$/,
   );
   assert.deepEqual([state(dir, 'LOG.md'), state(dir, 'LOG-2026-07.md'), state(dir, 'LOG-2026-08.md')], [ROTATED, JULY, august]);
-  const leftover = join(dir, '.soujo', '.LOG-2026-08.md.99999.tmp');
+  const leftover = join(dir, '.soujo', `.LOG-2026-08.md.${deadPid()}.tmp`);
   writeFileSync(leftover, 'half');
 
   restore();
@@ -335,7 +335,7 @@ test('log rotate does not append again what archives committed by hand before LO
 
 test('log rotate with nothing to move still removes leftover temporary files', (t) => {
   const dir = logProject(t, { 'LOG.md': '# LOG\n\n## 2026-01-01 L1\na\n' });
-  const leftover = join(dir, '.soujo', '.LOG-2026-08.md.99999.tmp');
+  const leftover = join(dir, '.soujo', `.LOG-2026-08.md.${deadPid()}.tmp`);
   writeFileSync(leftover, 'half');
   assert.deepEqual(logRotate(dir, undefined, SEPTEMBER), ['移動なし']);
   assert.deepEqual([existsSync(leftover), gitStatus(dir)], [false, []]);

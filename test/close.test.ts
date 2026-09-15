@@ -7,7 +7,7 @@ import { close } from '../src/commands/close.js';
 import { layerDone } from '../src/commands/layer.js';
 import { logRotate } from '../src/commands/log.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
-import { commitAll, project, repo, temp } from './helpers.js';
+import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 
 const NOW = new Date(2026, 8, 13, 12, 0);
 const NEXT = '次: L7 resume-close\n前提: p\n確認: c\n注意: なし\neffort: medium\n';
@@ -276,9 +276,9 @@ test('stopped between next set --layer plan and layer done of the last layer, cl
 test('close keeps CRLF in LOG.md, flattens control characters, and removes leftover temporary files', (t) => {
   const dir = project(repo(t), { ...STATE, 'LOG.md': LOG.replaceAll('\n', '\r\n') });
   commitAll(dir);
-  writeFileSync(join(dir, '.soujo', '.LOG.md.99999.tmp'), 'half');
+  writeFileSync(join(dir, '.soujo', `.LOG.md.${deadPid()}.tmp`), 'half');
   close(dir, 'a\rb\tc', NOW);
   assert.equal(read(dir, 'LOG.md'), `${LOG}${ENTRY}中断: a b c\n`.replaceAll('\n', '\r\n'));
-  assert.equal(existsSync(join(dir, '.soujo', '.LOG.md.99999.tmp')), false);
+  assert.equal(existsSync(join(dir, '.soujo', `.LOG.md.${deadPid()}.tmp`)), false);
   assert.deepEqual(gitStatus(dir), []);
 });

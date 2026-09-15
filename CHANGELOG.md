@@ -17,6 +17,9 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - A symlink of a state file or of `.soujo/` into `.git` under another of the names a file system may hand it — another letter case (`.GIT`), a trailing dot or space, an NTFS stream, the 8.3 short name, code points HFS+ leaves out — is refused like one into `.git`. Before, on a file system ignoring case, `soujo init`, reads (`next show --hook` output) and writes went into `.git` through it.
 - A state file or archive that is the same file as another one in `.soujo/` (through a symlink, a differently cased path, or a hard link) is refused for reading and writing, since reading one returns the other's contents and writing one writes over them: `LOG.md` symlinked to `PLAN.md` made `layer done` append the log to PLAN. One whose dangling symlink leads to where another is created is refused for writing, before anything is written: an archive symlinked to an archive the rotation was about to write made `log rotate` write over what it had just moved.
 - A symlink is followed part by part, through further symlinks, so that a `..` after one is taken from where it points, as the operating system does.
+- `soujo init` writes nothing where a file already is, so it succeeds in a directory that has every file and is read-only. Before, it wrote a temporary file next to each one and failed with `EACCES`.
+- Where hard links cannot be made (FAT, exFAT, some FUSE and SMB mounts), `soujo init` copies the new file into a place nothing holds instead of renaming over it, so a file created in between is never replaced. On those file systems only, an interruption can leave a half-written file there.
+- Temporary files named after a process that is still running are kept: one `soujo` no longer deletes the file another one is writing. A commit made while one is there takes it along, and `log rotate` no longer counts it as an uncommitted change.
 
 ## 0.3.1 — 2026-09-15
 

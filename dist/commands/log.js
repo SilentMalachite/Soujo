@@ -1,6 +1,6 @@
 // soujo log add: appends one dated entry to LOG.md. soujo log rotate: moves past months of LOG.md into LOG-YYYY-MM.md and commits.
 import { dirname } from 'node:path';
-import { archiveFile, archiveFiles, archiveMonth, leftoverTemps, readState, removeLeftoverTemps, requireStateDir, statePath, trackedStatePath, writeState, } from '../files.js';
+import { archiveFile, archiveFiles, archiveMonth, readState, removeLeftoverTemps, requireStateDir, statePath, stateTemps, trackedStatePath, writeState, } from '../files.js';
 import { gitChangedPaths, gitLastCommit, gitStatusExcluding, gitToplevel } from '../git.js';
 import { appendLog, appendedEntries, archiveLog, formatDate, isMonth, lastLog, logMonth, logMonths, removedEntries, parseLog, rotateLog, } from '../state.js';
 import { attempt, commitRecords, headState, missingEntries, requireCommittable, requireCommittableFiles, resumable, uncommittedLogs, } from './shared.js';
@@ -49,7 +49,7 @@ function within(entries, allowed) {
 }
 /**
  * What a previous rotate wrote but did not commit. Throws DIRTY unless every uncommitted change could be a rotate's: only
- * LOG.md and existing archives changed (leftover temporary files aside); LOG.md is HEAD's with whole entries removed and
+ * LOG.md and existing archives changed (temporary files aside, a running write's included); LOG.md is HEAD's with whole entries removed and
  * nothing else changed; each changed archive is HEAD's with at least one whole entry of its month appended; every removed or
  * appended entry is one a rotate of HEAD's LOG.md may move (not the last entry or the last milestone, not one whose date names
  * no month, not one LOG.md never had); and every removed entry is in the archive of its month (committed or not, so an archive committed by
@@ -61,7 +61,7 @@ function stoppedRotation(root, dir, log, before) {
     // Read first, so an archive whose real path leaves the project is refused before its path reaches git.
     const texts = new Map(archives.map((file) => [file, readState(dir, file) ?? '']));
     const allowed = [...trackedPaths(root, 'LOG.md'), ...archives.flatMap((file) => trackedPaths(root, file))];
-    if (gitStatusExcluding(root, [...allowed, ...leftoverTemps(dir)]).length > 0)
+    if (gitStatusExcluding(root, [...allowed, ...stateTemps(dir)]).length > 0)
         throw new Error(DIRTY);
     const changed = new Set(gitChangedPaths(root, allowed));
     if (changed.size === 0)

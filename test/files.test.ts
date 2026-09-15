@@ -24,8 +24,10 @@ import {
   ensureStateDir,
   findStateDir,
   isDotGit,
+  isRunning,
   isSymlink,
   pathKey,
+  place,
   sameFile,
   leftoverTemps,
   packageDir,
@@ -38,10 +40,11 @@ import {
   requireStateDir,
   statePath,
   stateTarget,
+  stateTemps,
   symlinkTargetParts,
   writeState,
 } from '../src/files.js';
-import { temp } from './helpers.js';
+import { deadPid, livePid, temp } from './helpers.js';
 
 test('symlinkTargetParts leaves a relative link unresolved and takes an absolute one through real paths', { skip: process.platform === 'win32' }, (t) => {
   assert.deepEqual(symlinkTargetParts('/nowhere', '.soujo/PLAN.md', '../docs/./PLAN.md'), ['.soujo', '..', 'docs', '.', 'PLAN.md']);
@@ -419,15 +422,16 @@ test('removeLeftoverTemps deletes only writeState temporary files, next to symli
   mkdirSync(dir);
   writeFileSync(join(root, 'PLAN.real.md'), '');
   symlinkSync('../PLAN.real.md', join(dir, 'PLAN.md'));
-  const leftovers = [join(dir, '.LOG.md.123.tmp'), join(dir, '.NEXT.md.9.tmp'), join(root, '.PLAN.real.md.456.tmp')];
-  const kept = [join(dir, '.LOG.md.tmp'), join(dir, '.LOG.md.12a.tmp'), join(dir, 'notes.tmp'), join(root, '.PLAN.md.456.tmp')];
+  const gone = deadPid();
+  const leftovers = [join(dir, `.LOG.md.${gone}.tmp`), join(dir, `.NEXT.md.${gone}.tmp`), join(root, `.PLAN.real.md.${gone}.tmp`)];
+  const kept = [join(dir, '.LOG.md.tmp'), join(dir, '.LOG.md.12a.tmp'), join(dir, 'notes.tmp'), join(root, `.PLAN.md.${gone}.tmp`)];
   for (const path of [...leftovers, ...kept]) writeFileSync(path, '');
-  mkdirSync(join(dir, '.SPEC.md.7.tmp'));
+  mkdirSync(join(dir, `.SPEC.md.${gone}.tmp`));
 
   removeLeftoverTemps(dir);
   assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
   assert.deepEqual(kept.filter((path) => !existsSync(path)), []);
-  assert.ok(existsSync(join(dir, '.SPEC.md.7.tmp')));
+  assert.ok(existsSync(join(dir, `.SPEC.md.${gone}.tmp`)));
 });
 
 test('archiveFile names a month only, archiveMonth reads it back, and archiveFiles lists the archives in .soujo/', (t) => {
@@ -468,10 +472,15 @@ test('leftoverTemps lists and removeLeftoverTemps deletes temporary files of arc
   mkdirSync(join(root, 'records'));
   writeFileSync(join(root, 'records', 'LOG.md'), '');
   symlinkSync('../records/LOG.md', join(dir, 'LOG.md'));
-  const leftovers = [join(dir, '.LOG-2026-08.md.12.tmp'), join(dir, '.LOG-2026-07.md.34.tmp'), join(root, 'records', '.LOG.md.5.tmp')];
-  const kept = [join(dir, '.LOG-2026-7.md.34.tmp'), join(dir, '.LOG-2026-13.md.34.tmp'), join(dir, '.LOG-2026-07.md.tmp')];
+  const gone = deadPid();
+  const leftovers = [join(dir, `.LOG-2026-08.md.${gone}.tmp`), join(dir, `.LOG-2026-07.md.${gone}.tmp`), join(root, 'records', `.LOG.md.${gone}.tmp`)];
+  const kept = [join(dir, `.LOG-2026-7.md.${gone}.tmp`), join(dir, `.LOG-2026-13.md.${gone}.tmp`), join(dir, '.LOG-2026-07.md.tmp')];
   for (const path of [...leftovers, ...kept]) writeFileSync(path, '');
-  assert.deepEqual(leftoverTemps(dir).sort(), ['.soujo/.LOG-2026-07.md.34.tmp', '.soujo/.LOG-2026-08.md.12.tmp', 'records/.LOG.md.5.tmp']);
+  assert.deepEqual(leftoverTemps(dir).sort(), [
+    `.soujo/.LOG-2026-07.md.${gone}.tmp`,
+    `.soujo/.LOG-2026-08.md.${gone}.tmp`,
+    `records/.LOG.md.${gone}.tmp`,
+  ]);
   assert.deepEqual(leftoverTemps(join(root, 'missing', '.soujo')), []);
   removeLeftoverTemps(dir);
   assert.deepEqual(leftoverTemps(dir), []);
@@ -495,12 +504,12 @@ test('removeLeftoverTemps deletes the temporary files of an archive refused for 
 test('removeLeftoverTemps leaves files next to a symlink target outside the project', { skip: process.platform === 'win32' }, (t) => {
   const elsewhere = temp(t);
   writeFileSync(join(elsewhere, 'LOG.md'), '');
-  writeFileSync(join(elsewhere, '.LOG.md.123.tmp'), 'not ours');
+  writeFileSync(join(elsewhere, `.LOG.md.${deadPid()}.tmp`), 'not ours');
   const root = temp(t);
   mkdirSync(join(root, '.soujo'));
   symlinkSync(join(elsewhere, 'LOG.md'), join(root, '.soujo', 'LOG.md'));
   removeLeftoverTemps(join(root, '.soujo'));
-  assert.ok(existsSync(join(elsewhere, '.LOG.md.123.tmp')));
+  assert.ok(existsSync(join(elsewhere, `.LOG.md.${deadPid()}.tmp`)));
 });
 
 test('requireState throws for a missing file', (t) => {
@@ -534,7 +543,7 @@ test('createFile never writes through an existing temporary path, and removeTemp
   const dir = temp(t);
   const planted = join(dir, `.CLAUDE.md.${process.pid}.tmp`);
   symlinkSync(outside, planted);
-  writeFileSync(join(dir, '.CLAUDE.md.77.tmp'), 'half');
+  writeFileSync(join(dir, `.CLAUDE.md.${deadPid()}.tmp`), 'half');
   assert.throws(() => createFile(join(dir, 'CLAUDE.md'), 'x'), /^Error: CLAUDE\.md を作れない: [^\n]*EEXIST/);
   assert.equal(readFileSync(outside, 'utf8'), 'keep\n');
   assert.equal(existsSync(join(dir, 'CLAUDE.md')), false);
@@ -542,6 +551,92 @@ test('createFile never writes through an existing temporary path, and removeTemp
   removeTempsOf(join(dir, 'CLAUDE.md'));
   assert.deepEqual(readdirSync(dir), []);
   assert.equal(createFile(join(dir, 'CLAUDE.md'), 'x'), true);
+});
+
+test('place copies where hard links cannot be made, and never puts the file over what is already there', (t) => {
+  const dir = temp(t);
+  const source = join(dir, `.fresh.md.${process.pid}.tmp`);
+  writeFileSync(source, 'new\n');
+  const noLinks = (): never => {
+    const error = new Error('hard links are not supported') as NodeJS.ErrnoException;
+    error.code = 'EPERM';
+    throw error;
+  };
+
+  const taken = join(dir, 'taken.md');
+  writeFileSync(taken, 'keep\n');
+  assert.equal(place(source, taken, noLinks), false);
+  assert.equal(readFileSync(taken, 'utf8'), 'keep\n');
+
+  if (process.platform !== 'win32') {
+    const dangling = join(dir, 'dangling.md');
+    symlinkSync('missing.md', dangling);
+    assert.equal(place(source, dangling, noLinks), false);
+    assert.equal(existsSync(join(dir, 'missing.md')), false);
+  }
+
+  // Copied, not renamed: nothing is moved onto a path, so an entry appearing in between is never replaced.
+  const fresh = join(dir, 'fresh.md');
+  assert.equal(place(source, fresh, noLinks), true);
+  assert.equal(readFileSync(fresh, 'utf8'), 'new\n');
+  assert.equal(readFileSync(source, 'utf8'), 'new\n');
+});
+
+test('place refuses a file that appears between the hard link and the copy, and leaves it as it is', (t) => {
+  const dir = temp(t);
+  const source = join(dir, `.late.md.${process.pid}.tmp`);
+  writeFileSync(source, 'new\n');
+  const late = join(dir, 'late.md');
+  // Nothing is there when the hard link is tried, and something is by the time the copy runs, as another process would do.
+  const raced = (): never => {
+    writeFileSync(late, 'theirs\n');
+    const error = new Error('hard links are not supported') as NodeJS.ErrnoException;
+    error.code = 'EPERM';
+    throw error;
+  };
+  assert.equal(place(source, late, raced), false);
+  assert.equal(readFileSync(late, 'utf8'), 'theirs\n');
+});
+
+test('isRunning tells a pid that is still running from one that has exited, and never claims the own', (t) => {
+  assert.equal(isRunning(process.pid), false);
+  assert.equal(isRunning(livePid(t)), true);
+  assert.equal(isRunning(deadPid()), false);
+  for (const pid of [0, -1, Number.NaN, 2 ** 53]) assert.equal(isRunning(pid), false, String(pid));
+});
+
+test('leftoverTemps, removeLeftoverTemps, and removeTempsOf leave the temporary file of a write still running, which stateTemps lists', (t) => {
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(dir);
+  const gone = deadPid();
+  const live = livePid(t);
+  const running = join(dir, `.LOG.md.${live}.tmp`);
+  // A number no process of ours can have is not a pid to spare the file for: a leading zero, and past the safe range.
+  const leftovers = [
+    join(dir, `.PLAN.md.${process.pid}.tmp`),
+    join(dir, `.NEXT.md.${gone}.tmp`),
+    join(dir, '.SPEC.md.09.tmp'),
+    join(dir, '.SPEC.md.9007199254740993.tmp'),
+  ];
+  for (const path of [running, ...leftovers]) writeFileSync(path, 'half');
+
+  assert.deepEqual(leftoverTemps(dir).sort(), [
+    `.soujo/.NEXT.md.${gone}.tmp`,
+    `.soujo/.PLAN.md.${process.pid}.tmp`,
+    '.soujo/.SPEC.md.09.tmp',
+    '.soujo/.SPEC.md.9007199254740993.tmp',
+  ]);
+  // Not a leftover to delete, but still a file in the working tree, which the commit checks must not count as a change.
+  assert.ok(stateTemps(dir).includes(`.soujo/.LOG.md.${live}.tmp`));
+  removeLeftoverTemps(dir);
+  assert.ok(existsSync(running));
+  assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
+
+  const theirs = join(root, `.CLAUDE.md.${live}.tmp`);
+  writeFileSync(theirs, 'half');
+  removeTempsOf(join(root, 'CLAUDE.md'));
+  assert.ok(existsSync(theirs));
 });
 
 test('packageDir finds the soujo package root and readTemplate reads from templates/', () => {
