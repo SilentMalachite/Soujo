@@ -8,7 +8,8 @@ The English version is canonical; the Japanese page is a translation. Versions f
 
 ### Changed
 
-- When `再開:` of `soujo resume` says `N日ぶり`, the `resume` skill also runs `soujo brief` and returns its five lines after the four lines. Before, it returned only the four lines, and the model or you had to run `soujo brief` as a second step.
+- When the `再開:` line of `soujo resume` ends with `・N日ぶり: 先に soujo brief`, the `resume` skill also runs `soujo brief` and returns its five lines after the four lines. Before, it returned only the four lines, and the model or you had to run `soujo brief` as a second step.
+- The `go` skill and the `CLAUDE.md` / `AGENTS.md` that `soujo init` writes no longer have the model run `soujo brief` inside `go`; `soujo brief` belongs to the `resume` skill. Before, the templates said to run `soujo brief` first whenever `再開:` pointed to it.
 
 ## 0.3.0 — 2026-09-15
 

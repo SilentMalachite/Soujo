@@ -1,18 +1,19 @@
 ---
 name: resume
-description: "Soujo のプロジェクトで作業を再開するとき、現在地と次にやることを4行（何日も空いていれば brief の5行も）で示すために使う。"
+description: "Soujo のプロジェクトで作業を再開するとき、現在地と次にやることを4行（3日以上空いていれば続けて brief の5行）で示すために使う。"
 ---
 
 ## 読むもの
 - `soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもの。スキルの置き場所へ cd したり、そこの `.soujo/`・`dist/` を使ったりしない。`soujo` が見つからなければ止めて1行で伝える。
-- 会話履歴や `.soujo/` のファイルは読まない。`soujo resume` と `soujo brief` の出力だけを根拠にする。
+- 会話履歴や `.soujo/` のファイルは読まない。根拠は `soujo resume` の出力だけ（`soujo brief` を実行したときはその出力も）。
 
 ## やること
 - CLI の出力をそのまま返す。要約・補足・言い換えを足さない。
-- `再開:` に `N日ぶり` があれば、案内どおり続けて `soujo brief` を実行する。
+- `soujo resume` の4行を受け取った後、`再開:` で始まる行が `日ぶり: 先に soujo brief` で終わるときだけ `soujo brief` を実行する。終わらなければ実行しない。
 
 ## soujo に頼むこと
-- `soujo resume`。`再開:` に `N日ぶり` があるときだけ、その後に `soujo brief`
+- `soujo resume`。`再開:` で始まる行が `日ぶり: 先に soujo brief` で終わるときだけ、その後に `soujo brief`
 
 ## 出力の形
-- `soujo resume` の4行そのまま。`soujo brief` を実行したら、その後にその5行そのまま。失敗したらエラーの1行そのまま。
+- `soujo resume` の4行そのまま。`soujo brief` を実行したら、その後にその5行そのまま。
+- `soujo resume` が失敗したらエラーの1行だけ（`soujo brief` は実行しない）。`soujo brief` だけ失敗したら、4行の後にそのエラーの1行。

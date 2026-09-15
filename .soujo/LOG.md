@@ -307,3 +307,8 @@ L19 まで完了: resume スキルが 再開: に N日ぶり があるとき sou
 ## 2026-09-15 L19 resume-brief
 resume スキルは 再開: に N日ぶり があれば soujo brief も実行し、4行の後にその5行をそのまま返す
 skills テストで順序と条件を固定。SPEC(+ja) §3・§7・§14、README(+ja)、CHANGELOG(+ja) の Unreleased に記載
+
+## 2026-09-15 grok-fix-l19
+grok レビュー L19 の15件を修正: resume スキルは 再開: で始まる行が 日ぶり: 先に soujo brief で終わるときだけ4行の後に brief、失敗時の出力を resume/brief で分けた
+go・CLAUDE/AGENTS(+templates) は go の中で brief を走らせない。skills テストで CLI の実出力・条件・否定・失敗の形・go の非実行を固定。SPEC §7・README・CHANGELOG(+ja) 同期
+訂正: L19 の SPEC(+ja) §3・§7・§14 は親の docs: plan L19 で記載（L19 のコミットは README・CHANGELOG・スキル・テスト）

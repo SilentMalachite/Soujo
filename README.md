@@ -11,7 +11,7 @@ AI coding sessions end mid-task: a usage limit, a compacted context, a meeting, 
 | | What it means | How Soujo does it |
 |---|---|---|
 | Interruptible development | Stopping at any moment loses no work and no decision | Layers of ≤30 minutes, one commit each; `close` commits unfinished work as `wip:` |
-| Resumable AI coding | A new session needs no conversation history, in either host, even weeks later | `NEXT.md` (≤5 lines) names the next step; `resume` prints a four-line status; after days away, `brief` adds progress, the last `節目` (milestone) entry, and the gap |
+| Resumable AI coding | A new session needs no conversation history, in either host, even weeks later | `NEXT.md` (≤5 lines) names the next step; `soujo resume` prints a four-line status; from 3 days away, `soujo brief` gives progress, the last `節目` (milestone) entry, and the gap, which the `resume` skill returns after the four lines |
 | Low-context development | Neither you nor the model has to keep much in mind | Each file has a line limit; one question at a time; the CLI updates the records |
 
 The name: in an excavation, strata (層) are removed one at a time in order (序), and each removed layer is recorded. With the records, anyone can continue the dig.
@@ -30,7 +30,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 | spec | `/soujo:spec` | `$spec` | One question at a time (at most 7) → `.soujo/SPEC.md`, then a `節目` entry in `LOG.md` |
 | plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added |
 | go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>` |
-| resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume; from 3 days away, then the five lines of `soujo brief` |
+| resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume; from 3 days away, followed by the five lines of `soujo brief` |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
 | review | `/soujo:review` | `$review` | Every finding on the given range (default: the latest layer, uncommitted changes included) in one table, unfiltered |

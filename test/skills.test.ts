@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { packageDir } from '../src/files.js';
-import { assertKnownCommand, commands, temp } from './helpers.js';
+import { resume } from '../src/commands/resume.js';
+import { packageDir, readTemplate } from '../src/files.js';
+import { assertKnownCommand, commands, commitAll, project, repo, temp } from './helpers.js';
 
 const SKILLS = ['close', 'go', 'map', 'plan', 'resume', 'review', 'spec'];
 const SECTIONS = ['読むもの', 'やること', 'soujo に頼むこと', '出力の形'];
@@ -143,19 +144,51 @@ test('spec, plan, and go write a 節目 entry, spec and go before next set to pl
   for (const word of ['`spec`', '`plan`', '`節目`', 'CLI が拒否する']) assert.ok(naming.includes(word), `plan の層名の行に ${word}`);
 });
 
-// SPEC §7: the resume skill follows the pointer of 再開: to soujo brief, which soujo resume prints after 3 days away.
-test('resume runs soujo brief after soujo resume only when 再開: says N日ぶり, and returns its lines after the four', () => {
-  const body = split(join(packageDir(), 'skills', 'resume', 'SKILL.md')).body;
-  const argvs = commands(body);
-  const resume = argvs.findIndex((argv) => argv.join(' ') === 'resume');
-  const brief = argvs.findIndex((argv) => argv.join(' ') === 'brief');
-  assert.ok(resume !== -1 && brief > resume, 'soujo resume の後に soujo brief');
-  const found = sections(body);
-  for (const section of ['やること', 'soujo に頼むこと']) {
-    const line = found.get(section)?.find((text) => text.includes('`soujo brief`')) ?? '';
-    assert.ok(line.includes('`再開:`') && line.includes('`N日ぶり`'), `resume の「${section}」は N日ぶり のときだけ brief`);
+// The end of 再開: after 3 days away as the skills and CLAUDE.md / AGENTS.md quote it: the number of days varies, so it is left out.
+const POINTER = '日ぶり: 先に soujo brief';
+
+// SPEC §6: the quoted end is what soujo resume prints, so a model matching the text finds it.
+test('soujo resume ends 再開: with the pointer that the skills and the templates quote', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': '次: L1 a\n前提: なし\n確認: a\n注意: なし\neffort: low\n', 'PLAN.md': '- [ ] L1 a — a\n' });
+  commitAll(dir, 'layer: L0', new Date(2026, 8, 1));
+  const line = resume(dir, new Date(2026, 8, 20))[3] ?? '';
+  assert.ok(line.startsWith('再開:') && line.endsWith(POINTER), line);
+  const quoting: [string, string][] = [
+    ['resume', split(join(packageDir(), 'skills', 'resume', 'SKILL.md')).body],
+    ['go', split(join(packageDir(), 'skills', 'go', 'SKILL.md')).body],
+    ['CLAUDE.md', readTemplate('CLAUDE.md')],
+    ['AGENTS.md', readTemplate('AGENTS.md')],
+  ];
+  for (const [label, text] of quoting) {
+    assert.ok(text.includes(`\`${POINTER}\``), `${label} は ${POINTER} を引く`);
+    assert.ok(!text.includes('N日ぶり'), `${label} に字面の N日ぶり がない`);
   }
-  assert.match(found.get('出力の形')?.join('\n') ?? '', /4行そのまま。`soujo brief` を実行したら、その後にその5行そのまま/);
+});
+
+// SPEC §7: the resume skill follows the pointer; brief is read only when it ran.
+test('resume runs soujo brief after the four lines only when 再開: ends with the pointer, and says what a failure returns', () => {
+  const found = sections(split(join(packageDir(), 'skills', 'resume', 'SKILL.md')).body);
+  const text = (section: string) => found.get(section)?.join('\n') ?? '';
+  assert.deepEqual(commands(text('soujo に頼むこと')), [['resume'], ['brief']], 'soujo resume の後に soujo brief');
+  const only = `\`再開:\` で始まる行が \`${POINTER}\` で終わるときだけ`;
+  assert.ok(text('soujo に頼むこと').includes(`${only}、その後に \`soujo brief\``), '頼むこと: 条件つきで resume の後');
+  assert.ok(text('やること').includes(`4行を受け取った後、${only} \`soujo brief\` を実行する。終わらなければ実行しない。`), 'やること: 4行の後・条件・否定');
+  assert.ok(text('読むもの').includes('根拠は `soujo resume` の出力だけ（`soujo brief` を実行したときはその出力も）'), '読むもの: brief は実行したときだけ');
+  for (const phrase of [
+    '`soujo resume` の4行そのまま。`soujo brief` を実行したら、その後にその5行そのまま。',
+    '`soujo resume` が失敗したらエラーの1行だけ（`soujo brief` は実行しない）。',
+    '`soujo brief` だけ失敗したら、4行の後にそのエラーの1行。',
+  ]) {
+    assert.ok(text('出力の形').includes(phrase), `出力の形: ${phrase}`);
+  }
+});
+
+// SPEC §14: go keeps reading only the four lines; brief is the resume skill's.
+test('go runs no soujo brief, reads the four lines of soujo resume, and does not follow the pointer', () => {
+  const found = sections(split(join(packageDir(), 'skills', 'go', 'SKILL.md')).body);
+  assert.ok(!commands([...found.values()].flat().join('\n')).some((argv) => argv[0] === 'brief'), 'go に soujo brief がない');
+  assert.match(found.get('読むもの')?.[1] ?? '', /^- `soujo resume` の4行 → /);
+  assert.ok((found.get('やること')?.[0] ?? '').includes(`\`再開:\` の行末の \`${POINTER}\` には従わない`), 'go は brief の案内に従わない');
 });
 
 test('agents/reviewer.md is the subagent the review skill names', () => {

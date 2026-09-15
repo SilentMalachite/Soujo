@@ -145,8 +145,8 @@ effort: <low|medium|high|xhigh>
 |---|---|---|---|---|---|
 | `spec` | `soujo init` 後の `SPEC.md`。技術の候補を出すときは設定ファイル | 質問1つずつ（答えを受けてから次）・最大7問。各問に番号付きの答え候補。答えるたびに書く。技術スタックは設定ファイルで決まればそれ、決まらなければ質問（既定値を持たない） | `soujo init` → `soujo log add 節目`（SPEC を書いた・何が未決か）→ `soujo next set`（次: plan） | `SPEC.md` の骨組みの表1つと init が作ったファイル | high |
 | `plan` | `SPEC.md` と既存の `PLAN.md` | 未実装を30分以内の層に分割。依存順。未完了は最大12層。未実装がなければ層を足さず終える | `soujo log add 節目`（層を足したときだけ：何層か・何を外したか）→ `soujo next set`（`次:` が最初の未完了の層でないときだけ）→ `soujo map plan` | `PLAN.md` と図 | high |
-| `go` | `soujo resume` → `NEXT.md` → `SPEC.md` → PLAN の該当層 | `再開:` が go 以外ならそれに従う。層を完了条件まで実装。**終わったら次の層の `NEXT.md` を先に書き（最後の層の後は `次: plan`）、その後 `layer done`。最後の層では `NEXT.md` の前に `節目` エントリを LOG へ書く**。拒否されたコマンドは失敗したところから再実行する。NEXT が spec / plan を指すならそちらへ | `soujo resume` → `soujo log add 節目`（最後の層だけ：層で何ができたか・何が未決か）→ `soujo next set` → `soujo layer done` | 結果1文＋変更ファイル | `NEXT.md` の指定 |
-| `resume` | — | CLI の出力をそのまま返す。`再開:` に `N日ぶり` があれば `soujo brief` も実行する | `soujo resume` → `soujo brief`（`再開:` に `N日ぶり` があるときだけ） | 4行。`brief` を実行したらその後に5行 | low |
+| `go` | `soujo resume` → `NEXT.md` → `SPEC.md` → PLAN の該当層 | `再開:` が go 以外ならそれに従う（`soujo brief` の案内には従わない）。層を完了条件まで実装。**終わったら次の層の `NEXT.md` を先に書き（最後の層の後は `次: plan`）、その後 `layer done`。最後の層では `NEXT.md` の前に `節目` エントリを LOG へ書く**。拒否されたコマンドは失敗したところから再実行する。NEXT が spec / plan を指すならそちらへ | `soujo resume` → `soujo log add 節目`（最後の層だけ：層で何ができたか・何が未決か）→ `soujo next set` → `soujo layer done` | 結果1文＋変更ファイル | `NEXT.md` の指定 |
+| `resume` | — | CLI の出力をそのまま返す。`再開:` の行が `・N日ぶり: 先に soujo brief` で終われば、4行の後に `soujo brief` も実行する | `soujo resume` → `soujo brief`（`再開:` の行がそう終わるときだけ） | 4行。`brief` を実行したらその後に5行。`resume` が失敗したらエラーの1行だけで `brief` は実行しない。`brief` が失敗したら4行の後にエラーの1行 | low |
 | `map` | `diff` のときだけ、直近の層の diff とその周辺 | `plan` / `code [dir]` は CLI の図をそのまま示す。`diff` は Before/After を自分で描く | `soujo map` | 図＋5行以内 | medium |
 | `review` | 引数の範囲、なければ最新の `layer:` コミットの親から作業ツリーまでの diff（未追跡も含む） | **見つけたものは全部**、表 `# / 場所 / 何が / なぜ / 直し方`。`soujo:reviewer` を起動できれば1体だけ起動し、表を加工せず出す | — | 表 | medium |
 | `close` | — | 引数の一言を `--note` に渡す。なければ進んだところを1行にして渡す | `soujo close` | 2行 | low |

@@ -8,7 +8,7 @@ description: "Soujo の .soujo/NEXT.md が指す層を実装し、次の NEXT.md
 - `soujo resume` の4行 → `.soujo/NEXT.md` → `.soujo/SPEC.md` → `.soujo/PLAN.md` の該当層の行。
 
 ## やること
-- `再開:` が go 以外（layer done の再実行・next set）ならその通りにする。`次:` が `spec` / `plan` ならそのスキルに切り替える。
+- `再開:` が go 以外（layer done の再実行・next set）ならその通りにする。`再開:` の行末の `日ぶり: 先に soujo brief` には従わない（brief は resume スキルが出す）。`次:` が `spec` / `plan` ならそのスキルに切り替える。
 - PLAN の完了条件までが実装してよい範囲。確認を挟まず、満たすまで続ける（テストが落ちたまま締めない）。途中で止まるなら close スキルへ。
 - 満たしたら締める。順は、最後の層なら 節目 → NEXT.md（`次: plan`）→ layer done、ほかは NEXT.md → layer done。拒否はエラーの1行に従って直し、git に書けなければ権限を求めて、失敗したコマンドから再実行する（成功した log add は繰り返さない）。
 

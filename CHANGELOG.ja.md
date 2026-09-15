@@ -8,7 +8,8 @@
 
 ### 変更
 
-- `resume` スキルは、`soujo resume` の `再開:` に `N日ぶり` があれば `soujo brief` も実行し、4行の後にその5行を返す。以前は4行だけを返し、`soujo brief` はモデルか利用者が別の手順として実行する必要があった。
+- `resume` スキルは、`soujo resume` の `再開:` の行が `・N日ぶり: 先に soujo brief` で終われば `soujo brief` も実行し、4行の後にその5行を返す。以前は4行だけを返し、`soujo brief` はモデルか利用者が別の手順として実行する必要があった。
+- `go` スキルと、`soujo init` が書く `CLAUDE.md` / `AGENTS.md` は、`go` の中でモデルに `soujo brief` を実行させない。`soujo brief` は `resume` スキルの役目。以前のテンプレートは、`再開:` が案内すれば先に `soujo brief` を実行するよう書いていた。
 
 ## 0.3.0 — 2026-09-15
 
