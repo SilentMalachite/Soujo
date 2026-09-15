@@ -290,3 +290,8 @@ next show/next check は findStateDir が undefined を返しプロジェクト�
 grok レビュー L18 の14件を修正: pluginDir は大文字小文字を区別せず、実パスが求まらないとき求まる最も近い祖先の実パスで判定
 --hook なしの next show もプラグイン配下で拒否（soujo init への誤誘導をなくす）。SPEC §6/§14・README・CHANGELOG(+ja)・PLAN L18 の文言を next check/next show --hook とそれ以外に分けた
 テスト: 判定は全 OS、symlink・EACCES・ELOOP は win32 skip。.git なしキャッシュ、-h・next --help、未知コマンド・空 argv・外の dir への map code を追加
+
+## 2026-09-15 release-0.3.0
+0.3.0 をリリース（2026-09-15）: soujo brief と resume の N日ぶり、節目エントリ（spec/plan/go）、プラグインの置き場所での実行拒否
+数週間の空白を再現して確認（26日ぶり→brief→rotate 後も節目が残る）。README(+ja)・SPEC(+ja) の再開を「数日〜数週間」に
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.0 にし、CHANGELOG(+ja) の未リリース節を 0.3.0 — 2026-09-15 にした
