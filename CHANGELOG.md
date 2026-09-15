@@ -4,6 +4,22 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.3 — 2026-09-15
+
+Release: [v0.1.3](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.3).
+
+### Fixed
+
+- `.soujo/` files are read only where they may be written: through a symlink (of a file or of `.soujo/`) to a file outside the project or inside `.git`, or when not a regular file, reading is refused. Before, a symlink planted in a cloned repository could put another file into the session context through `soujo next show --hook` or into a `soujo next check` warning, and a symlink to `/dev/zero` could hang a hook.
+- `soujo init` refuses and creates nothing when a state file's real path is outside the project or inside `.git`. Before, a symlinked `.soujo/` made it create the templates wherever the symlink pointed.
+- `soujo init` writes each file to a temporary file and links it into place. Before, an interruption could leave an empty or half-written file, which a re-run skipped as existing.
+- `soujo next set` and `soujo layer done` refuse a `PLAN.md` that repeats a layer name or has a layer named `spec` / `plan`, and `soujo next check` warns about it. Before, only the first of two layers with the same name could be closed, and a layer named `plan` was taken for the step after the last layer.
+
+### Changed
+
+- `templates/CLAUDE.md` and `templates/AGENTS.md`, which `soujo init` copies into projects of any stack, no longer describe Soujo's own stack (TypeScript, a committed `dist/`); this repository's copies keep it in a last section. Projects set up earlier keep their copies: the `このリポジトリ（Soujo 本体）` part of §6 in `CLAUDE.md` and the `本体：` line in `AGENTS.md` can be deleted by hand.
+- `CLAUDE.md` says `--effort` of `soujo next set` is only for PLAN layers, and the `plan` skill says not to name a layer `spec` or `plan`.
+
 ## 0.1.2 — 2026-09-15
 
 Release: [v0.1.2](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.2).

@@ -232,3 +232,7 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.2 にし、
 grok レビュー3回目の #1〜#7 をすべて修正（#6 は任意表記への注記のみ）。
 readState と init はプロジェクト外・.git 内への symlink を拒否し、読むのは通常ファイルだけ。init は一時ファイル＋link で作る。
 PLAN の層名の重複と spec/plan を next set・layer done が拒否し next check が警告。templates の CLAUDE/AGENTS から本体スタックを外した。
+
+## 2026-09-15 release-0.1.3
+0.1.3 をリリース（2026-09-15）: grok レビュー3回目の修正（読み取りと init の symlink 制限・init の原子的作成・層名の重複と spec/plan の拒否）。
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.3 にし、CHANGELOG(+ja) に Fixed / Changed を追加。

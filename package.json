@@ -1,6 +1,6 @@
 {
   "name": "soujo",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Resumable spec → plan → layer workflow shared by Claude Code and Codex",
   "type": "module",
   "bin": {

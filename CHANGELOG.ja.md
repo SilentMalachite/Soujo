@@ -4,6 +4,22 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
+## 0.1.3 — 2026-09-15
+
+リリース：[v0.1.3](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.3)。
+
+### 修正
+
+- `.soujo/` のファイルは、書いてよい場所にあるものだけを読む：プロジェクトの外か `.git` の中のファイルへの symlink（ファイルのものも `.soujo/` のものも）を通すとき、または通常のファイルでないときは読まない。これまでは、取得したリポジトリに仕込まれた symlink で、別のファイルが `soujo next show --hook` からセッションの文脈に載ったり `soujo next check` の警告に載ったりし、`/dev/zero` への symlink でフックが固まりえた。
+- `soujo init` は、状態ファイルの実体がプロジェクトの外か `.git` の中なら、何も作らずに拒否する。これまでは、symlink の `.soujo/` の先にテンプレートを作った。
+- `soujo init` は各ファイルを一時ファイルに書いてから置き先へリンクする。これまでは中断で空や書きかけのファイルが残り、再実行は既存として飛ばした。
+- `soujo next set` と `soujo layer done` は、層名が重複するか `spec` / `plan` という層がある `PLAN.md` を拒否し、`soujo next check` はそれを警告する。これまでは同名の2つの層の最初しか締められず、`plan` という層は最後の層の後の手順と取り違えられた。
+
+### 変更
+
+- `soujo init` がどのスタックのプロジェクトにも複製する `templates/CLAUDE.md` と `templates/AGENTS.md` から、Soujo 本体のスタック（TypeScript、コミットする `dist/`）の記述を外した。このリポジトリの写しは末尾の節に残す。以前に導入したプロジェクトの写しはそのままなので、`CLAUDE.md` §6 の「このリポジトリ（Soujo 本体）」の部分と `AGENTS.md` の「本体：」の行は手で消してよい。
+- `CLAUDE.md` に `soujo next set` の `--effort` は PLAN の層にだけ付けると書き、`plan` スキルに層名を `spec` / `plan` にしないと書いた。
+
 ## 0.1.2 — 2026-09-15
 
 リリース：[v0.1.2](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.2)。
