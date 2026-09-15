@@ -186,9 +186,10 @@ test('appendLog refuses entries that break the format', () => {
   const entry = { date: '2026-09-13', layer: 'L2 state', lines: ['a'] };
   assert.throws(() => appendLog('', { ...entry, lines: ['a', 'b', 'c', 'd'] }), /3行まで（4行）/);
   assert.throws(() => appendLog('', { ...entry, layer: ' ' }), /層名/);
-  for (const date of ['2026/09/13', '2026-13-01', '2026-09-00', '2026-09-32']) {
+  for (const date of ['2026/09/13', '2026-13-01', '2026-00-01', '2026-09-00', '2026-09-32', '2026-09-31', '2026-02-29', '2100-02-29']) {
     assert.throws(() => appendLog('', { ...entry, date }), /YYYY-MM-DD/, date);
   }
+  for (const date of ['2028-02-29', '2000-02-29', '2026-12-31']) assert.doesNotThrow(() => appendLog('', { ...entry, date }), date);
   assert.throws(() => appendLog('', { ...entry, lines: ['## 2026-09-14 fake'] }), /## /);
 });
 

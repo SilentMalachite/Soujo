@@ -246,3 +246,8 @@ rotateLog/archiveLog は純粋関数。書庫→LOG.md の順に書き、止ま�
 L15 レビュー #1〜#25 を修正: 止まった rotate の例外を「LOG.md は丸ごとのエントリ削除だけ・書庫は丸ごとの追記だけ・消えたエントリは同じ月の書庫にある」に限定し、symlink の実パスも除外。重複省きは止まった rotate の書庫だけ。
 エントリは LOG.md の行の形のまま移す（LogBlock）。月は01〜12を state.ts の1か所で検証し statePath でも名前を検査。拒否時は一時ファイルを消さない。出力は2行、件名は <最初>..<最後>。next check は rotate が2か月分以上移せるとき警告。
 版は 0.1.3 に戻し CHANGELOG は Unreleased（Added/Changed）。サブディレクトリ・CRLF・HEAD の書庫・手でコミットした書庫・layer done/close 後続のテストを追加。SPEC(+ja)・README(+ja) を同期。
+
+## 2026-09-15 grok-fix-l15
+grok レビュー10件を修正: 止まった rotate は「追記した書庫はその月のエントリを1件以上」「消えた・足されたエントリは HEAD の LOG.md を rotate して移るもの」に限り、この --before で移らなければ前回と同じ --before を案内。
+重複省きは書庫の作業ツリーの中身（今回より前に LOG.md から消えた分を除く）と比べ、書庫だけ先に手でコミットしても二重に足さない。移動なしでも拒否判定の後は一時ファイルを消す。LOG の日付は暦日まで検証。
+PLAN L15 の完了条件を2か月分に、SPEC(+ja)・README(+ja) の LOG.md を「追記だけ」から直し、CHANGELOG の Unreleased を docs テストと CONTRIBUTING(+ja) で明示。cli の --help 無書込に log rotate を追加。

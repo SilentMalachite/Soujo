@@ -163,6 +163,7 @@ test('--help on write commands writes nothing', (t) => {
     [['init', '--help'], USAGES.init],
     [['next', 'set', '--layer', 'L1 scaffold', '--premise', 'p', '--check', 'c', '--help'], USAGES.nextSet],
     [['log', 'add', 'L1 scaffold', '--line', 'a', '-h'], USAGES.logAdd],
+    [['log', 'rotate', '--before', '2026-09', '--help'], USAGES.logRotate],
     [['layer', 'done', 'L1 scaffold', '--note', 'a', '--help'], USAGES.layerDone],
     [['close', '--note', 'a', '-h'], USAGES.close],
   ];

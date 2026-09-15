@@ -39,7 +39,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 |---|---|---|
 | `SPEC.md` | Goals, non-goals, acceptance criteria, technical decisions | ~100 lines |
 | `PLAN.md` | `- [ ] <layer> — <completion condition>` | 1 line per layer |
-| `LOG.md` | Append-only journal | 3 lines per entry |
+| `LOG.md` | Journal that commands append to; only `soujo log rotate` moves entries out | 3 lines per entry |
 | `LOG-YYYY-MM.md` | Past months of `LOG.md`, moved by `soujo log rotate` | — (entries as `LOG.md` had them) |
 | `NEXT.md` | The next step — all you need to resume | 5 lines |
 

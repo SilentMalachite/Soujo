@@ -72,10 +72,14 @@ test('the READMEs name every skill for both hosts', () => {
   }
 });
 
-// A version stays "unreleased" until it is released; the date replaces it then.
-test('the latest version in both changelogs is the package.json version', () => {
+// Changes merged after a release wait under one "## Unreleased" section above the versions; the version stays that of the last
+// release until the release commit numbers the section. A version not yet released can also say "unreleased" instead of a date.
+test('the latest version in both changelogs is the package.json version, below at most one unreleased section', () => {
   const { version } = JSON.parse(read('package.json')) as { version: string };
-  for (const name of ['CHANGELOG.md', 'CHANGELOG.ja.md']) {
-    assert.equal(/^## (\S+) — (?:unreleased|\d{4}-\d{2}-\d{2})$/m.exec(read(name))?.[1], version, `${name} の先頭の版`);
+  for (const [name, unreleased] of [['CHANGELOG.md', 'Unreleased'], ['CHANGELOG.ja.md', '未リリース']] as const) {
+    const headings = [...read(name).matchAll(/^## (.+)$/gm)].map(([, heading]) => heading ?? '');
+    const versions = headings.filter((heading) => heading !== unreleased);
+    assert.ok(headings.slice(1).every((heading) => heading !== unreleased), `${name}: ## ${unreleased} は先頭に1つだけ`);
+    assert.equal(/^(\S+) — (?:unreleased|\d{4}-\d{2}-\d{2})$/.exec(versions[0] ?? '')?.[1], version, `${name} の先頭の版`);
   }
 });

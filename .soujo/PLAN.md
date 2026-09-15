@@ -14,4 +14,4 @@
 - [x] L12 accept — 既存 Python プロジェクトの複製で Claude Code→Codex→Claude Code を通し、受け入れ基準1〜10を LOG に記録
 - [x] L13 help — SPEC §6 の --help 行（全コマンド・1コマンド・2語コマンドの1語目・-h・-- の後と --x=--help は対象外・--hook 付きでも使い方・書き込みコマンドでも何も書かない・エラーの案内）がテストで通り、README・CHANGELOG(+.ja) に載る
 - [x] L14 effort — next set --layer spec/plan（前後の空白付きを含む）が effort 省略で high を書き、ほかの effort を何も書かずに拒否することがテストで通り、spec・go スキルの plan 行きの next set が --effort を付けない（go の節は3行のまま）
-- [x] L15 log-rotate — log rotate が当月より前（--before 指定可）のエントリを日付の月ごとに LOG-YYYY-MM.md へ移して先頭部分と最後のエントリを残し log: rotate でコミットし、汚れたツリー・不正な --before で無書込・移動なしで終了0、next check が3か月以上で警告することがテストで通り、README・CHANGELOG(+.ja) に載る
+- [x] L15 log-rotate — log rotate が当月より前（--before 指定可）のエントリを日付の月ごとに LOG-YYYY-MM.md へ移して先頭部分と最後のエントリを残し log: rotate でコミットし、汚れたツリー・不正な --before で無書込・移動なしで終了0、next check が rotate で2か月分以上移せるとき警告することがテストで通り、README・CHANGELOG(+.ja) に載る

@@ -50,10 +50,20 @@ const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/;
 // Standalone tokens between the layer name and its completion condition. "—" is canonical; the rest are common typing variants.
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
-const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 // Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, U+2028/2029.
 const CONTROL = /[\u0000-\u001f\u007f\u2028\u2029]/g;
+
+// A calendar date: the month from 01 to 12 and a day that month has, leap years included.
+function isDate(value: string): boolean {
+  const match = DATE.exec(value);
+  if (match === null) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return days !== undefined && day >= 1 && day <= days;
+}
 
 function isEffort(value: string): value is Effort {
   return (EFFORTS as readonly string[]).includes(value);
@@ -236,7 +246,7 @@ export function logLines(lines: string[]): string[] {
 export function appendLog(text: string, entry: LogEntry): string {
   const layer = entry.layer.trim();
   if (layer === '' || printable(layer) !== layer) throw new Error('層名は空でない1行で書く（制御文字なし）');
-  if (!DATE.test(entry.date)) throw new Error(`日付は YYYY-MM-DD: ${entry.date}`);
+  if (!isDate(entry.date)) throw new Error(`日付は YYYY-MM-DD: ${entry.date}`);
   const lines = logLines(entry.lines);
   if (lines.length > LOG_MAX_LINES) {
     throw new Error(`LOG は1エントリ${LOG_MAX_LINES}行まで（${lines.length}行）`);

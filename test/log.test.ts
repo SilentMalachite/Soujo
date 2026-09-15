@@ -147,6 +147,20 @@ test('log rotate refuses uncommitted changes a rotate does not make, writing and
     ['a committed entry removed from an archive', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), '# LOG 2026-06\n')],
     ['a line added to the last entry of an archive', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), `${june}more\n`)],
     ['an archive named for no month', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-13.md'), '')],
+    ['a new archive without entries', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-05.md'), '# LOG 2026-05\n')],
+    ['only a blank line added to an archive', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), `${june}\n`)],
+    ['an entry LOG.md never had added to an archive', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), `${june}\n## 2026-06-02 hand\nh\n`)],
+    [
+      'an entry of another month appended to an archive',
+      (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), `${june}\n## 2026-07-30 L1\na\n`),
+    ],
+    [
+      'the last entry moved by hand into its archive',
+      (dir) => {
+        writeFileSync(join(dir, '.soujo', 'LOG.md'), ROTATING.replace('\n## 2026-09-10 L5\ne\n', ''));
+        writeFileSync(join(dir, '.soujo', 'LOG-2026-09.md'), '# LOG 2026-09\n\n## 2026-09-10 L5\ne\n');
+      },
+    ],
     [
       'an entry removed from LOG.md into the archive of another month',
       (dir) => {
@@ -221,14 +235,41 @@ test('log rotate re-run finishes a rotate stopped after writing archives, or aft
   assert.deepEqual([state(byHand, 'LOG.md'), gitStatus(byHand)], [ROTATED, []]);
 });
 
-test('log rotate refuses to commit a stopped rotate whose entries this rotation would leave in LOG.md', (t) => {
+test('log rotate refuses a stopped rotate that this --before would not finish, writing nothing', (t) => {
+  const otherBefore = /^Error: 前回の rotate が動かしたエントリがこの --before では移らない（前回と同じ --before で再実行する）$/;
+  const appended = logProject(t);
+  writeFileSync(join(appended, '.soujo', 'LOG-2026-08.md'), AUGUST);
+  assert.throws(() => logRotate(appended, '2026-08', SEPTEMBER), otherBefore);
+  assert.deepEqual([state(appended, 'LOG.md'), existsSync(join(appended, '.soujo', 'LOG-2026-07.md'))], [ROTATING, false]);
+
+  // An entry of the current month moved into its archive is what rotate --before 2026-10 does, so only that --before finishes it.
+  const current = logProject(t);
+  writeFileSync(join(current, '.soujo', 'LOG.md'), ROTATING.replace('## 2026-09-01 L3\nc\n\n', ''));
+  writeFileSync(join(current, '.soujo', 'LOG-2026-09.md'), '# LOG 2026-09\n\n## 2026-09-01 L3\nc\n');
+  assert.throws(() => logRotate(current, undefined, SEPTEMBER), otherBefore);
+  assert.equal(gitLastCommit(current)?.subject, 'layer: L5');
+  assert.deepEqual(logRotate(current, '2026-10', SEPTEMBER), [
+    'LOG.md から4件を3書庫へ移動（2026-07〜2026-09）',
+    commitLine(current, 'log: rotate 2026-07..2026-09'),
+  ]);
+  assert.equal(state(current, 'LOG-2026-09.md'), '# LOG 2026-09\n\n## 2026-09-01 L3\nc\n');
+});
+
+test('log rotate does not append again what archives committed by hand before LOG.md already hold', (t) => {
   const dir = logProject(t);
+  writeFileSync(join(dir, '.soujo', 'LOG-2026-07.md'), JULY);
   writeFileSync(join(dir, '.soujo', 'LOG-2026-08.md'), AUGUST);
-  assert.throws(
-    () => logRotate(dir, '2026-08', SEPTEMBER),
-    /^Error: 前回の rotate が書庫に移したエントリが LOG\.md に残る（前回と同じ --before で再実行する）$/,
-  );
-  assert.deepEqual([state(dir, 'LOG.md'), existsSync(join(dir, '.soujo', 'LOG-2026-07.md'))], [ROTATING, false]);
+  commitAll(dir, 'archives');
+  assert.deepEqual(logRotate(dir, undefined, SEPTEMBER), [MOVED, commitLine(dir)]);
+  assert.deepEqual([state(dir, 'LOG.md'), state(dir, 'LOG-2026-07.md'), state(dir, 'LOG-2026-08.md')], [ROTATED, JULY, AUGUST]);
+});
+
+test('log rotate with nothing to move still removes leftover temporary files', (t) => {
+  const dir = logProject(t, { 'LOG.md': '# LOG\n\n## 2026-01-01 L1\na\n' });
+  const leftover = join(dir, '.soujo', '.LOG-2026-08.md.99999.tmp');
+  writeFileSync(leftover, 'half');
+  assert.deepEqual(logRotate(dir, undefined, SEPTEMBER), ['移動なし']);
+  assert.deepEqual([existsSync(leftover), gitStatus(dir)], [false, []]);
 });
 
 test('log rotate in a project inside a larger repository ignores changes outside it and commits only the project', (t) => {
