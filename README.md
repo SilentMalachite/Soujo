@@ -22,7 +22,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 
 ```
 /soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:plan (when layers run out)
-                                 ↑ /soujo:resume after a break (soujo brief after days or weeks away) · /soujo:close before stopping
+                                 ↑ /soujo:resume after a break (with soujo brief after days or weeks away) · /soujo:close before stopping
 ```
 
 | Skill | Claude Code | Codex | Result |
@@ -30,7 +30,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 | spec | `/soujo:spec` | `$spec` | One question at a time (at most 7) → `.soujo/SPEC.md`, then a `節目` entry in `LOG.md` |
 | plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added |
 | go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>` |
-| resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume |
+| resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume; from 3 days away, then the five lines of `soujo brief` |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
 | review | `/soujo:review` | `$review` | Every finding on the given range (default: the latest layer, uncommitted changes included) in one table, unfiltered |

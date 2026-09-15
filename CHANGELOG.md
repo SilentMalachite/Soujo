@@ -4,6 +4,12 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- When `再開:` of `soujo resume` says `N日ぶり`, the `resume` skill also runs `soujo brief` and returns its five lines after the four lines. Before, it returned only the four lines, and the model or you had to run `soujo brief` as a second step.
+
 ## 0.3.0 — 2026-09-15
 
 Release: [v0.3.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.0).

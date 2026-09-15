@@ -4,6 +4,12 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
+## 未リリース
+
+### 変更
+
+- `resume` スキルは、`soujo resume` の `再開:` に `N日ぶり` があれば `soujo brief` も実行し、4行の後にその5行を返す。以前は4行だけを返し、`soujo brief` はモデルか利用者が別の手順として実行する必要があった。
+
 ## 0.3.0 — 2026-09-15
 
 リリース：[v0.3.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.0)。

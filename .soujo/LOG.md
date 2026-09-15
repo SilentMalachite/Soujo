@@ -299,3 +299,11 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.0 にし、
 ## 2026-09-15 節目
 PLAN.md に 1層: L19 resume-brief（resume スキルが N日ぶり のとき soujo brief も返す。SPEC §3・§7・§14 に決定を記載）
 外したもの: なし
+
+## 2026-09-15 節目
+L19 まで完了: resume スキルが 再開: に N日ぶり があるとき soujo brief も実行し、4行の後に5行を返す
+未決: SPEC §14 Open の各項目（Codex フックの展開、spec の逐次書き込み、review の表の無編集など）
+
+## 2026-09-15 L19 resume-brief
+resume スキルは 再開: に N日ぶり があれば soujo brief も実行し、4行の後にその5行をそのまま返す
+skills テストで順序と条件を固定。SPEC(+ja) §3・§7・§14、README(+ja)、CHANGELOG(+ja) の Unreleased に記載

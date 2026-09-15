@@ -18,5 +18,5 @@
 - [x] L16 brief — soujo brief が SPEC §6 の5行（進捗・以後・節目・空白・次）を記録から導出し、git なし・LOG なし・NEXT 無効でその行だけ縮退することがテストで通り、resume の 再開: が最終コミットから3日以上で `・N日ぶり: 先に soujo brief` を付け、README(+.ja)・CHANGELOG(+.ja) に載る
 - [x] L17 milestones — spec・plan・go スキルがフェーズの区切りに `soujo log add 節目` を書き（各節は3行以内のまま）、plan スキルが層名を 節目 にしないと言い、templates/CLAUDE.md・AGENTS.md と README(+.ja) が節目と brief に触れ、skills テストが通る
 - [x] L18 plugin-guard — cwd の実パスに .claude/plugins か .codex/plugins があるとき next check と next show --hook は Soujo 外と同じ（無音）、それ以外のコマンドは --help を除き何も読み書きせず終了1になることがテストで通り、README(+.ja)・CHANGELOG(+.ja) に載る
-- [ ] L19 resume-brief — resume スキルが 再開: に N日ぶり があるとき soujo brief も実行してその5行を4行の後に返し（各節3行以内のまま）、skills テストが通り、README(+.ja)・CHANGELOG(+.ja) に載る
+- [x] L19 resume-brief — resume スキルが 再開: に N日ぶり があるとき soujo brief も実行してその5行を4行の後に返し（各節3行以内のまま）、skills テストが通り、README(+.ja)・CHANGELOG(+.ja) に載る
 

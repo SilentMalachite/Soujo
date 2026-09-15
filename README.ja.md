@@ -22,7 +22,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 
 ```
 /soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:plan（層が尽きたら）
-                                 ↑ 中断後は /soujo:resume（何日・何週間も空いたら soujo brief）・ 止まる前に /soujo:close
+                                 ↑ 中断後は /soujo:resume（何日・何週間も空いたら soujo brief も）・ 止まる前に /soujo:close
 ```
 
 | スキル | Claude Code | Codex | 結果 |
@@ -30,7 +30,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 | spec | `/soujo:spec` | `$spec` | 1問ずつ（最大7問）→ `.soujo/SPEC.md`、続けて `LOG.md` に `節目` エントリ |
 | plan | `/soujo:plan` | `$plan` | 30分以内の層、各1行の完了条件 → `.soujo/PLAN.md`、層を足したら `節目` エントリ |
 | go | `/soujo:go` | `$go` | 次の層を実装し、次の `NEXT.md` を書いて（最後の層はその前に `節目` エントリ）`layer: <層>` でコミット |
-| resume | `/soujo:resume` | `$resume` | 4行：次の層・前回のログ・最新コミット・再開方法 |
+| resume | `/soujo:resume` | `$resume` | 4行：次の層・前回のログ・最新コミット・再開方法。3日以上空いていれば続けて `soujo brief` の5行 |
 | close | `/soujo:close` | `$close` | `中断: …` をログに残し `wip: <層>` でコミット |
 | map | `/soujo:map` | `$map` | 計画の図、import のグラフ、直近の層の Before/After |
 | review | `/soujo:review` | `$review` | 指定した範囲（なければ直近の層。未コミットの変更を含む）の指摘を絞らず全部1つの表で |

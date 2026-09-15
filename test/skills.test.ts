@@ -143,6 +143,21 @@ test('spec, plan, and go write a 節目 entry, spec and go before next set to pl
   for (const word of ['`spec`', '`plan`', '`節目`', 'CLI が拒否する']) assert.ok(naming.includes(word), `plan の層名の行に ${word}`);
 });
 
+// SPEC §7: the resume skill follows the pointer of 再開: to soujo brief, which soujo resume prints after 3 days away.
+test('resume runs soujo brief after soujo resume only when 再開: says N日ぶり, and returns its lines after the four', () => {
+  const body = split(join(packageDir(), 'skills', 'resume', 'SKILL.md')).body;
+  const argvs = commands(body);
+  const resume = argvs.findIndex((argv) => argv.join(' ') === 'resume');
+  const brief = argvs.findIndex((argv) => argv.join(' ') === 'brief');
+  assert.ok(resume !== -1 && brief > resume, 'soujo resume の後に soujo brief');
+  const found = sections(body);
+  for (const section of ['やること', 'soujo に頼むこと']) {
+    const line = found.get(section)?.find((text) => text.includes('`soujo brief`')) ?? '';
+    assert.ok(line.includes('`再開:`') && line.includes('`N日ぶり`'), `resume の「${section}」は N日ぶり のときだけ brief`);
+  }
+  assert.match(found.get('出力の形')?.join('\n') ?? '', /4行そのまま。`soujo brief` を実行したら、その後にその5行そのまま/);
+});
+
 test('agents/reviewer.md is the subagent the review skill names', () => {
   const { keys, body } = split(join(packageDir(), 'agents', 'reviewer.md'));
   assert.deepEqual([...keys.keys()], ['name', 'description', 'tools']);
