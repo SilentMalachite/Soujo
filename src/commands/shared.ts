@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import {
   STATE_DIR,
   STATE_FILES,
-  STATE_PATHS,
   isSymlink,
   readState,
   requireState,
@@ -80,19 +79,36 @@ export function requireCommittable(root: string): void {
   if (isSymlink(join(root, STATE_DIR))) {
     throw new Error(`${STATE_DIR}/ が symlink なので記録をコミットできない（実体のディレクトリにしてから）`);
   }
-  for (const file of STATE_FILES) {
-    const { problem } = stateTarget(join(root, STATE_DIR), file);
-    if (problem !== undefined) throw new Error(`${statePath(file)} の実体（symlink の先）が${problem}なので記録をコミットできない`);
-  }
+  requireInProject(root, STATE_FILES);
   const operation = gitOperationInProgress(root);
   if (operation !== undefined) throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
   const unmerged = gitUnmergedCount(toplevel);
   if (unmerged > 0) throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
-  const tracked = STATE_FILES.map((file) => trackedStatePath(root, file));
-  const ignored = gitIgnored(root, [...new Set([...STATE_PATHS, ...tracked])]);
+  requireNotIgnored(root, STATE_FILES);
+}
+
+/** Throws when a file's real path (a symlink's target) is outside the project or inside .git. */
+function requireInProject(root: string, files: readonly StateFile[]): void {
+  for (const file of files) {
+    const { problem } = stateTarget(join(root, STATE_DIR), file);
+    if (problem !== undefined) throw new Error(`${statePath(file)} の実体（symlink の先）が${problem}なので記録をコミットできない`);
+  }
+}
+
+/** Throws when git ignores a file or its symlink target, so that it would be missing from the commit. */
+function requireNotIgnored(root: string, files: readonly StateFile[]): void {
+  const paths = files.flatMap((file) => [statePath(file), trackedStatePath(root, file)]);
+  const ignored = gitIgnored(root, [...new Set(paths)]);
   if (ignored.length > 0) {
     throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
   }
+}
+
+/** The checks of requireCommittable for files other than the four state files, e.g. the archives of LOG.md. */
+export function requireCommittableFiles(root: string, files: readonly StateFile[]): void {
+  if (files.length === 0) return;
+  requireInProject(root, files);
+  requireNotIgnored(root, files);
 }
 
 /**
@@ -100,13 +116,18 @@ export function requireCommittable(root: string): void {
  * are. Entries are compared whole and counted, so a repeated entry is uncommitted once HEAD has fewer copies of it.
  */
 export function uncommittedLogs(log: string, head: string | undefined): LogEntry[] {
+  return missingEntries(parseLog(log), parseLog(head ?? ''));
+}
+
+/** The entries, in order, that present does not have. Entries are compared whole and counted, as uncommittedLogs does. */
+export function missingEntries(entries: readonly LogEntry[], present: readonly LogEntry[]): LogEntry[] {
   const key = (entry: LogEntry) => JSON.stringify([entry.date, entry.layer, entry.lines]);
-  const committed = new Map<string, number>();
-  for (const entry of parseLog(head ?? '')) committed.set(key(entry), (committed.get(key(entry)) ?? 0) + 1);
-  return parseLog(log).filter((entry) => {
-    const copies = committed.get(key(entry)) ?? 0;
-    if (copies > 0) committed.set(key(entry), copies - 1);
-    return copies === 0;
+  const copies = new Map<string, number>();
+  for (const entry of present) copies.set(key(entry), (copies.get(key(entry)) ?? 0) + 1);
+  return entries.filter((entry) => {
+    const left = copies.get(key(entry)) ?? 0;
+    if (left > 0) copies.set(key(entry), left - 1);
+    return left === 0;
   });
 }
 
@@ -117,12 +138,12 @@ export function headState(root: string, file: StateFile): string | undefined {
 
 /**
  * Stages everything in the project and commits it as subject. Returns false, without committing, when nothing ends up staged.
- * Nothing is committed while PLAN, LOG, or NEXT is not staged as written (skip-worktree): the commit would lack its records,
- * and a re-run of layer done could not add them afterwards.
+ * Nothing is committed while PLAN, LOG, NEXT, or an extra file is not staged as written (skip-worktree): the commit would lack
+ * its records, and a re-run of layer done could not add them afterwards.
  */
-export function commitRecords(root: string, subject: string): boolean {
+export function commitRecords(root: string, subject: string, extra: readonly StateFile[] = []): boolean {
   gitAddAll(root);
-  const unstaged = gitNotStaged(root, RECORDS.map((file) => trackedStatePath(root, file)));
+  const unstaged = gitNotStaged(root, [...RECORDS, ...extra].map((file) => trackedStatePath(root, file)));
   if (unstaged.length > 0) throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
   if (!gitHasStagedChanges(root)) return false;
   gitCommit(root, subject);

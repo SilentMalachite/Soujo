@@ -236,3 +236,8 @@ PLAN の層名の重複と spec/plan を next set・layer done が拒否し next
 ## 2026-09-15 release-0.1.3
 0.1.3 をリリース（2026-09-15）: grok レビュー3回目の修正（読み取りと init の symlink 制限・init の原子的作成・層名の重複と spec/plan の拒否）。
 package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.3 にし、CHANGELOG(+ja) に Fixed / Changed を追加。
+
+## 2026-09-15 L15 log-rotate
+rotateLog/archiveLog は純粋関数。書庫→LOG.md の順に書き、止まった rotate の変更だけは dirty でも許して再実行で仕上げる。
+書庫名は StateFile に LOG-YYYY-MM.md を足して同じ in-project 検査を通す。next check は3か月以上で警告。
+版は 0.2.0 — unreleased（package.json・Codex マニフェスト・CHANGELOG）。SPEC.ja.md も同期。

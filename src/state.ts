@@ -51,6 +51,7 @@ const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/;
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH = /^\d{4}-\d{2}$/;
 // Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, U+2028/2029.
 const CONTROL = /[\u0000-\u001f\u007f\u2028\u2029]/g;
 
@@ -263,6 +264,66 @@ export function parseLog(text: string): LogEntry[] {
 /** The last entry of LOG.md, or undefined when there is none. */
 export function lastLog(text: string): LogEntry | undefined {
   return parseLog(text).at(-1);
+}
+
+/** Whether value is a month as log rotation names it: YYYY-MM. */
+export function isMonth(value: string): boolean {
+  return MONTH.test(value);
+}
+
+/** The month (YYYY-MM) of a LOG entry. */
+export function logMonth(entry: LogEntry): string {
+  return entry.date.slice(0, 7);
+}
+
+/** The months (YYYY-MM) of LOG.md's entries, distinct and in ascending order. */
+export function logMonths(text: string): string[] {
+  return [...new Set(parseLog(text).map(logMonth))].sort();
+}
+
+export interface LogRotation {
+  /** LOG.md without the moved entries; everything else, the text before the first entry included, stays as it was. */
+  kept: string;
+  /** The moved entries in LOG.md's order. */
+  moved: LogEntry[];
+}
+
+/**
+ * LOG.md split for rotation: every entry dated before the month `before` (YYYY-MM) moves, wherever it is, except the last
+ * entry, which resume reads. An entry moves with the blank lines after it, so the kept entries stay separated as they were.
+ */
+export function rotateLog(text: string, before: string): LogRotation {
+  if (!MONTH.test(before)) throw new Error(`月は YYYY-MM: ${before}`);
+  const lines = text.split('\n');
+  // The same rule parseLog uses, so starts[i] is the heading of parseLog(text)[i].
+  const starts = lines.flatMap((line, index) => (LOG_HEADER.test(line.trim()) ? [index] : []));
+  const entries = parseLog(text);
+  const dropped = new Set<number>();
+  const moved: LogEntry[] = [];
+  for (let index = 0; index < starts.length - 1; index++) {
+    const entry = entries[index];
+    if (entry === undefined || logMonth(entry) >= before) continue;
+    moved.push(entry);
+    for (let line = starts[index] ?? 0; line < (starts[index + 1] ?? 0); line++) dropped.add(line);
+  }
+  return { kept: lines.filter((_, index) => !dropped.has(index)).join('\n'), moved };
+}
+
+/**
+ * The archive LOG-<month>.md with entries appended after a blank line each. A missing or blank archive starts with
+ * "# LOG <month>" and uses eol; an existing one keeps its own line break. Entries are written as parseLog read them, without
+ * the limits of appendLog, so entries written by hand still move.
+ */
+export function archiveLog(archive: string | undefined, month: string, entries: LogEntry[], eol: string = '\n'): string {
+  if (!MONTH.test(month)) throw new Error(`月は YYYY-MM: ${month}`);
+  const fresh = archive === undefined || archive.trim() === '';
+  const lineBreak = fresh ? eol : archive.includes('\r\n') ? '\r\n' : '\n';
+  let text = fresh ? `# LOG ${month}${lineBreak}` : archive;
+  for (const entry of entries) {
+    const block = `${[`## ${entry.date} ${entry.layer}`, ...entry.lines].join(lineBreak)}${lineBreak}`;
+    text = `${text}${logSeparator(text, lineBreak)}${block}`;
+  }
+  return text;
 }
 
 /** YYYY-MM-DD in local time. */

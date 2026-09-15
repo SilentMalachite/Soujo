@@ -4,6 +4,13 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
+## 0.2.0 — unreleased
+
+### 追加
+
+- `soujo log rotate [--before YYYY-MM]` は、今月（か `--before`）より前の日付の `LOG.md` のエントリを月ごとに `.soujo/LOG-YYYY-MM.md` へ移す。最初のエントリより前の文と最後のエントリは残すので、`soujo resume` の `前回:` はそのまま出る。`log: rotate <月>` でコミットし、ほかの変更が未コミットの間は拒否する。書き込みかコミットに失敗した後の再実行は、エントリを二重に移さずに同じ移動を仕上げる。
+- `soujo next check` は `LOG.md` が3か月分以上にわたると警告する。
+
 ## 0.1.3 — 2026-09-15
 
 リリース：[v0.1.3](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.3)。

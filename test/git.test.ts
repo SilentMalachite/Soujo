@@ -17,6 +17,7 @@ import {
   gitNotStaged,
   gitOperationInProgress,
   gitStatus,
+  gitStatusExcluding,
   gitToplevel,
   gitUnmergedCount,
 } from '../src/git.js';
@@ -125,6 +126,20 @@ test('status, staging, and commits are limited to cwd and below', (t) => {
   assert.deepEqual(gitStatus(app), []);
   assert.deepEqual(gitStatus(top), ['M  outside.txt', '?? untracked.txt']);
   assert.equal(gitCommitAll(app, 'nothing in app'), false);
+});
+
+test('gitStatusExcluding leaves out matching paths, untracked ones inside an untracked directory included', (t) => {
+  const top = repo(t);
+  const app = join(top, 'app');
+  mkdirSync(join(app, '.soujo'), { recursive: true });
+  writeFileSync(join(top, 'outside.txt'), '');
+  writeFileSync(join(app, '.soujo', 'LOG.md'), '');
+  writeFileSync(join(app, '.soujo', 'LOG-2026-08.md'), '');
+  const excluded = ['.soujo/LOG.md', '.soujo/LOG-[0-9][0-9][0-9][0-9]-[0-9][0-9].md'];
+  assert.deepEqual(gitStatusExcluding(app, excluded), []);
+  assert.deepEqual(gitStatusExcluding(app, []), ['?? app/.soujo/LOG-2026-08.md', '?? app/.soujo/LOG.md']);
+  writeFileSync(join(app, '.soujo', 'LOG-2026-8.md'), '');
+  assert.deepEqual(gitStatusExcluding(app, excluded), ['?? app/.soujo/LOG-2026-8.md']);
 });
 
 test('gitUnmergedCount counts conflicts in the whole repository', (t) => {

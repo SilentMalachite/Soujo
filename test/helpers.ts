@@ -38,7 +38,7 @@ export function commitAll(dir: string, message = 'test commit'): void {
 /** Writes .soujo/ with the given files into dir and returns dir. */
 export function project(dir: string, files: Partial<Record<StateFile, string>> = {}): string {
   mkdirSync(join(dir, '.soujo'), { recursive: true });
-  for (const [file, text] of Object.entries(files)) writeFileSync(join(dir, '.soujo', file), text);
+  for (const [file, text] of Object.entries(files)) if (text !== undefined) writeFileSync(join(dir, '.soujo', file), text);
   return dir;
 }
 

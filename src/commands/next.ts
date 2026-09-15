@@ -3,7 +3,18 @@
 import { dirname } from 'node:path';
 import { findStateDir, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitStatus, gitToplevel } from '../git.js';
-import { PHASES, formatNext, nextStatus, parseNext, parsePlan, validateNext, validatePlan, type Effort, type NextInput } from '../state.js';
+import {
+  PHASES,
+  formatNext,
+  logMonths,
+  nextStatus,
+  parseNext,
+  parsePlan,
+  validateNext,
+  validatePlan,
+  type Effort,
+  type NextInput,
+} from '../state.js';
 
 /** NEXT.md as lines. With hook, silent when there is nothing to show (no project, no file, unreadable). */
 export function nextShow(cwd: string, hook: boolean): string[] {
@@ -51,6 +62,19 @@ export function nextSet(cwd: string, input: NextInput): string[] {
   return [`NEXT.md を更新: 次: ${layer}`];
 }
 
+// LOG.md spanning this many months is worth rotating: a month just begun plus the one before it is not.
+const ROTATE_MONTHS = 3;
+
+// Kept apart from the other checks, so that an unreadable LOG.md does not hide their warnings.
+function logProblems(dir: string): string[] {
+  try {
+    const months = logMonths(readState(dir, 'LOG.md') ?? '').length;
+    return months >= ROTATE_MONTHS ? [`LOG.md に${months}か月分のエントリ（soujo log rotate で移す）`] : [];
+  } catch (error) {
+    return [(error as Error).message];
+  }
+}
+
 function problems(dir: string): string[] {
   const found: string[] = [];
   const next = readState(dir, 'NEXT.md');
@@ -65,6 +89,7 @@ function problems(dir: string): string[] {
     if (status?.state === 'skipped') found.push(`NEXT.md の次「${layer}」より前の「${status.unfinished.layer}」が PLAN で未完了`);
   }
   found.push(...validatePlan(plan ?? ''));
+  found.push(...logProblems(dir));
   const root = dirname(dir);
   if (gitToplevel(root) !== undefined) {
     const changes = gitStatus(root).length;

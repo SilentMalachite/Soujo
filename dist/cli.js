@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import { close } from './commands/close.js';
 import { init } from './commands/init.js';
 import { layerDone } from './commands/layer.js';
-import { logAdd } from './commands/log.js';
+import { logAdd, logRotate } from './commands/log.js';
 import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
@@ -81,6 +81,14 @@ const COMMANDS = {
             });
             expectPositionals(positionals, 1, usage);
             return logAdd(cwd, positionals[0] ?? '', values.line ?? []);
+        },
+    },
+    'log rotate': {
+        usage: 'log rotate [--before YYYY-MM]',
+        run: (args, cwd, usage) => {
+            const { positionals, values } = parseArgs({ args, options: { before: { type: 'string' } }, allowPositionals: true });
+            expectPositionals(positionals, 0, usage);
+            return logRotate(cwd, values.before);
         },
     },
     'layer done': {

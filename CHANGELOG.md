@@ -4,6 +4,13 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.0 — unreleased
+
+### Added
+
+- `soujo log rotate [--before YYYY-MM]` moves the entries of `LOG.md` dated before the current month (or `--before`) into `.soujo/LOG-YYYY-MM.md`, one archive per month, keeping the text before the first entry and the last entry so that `soujo resume` still shows `前回:`. It commits `log: rotate <months>`, refuses while other changes are uncommitted, and a re-run after a failed write or commit finishes the same rotation without moving an entry twice.
+- `soujo next check` warns when `LOG.md` spans three or more months.
+
 ## 0.1.3 — 2026-09-15
 
 Release: [v0.1.3](https://github.com/SilentMalachite/Soujo/releases/tag/v0.1.3).

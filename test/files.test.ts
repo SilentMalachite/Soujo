@@ -15,6 +15,10 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
+  ARCHIVE_PATHSPEC,
+  archiveFile,
+  archiveFiles,
+  archiveMonth,
   createFile,
   ensureStateDir,
   findStateDir,
@@ -193,6 +197,47 @@ test('removeLeftoverTemps deletes only writeState temporary files, next to symli
   assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
   assert.deepEqual(kept.filter((path) => !existsSync(path)), []);
   assert.ok(existsSync(join(dir, '.SPEC.md.7.tmp')));
+});
+
+test('archiveFile names a month only, archiveMonth reads it back, and archiveFiles lists the archives in .soujo/', (t) => {
+  assert.equal(archiveFile('2026-08'), 'LOG-2026-08.md');
+  assert.equal(archiveMonth('LOG-2026-08.md'), '2026-08');
+  for (const month of ['2026-8', '../../x', '2026-08/..', '']) assert.throws(() => archiveFile(month), /^Error: 月は YYYY-MM: /, month);
+  assert.equal(ARCHIVE_PATHSPEC, '.soujo/LOG-[0-9][0-9][0-9][0-9]-[0-9][0-9].md');
+
+  const dir = join(temp(t), '.soujo');
+  assert.deepEqual(archiveFiles(dir), []);
+  mkdirSync(dir);
+  for (const name of ['LOG-2026-09.md', 'LOG-2026-07.md', 'LOG.md', 'LOG-2026-7.md', 'LOG-2026-08.md.bak', '.LOG-2026-06.md.1.tmp']) {
+    writeFileSync(join(dir, name), '');
+  }
+  assert.deepEqual(archiveFiles(dir), ['LOG-2026-07.md', 'LOG-2026-09.md']);
+});
+
+test('stateTarget refuses names other than the state files and archives, so no name leaves .soujo/', (t) => {
+  const dir = join(temp(t), '.soujo');
+  mkdirSync(dir);
+  writeFileSync(join(dir, 'LOG-2026-08.md'), 'archived\n');
+  assert.equal(readState(dir, 'LOG-2026-08.md'), 'archived\n');
+  writeState(dir, 'LOG-2026-09.md', 'new\n');
+  assert.equal(readFileSync(join(dir, 'LOG-2026-09.md'), 'utf8'), 'new\n');
+  for (const name of ['LOG-../../x.md', 'LOG-2026-08.md/../../x', 'notes.md']) {
+    assert.throws(() => stateTarget(dir, name as 'LOG-x.md'), /^Error: 状態ファイルの名前ではない: /, name);
+    assert.throws(() => writeState(dir, name as 'LOG-x.md', ''), /^Error: [^\n]* を書けない: 状態ファイルの名前ではない: /, name);
+  }
+});
+
+test('removeLeftoverTemps deletes temporary files of archives, existing or not', (t) => {
+  const root = temp(t);
+  const dir = join(root, '.soujo');
+  mkdirSync(dir);
+  writeFileSync(join(dir, 'LOG-2026-08.md'), '');
+  const leftovers = [join(dir, '.LOG-2026-08.md.12.tmp'), join(dir, '.LOG-2026-07.md.34.tmp')];
+  const kept = [join(dir, '.LOG-2026-7.md.34.tmp'), join(dir, '.LOG-2026-07.md.tmp')];
+  for (const path of [...leftovers, ...kept]) writeFileSync(path, '');
+  removeLeftoverTemps(dir);
+  assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
+  assert.deepEqual(kept.filter((path) => !existsSync(path)), []);
 });
 
 test('removeLeftoverTemps leaves files next to a symlink target outside the project', { skip: process.platform === 'win32' }, (t) => {

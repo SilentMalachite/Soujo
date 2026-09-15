@@ -21,14 +21,52 @@ import { fileURLToPath } from 'node:url';
 
 export const STATE_DIR = '.soujo';
 export const STATE_FILES = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'] as const;
-export type StateFile = (typeof STATE_FILES)[number];
+/** A month of LOG.md moved out by soujo log rotate. */
+export type ArchiveFile = `LOG-${string}.md`;
+export type StateFile = (typeof STATE_FILES)[number] | ArchiveFile;
+
+const ARCHIVE = /^LOG-(\d{4}-\d{2})\.md$/;
+// A temporary file of writeState for an archive, named after it.
+const ARCHIVE_TEMP = /^\.(LOG-\d{4}-\d{2}\.md)\.\d+\.tmp$/;
+
+/** The pathspec (git glob) of every archive, relative to the project root. */
+export const ARCHIVE_PATHSPEC = `${STATE_DIR}/LOG-[0-9][0-9][0-9][0-9]-[0-9][0-9].md`;
+
+/** The archive of month (YYYY-MM); anything else throws, so a name can never leave .soujo/. */
+export function archiveFile(month: string): ArchiveFile {
+  const file = `LOG-${month}.md` as const;
+  if (!ARCHIVE.test(file)) throw new Error(`月は YYYY-MM: ${month}`);
+  return file;
+}
+
+/** The month (YYYY-MM) of an archive. */
+export function archiveMonth(file: ArchiveFile): string {
+  return ARCHIVE.exec(file)?.[1] ?? '';
+}
+
+function isStateFile(name: string): name is StateFile {
+  return (STATE_FILES as readonly string[]).includes(name) || ARCHIVE.test(name);
+}
+
+function entryNames(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+/** The archives in .soujo/ (a symlink or any other entry with an archive's name included), sorted by name. */
+export function archiveFiles(dir: string): ArchiveFile[] {
+  return entryNames(dir)
+    .filter((name): name is ArchiveFile => ARCHIVE.test(name))
+    .sort();
+}
 
 /** The state file relative to the project root, e.g. ".soujo/PLAN.md". */
 export function statePath(file: StateFile): string {
   return `${STATE_DIR}/${file}`;
 }
-
-export const STATE_PATHS: readonly string[] = STATE_FILES.map(statePath);
 
 function isDirectory(path: string): boolean {
   try {
@@ -124,6 +162,7 @@ export interface StateTarget {
 
 /** Where writeState writes the file. Throws when .soujo/ or the project cannot be resolved. */
 export function stateTarget(dir: string, file: StateFile): StateTarget {
+  if (!isStateFile(file)) throw new Error(`状態ファイルの名前ではない: ${file}`);
   const path = join(dir, file);
   const real = existsSync(path) ? realpathSync(path) : join(realpathSync(dir), file);
   const inProject = relative(realpathSync(dirname(dir)), real);
@@ -211,9 +250,14 @@ export function removeTempsOf(target: string): void {
   }
 }
 
-/** Deletes temporary files (or symlinks in their place) that a killed writeState left behind, so that `git add -A` never commits them. */
+/**
+ * Deletes temporary files (or symlinks in their place) that a killed writeState left behind, so that `git add -A` never commits
+ * them: those of the four state files, and those of archives that exist or whose temporary file is in .soujo/.
+ */
 export function removeLeftoverTemps(dir: string): void {
-  for (const file of STATE_FILES) {
+  const temps = entryNames(dir).flatMap((name) => ARCHIVE_TEMP.exec(name)?.[1] ?? []) as ArchiveFile[];
+  const archives = new Set([...archiveFiles(dir), ...temps]);
+  for (const file of [...STATE_FILES, ...archives]) {
     let target: StateTarget;
     try {
       target = stateTarget(dir, file);

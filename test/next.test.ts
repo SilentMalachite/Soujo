@@ -182,6 +182,20 @@ test('next check counts untracked files even when git hides them from status', (
   assert.deepEqual(nextCheck(dir, false), ['soujo 警告: 未コミットの変更 1件']);
 });
 
+test('next check suggests log rotate once LOG.md spans three months, and reports an unreadable LOG.md with the other warnings', { skip: process.platform === 'win32' }, (t) => {
+  const two = '# LOG\n\n## 2026-08-31 L1\na\n\n## 2026-09-01 L2\nb\n';
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': two });
+  assert.deepEqual(nextCheck(dir, false), []);
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), `## 2026-07-01 L0\nz\n\n${two}`);
+  assert.deepEqual(nextCheck(dir, false), ['soujo 警告: LOG.md に3か月分のエントリ（soujo log rotate で移す）']);
+
+  const secret = join(temp(t), 'secret');
+  writeFileSync(secret, '## 2026-01-01 token-123\n');
+  const linked = project(temp(t), { 'PLAN.md': PLAN });
+  symlinkSync(secret, join(linked, '.soujo', 'LOG.md'));
+  assert.deepEqual(nextCheck(linked, false), ['soujo 警告: NEXT.md がない / LOG.md を読まない: 実体（symlink の先）がプロジェクトの外']);
+});
+
 test('next check --hook returns a systemMessage JSON line', (t) => {
   const dir = project(temp(t));
   assert.deepEqual(nextCheck(dir, true), [JSON.stringify({ systemMessage: 'soujo 警告: NEXT.md がない' })]);

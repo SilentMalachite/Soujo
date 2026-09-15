@@ -6,7 +6,9 @@ import {
   clip,
   describeInvalidNext,
   headState,
+  missingEntries,
   requireCommittable,
+  requireCommittableFiles,
   requireNext,
   resumable,
   skill,
@@ -48,6 +50,31 @@ test('uncommittedLogs lists entries HEAD lacks wherever they are, counting repea
   assert.deepEqual(uncommittedLogs(`${a}${c}`, `${a}${b}`), [entry('L3', 'c')]);
   assert.deepEqual(uncommittedLogs(`${b}${a}${b}`, `${a}${b}`), [entry('L2', 'b')]);
   assert.deepEqual(uncommittedLogs(a, `${a}${b}`), []);
+});
+
+test('missingEntries lists entries absent from present, counting repeated entries', () => {
+  const a = { date: '2026-08-01', layer: 'L1', lines: ['a'] };
+  const b = { date: '2026-08-02', layer: 'L2', lines: ['b'] };
+  assert.deepEqual(missingEntries([a, b, a], [a]), [b, a]);
+  assert.deepEqual(missingEntries([a, b], [b, a, a]), []);
+  assert.deepEqual(missingEntries([{ ...a, lines: ['a', 'x'] }], [a]), [{ ...a, lines: ['a', 'x'] }]);
+});
+
+test('requireCommittableFiles refuses archives leaving the project or ignored by git', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t));
+  assert.doesNotThrow(() => requireCommittableFiles(dir, []));
+  assert.doesNotThrow(() => requireCommittableFiles(dir, ['LOG-2026-08.md']));
+
+  writeFileSync(join(dir, '.gitignore'), '.soujo/LOG-*.md\n');
+  assert.throws(() => requireCommittableFiles(dir, ['LOG-2026-08.md']), /^Error: \.soujo\/LOG-2026-08\.md が git に無視されていて/);
+
+  const elsewhere = join(temp(t), 'archive.md');
+  writeFileSync(elsewhere, '');
+  symlinkSync(elsewhere, join(dir, '.soujo', 'LOG-2026-07.md'));
+  assert.throws(
+    () => requireCommittableFiles(dir, ['LOG-2026-07.md']),
+    /^Error: \.soujo\/LOG-2026-07\.md の実体（symlink の先）がプロジェクトの外なので記録をコミットできない$/,
+  );
 });
 
 test('requireCommittable refuses each unsafe state',{ skip: process.platform === 'win32' }, (t) => {

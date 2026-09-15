@@ -55,6 +55,14 @@ const HERE = ['--', '.'];
 export function gitStatus(cwd) {
     return git(cwd, ['status', '--porcelain', '--untracked-files=normal', ...HERE]).split('\n').filter((line) => line !== '');
 }
+/**
+ * `git status --porcelain` lines for cwd and below, leaving out the paths matching the excluded git globs (relative to cwd).
+ * Every untracked file has its own line, so an untracked directory holding only excluded files is not reported.
+ */
+export function gitStatusExcluding(cwd, excluded) {
+    const pathspecs = excluded.map((glob) => `:(exclude,glob)${glob}`);
+    return git(cwd, ['status', '--porcelain', '--untracked-files=all', ...HERE, ...pathspecs]).split('\n').filter((line) => line !== '');
+}
 const OPERATIONS = [
     ['MERGE_HEAD', 'merge'],
     ['rebase-merge', 'rebase'],

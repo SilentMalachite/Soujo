@@ -95,6 +95,7 @@ Soujo/
 | `PLAN.md` | 層の一覧。`- [ ] 層名 — 完了条件` | 1項目1行 | `plan` スキル。`soujo layer done` がチェック |
 | `LOG.md` | 追記専用の日誌。`## YYYY-MM-DD 層名` の下に最大3行 | 1エントリ3行 | `soujo log add` / `layer done` / `close --note` |
 | `NEXT.md` | 次の1手。**再開時にこれだけ読めばよい** | 5行 | `soujo next set` |
+| `LOG-YYYY-MM.md` | `LOG.md` の書庫。1か月分のエントリを同じ形で `# LOG YYYY-MM` の下に置く。読むのは `soujo log rotate` だけ | 1エントリ3行 | `soujo log rotate` |
 
 `NEXT.md` の形（CLI が検証する。キーは日本語のまま、区切りは `:` と `：` のどちらも可）：
 
@@ -120,10 +121,11 @@ effort: <low|medium|high|xhigh>
 | `soujo init` | templates から `.soujo/` を作り、CLAUDE.md / AGENTS.md がなければ複製する。git 管理下ならトップレベルに作る。既存ファイルは上書きしない。状態ファイルの実体（ファイルか `.soujo/` の symlink の先）がプロジェクトの外か `.git` の中なら、何も作らずに拒否 | 作成したファイル＋作らなかったファイルの1行。git 管理外なら `git init` が要る旨の1行 |
 | `soujo next show [--hook]` | `NEXT.md` を表示。なければ「NEXT.md なし」。`--hook` 時は NEXT.md がなければ何も出さない | 5行 |
 | `soujo next set --layer --premise --check [--caution] [--effort]` | `NEXT.md` を全文書き直す。既定は 注意=`なし`、effort=`medium`。層 `spec` / `plan`（前後の空白を除き、大文字小文字も含めて完全一致で比べる）の effort は `high`（§7）：`high` 以外の `--effort` は拒否して何も書かず、エラーは `--effort` を外すよう示す。値は1行。PLAN に層があるとき、PLAN にない層（`spec` / `plan` を除く）は何も書かずに拒否。PLAN に同じ層名が複数あるか `spec` / `plan` という層がある間は、どの層も何も書かずに拒否 | 1行 |
-| `soujo next check [--hook]` | NEXT.md がない・無効・PLAN で `[x]` 済みの層か未チェックの層より後ろを指す（`plan` はすべての層より後ろ）、PLAN に同じ層名が複数あるか `spec` / `plan` という層がある、またはプロジェクト内に未コミット変更があれば警告（未追跡のディレクトリは `status.showUntrackedFiles` の設定によらず1件と数える）。Soujo を使っていないプロジェクトでは無音。`--hook` 時は `{"systemMessage": "..."}`。**終了コードは常に0** | 0〜1行 |
+| `soujo next check [--hook]` | NEXT.md がない・無効・PLAN で `[x]` 済みの層か未チェックの層より後ろを指す（`plan` はすべての層より後ろ）、PLAN に同じ層名が複数あるか `spec` / `plan` という層がある、プロジェクト内に未コミット変更がある（未追跡のディレクトリは `status.showUntrackedFiles` の設定によらず1件と数える）、または `LOG.md` のエントリが3か月分以上にわたる（`soujo log rotate`）ときに警告。Soujo を使っていないプロジェクトでは無音。`--hook` 時は `{"systemMessage": "..."}`。**終了コードは常に0** | 0〜1行 |
 | `soujo plan list` | 層の一覧と完了状態 | 層数分 |
 | `soujo plan next` | 最初の未完了層と完了条件 | 2行 |
 | `soujo log add <層名> --line ...` | `LOG.md` に追記（1〜3行） | 1行 |
+| `soujo log rotate [--before YYYY-MM]` | 今月（か `--before`）より前の日付の `LOG.md` のエントリを、エントリの日付の月ごとに `.soujo/LOG-YYYY-MM.md` へ移す。既存の書庫には `LOG.md` にある形のまま追記する。日付によらず `LOG.md` に残すもの：最初のエントリより前の文と最後のエントリ（`resume` の `前回:` がそのまま出る）。書庫を先に、`LOG.md` を最後に書き、プロジェクトを `log: rotate <月>`（コミットが変える書庫の月）でコミットする。次のときは何も書かずに拒否：`--before` が `YYYY-MM` でない／layer done と同じコミット不能条件／書く書庫の実体がプロジェクトの外か `.git` の中、または git に無視されている／止まった rotate のもの以外に未コミットの変更がある（変わったのが `LOG.md` と書庫だけで、`LOG.md` に HEAD にないエントリがなく、`LOG.md` から消えたエントリがすべて書庫の未コミットのエントリにある、でなければ拒否）。書庫の未コミットのエントリにすでにあるエントリは再び追記しないので、書き込みかコミットの失敗後の再実行は同じ移動を仕上げる。移すものもコミットするものもなければ `移動なし` | 書いた書庫ごとに1行、続けてコミット |
 | `soujo layer done <層名> [--note ...]` | PLAN にチェック → LOG 追記 → プロジェクトのディレクトリで `git add -A -- .` と `git commit -m "layer: <層名>" -- .`（サブディレクトリのプロジェクトはそこだけをコミット）。次のときは何も書かずに拒否する：層が PLAN にない・PLAN に同じ層名が複数あるか `spec` / `plan` という層がある・note が LOG の上限を破るか `中断:` で始まる（`close` 専用）／NEXT.md がない・無効・`次:` がまだこの層／git リポジトリでない、`.soujo/` が symlink、状態ファイルの実体（symlink の先）がプロジェクトの外か `.git` の中、merge・rebase・cherry-pick・revert の途中（残った `sequencer/` を含む）、競合が未解決、`.soujo/` のファイルかその symlink の先が git に無視されている／コミット済み（`layer: <層名>` のコミットがある、または HEAD の PLAN でチェック済み）。チェックが作業ツリーにだけある（前回が途中で止まった）ときは、HEAD にまだないこの層の完了エントリが LOG のどこにもなければ（`close` の「中断」エントリは数えない）追記してコミットする。PLAN・LOG・NEXT が書いたとおりにステージされていない（skip-worktree など）間は何もコミットしない。書いた後の失敗は記録済みの範囲を示し、原因を直して再実行すれば続きから進む | 1行（追加ファイルを最大5件添える） |
 | `soujo resume` | `次: <層>（effort: <e>）確認: <確認>`（NEXT.md）／`前回: <日付> <層> — <1行目>`（LOG.md 末尾エントリ）／`コミット: <hash> <件名>（未コミット N件）`／`再開: /soujo:go（Codex は $go）`。値は層名も含めて60文字で `…` に切る。ただしコマンドの中の層名は切らない。NEXT.md がない・読めない・無効・チェック済みの層を指すとき：`次:` は PLAN の次の層、`再開:` に理由と `soujo next set`。残りの層がなければ `/soujo:spec`（SPEC.md がないかテンプレートのまま）か `/soujo:plan`。NEXT.md が未チェックの層より後ろを指すとき（`次: plan` を含む）：`次:` はその層、`再開:` は `soujo layer done` を示す。PLAN のチェックが未コミット（layer done が途中）なら `再開:` はその再実行。読めないファイルや git の失敗はその行だけを縮退させる | 4行 |
 | `soujo close [--note ...]` | `--note` を LOG に「中断: ...」で記録 → プロジェクトを `wip: <層名>` でコミット → 再開方法。次のときは何も書かずに終了1：layer done と同じコミット不能条件／NEXT.md がない・無効・チェック済みの層を指す／PLAN のチェックが未コミット（先に layer done を再実行）／note が空・LOG の上限を破る。PLAN・LOG・NEXT が書いたとおりにステージされていない（skip-worktree など）間は何もコミットしない。層は `次:`、ただし `次:` が未チェックの層より後ろを指すとき（next set と layer done の間で止まった）はその未チェックの層。HEAD にまだないその層の「中断」エントリが LOG のどこかにあれば追記せず残すので、コミット失敗後の再実行はコミットだけやり直す | 2行 |
@@ -131,7 +133,7 @@ effort: <low|medium|high|xhigh>
 | `soujo map code [dir]` | `dir`（既定はプロジェクトのルート、Soujo 外では cwd）の主言語（ファイル数が最多）の相対 import を Mermaid `graph LR` にする。言語は `src/map.ts` の `LANGUAGES` に1行ずつ。import 規則を持つ行（初期は TS/JS）だけを図にし、主言語が規則なし・認識できるファイルがないときは ASCII のディレクトリ木。パッケージとパス別名の import と、固定の文字列1つでない指定（`'./a' + b`）は線にしない。指定の中のエスケープは復号する。`node_modules`・`dist`・`build`・`target`・`vendor`・`deps`・`_build`・`__pycache__`・`venv`・`coverage`・ドットで始まるもの・symlink は除外。読めないサブディレクトリとファイルは飛ばして件数を示す。上限は走査5000件・ファイル100（つながりの多い順に残す）・線300・木200行で、超えたら注記 | Mermaid か木 |
 
 `state.ts` の公開関数（純粋関数、それぞれテストあり）：
-`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `validatePlan` / `formatItem` / `nextLayer` / `nextStatus` / `newlyDone` / `markDone` / `printable` / `logLines` / `appendLog` / `parseLog` / `lastLog` / `formatDate`。
+`parseNext` / `formatNext` / `validateNext` / `parsePlan` / `validatePlan` / `formatItem` / `nextLayer` / `nextStatus` / `newlyDone` / `markDone` / `printable` / `logLines` / `appendLog` / `parseLog` / `lastLog` / `isMonth` / `logMonth` / `logMonths` / `rotateLog` / `archiveLog` / `formatDate`。
 
 ## 7. スキル（`skills/`、両ホスト共有）
 
@@ -227,7 +229,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 ## 13. 実装
 
-依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。受け入れ後の L13・L14 は、§14 の未決だった2件（決定へ移した）を実装する：`soujo --help` と、`次: spec` / `次: plan` の effort。
+依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。受け入れ後の L13〜L15 は、§14 の未決だったもの（決定へ移した）を実装する：`soujo --help`、`次: spec` / `次: plan` の effort、`soujo log rotate`。
 
 ## 14. 決定事項と未決事項
 
@@ -250,6 +252,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - `soujo next set` は PLAN にない層（`spec` / `plan` を除く）を拒否する。層名の写し間違いが `layer done` まで気づかれないのを防ぐため。
 - `soujo --help` と `soujo <コマンド> --help` は使い方の行を出し、ほかは何も実行しない（L13）。両ホストが `soujo --help` を試してエラーになったため。また `--help` を付けた書き込みコマンドは、いま不明なオプションとして拒否して何も書かないのと同じく、何も書かないままにするため。
 - `soujo next set` は `次: spec` / `次: plan` に `effort: high`（§7 のそのスキルの effort）を書き、ほかの値を拒否する（L14）。最後の層の後の `NEXT.md` に場当たりの effort が残らないため。ほかの手段で書かれた `NEXT.md` は検査しない。
+- `soujo log rotate` は `LOG.md` を位置ではなくエントリの日付で月ごとに `LOG-YYYY-MM.md` へ移し、最後のエントリは必ず残す（L15）。`resume` は `前回:` を `LOG.md` から読み、状態を示すコマンドは書庫を読まないため。`layer done` には組み込まず手で実行し、ほかの未コミットの変更があれば拒否する。`commitRecords` がプロジェクト全体をステージするため。止まった rotate の変更だけは例外にする。Codex の sandbox は承認なしにコミットできず、再実行は拒否ではなく仕上げるべきだから。`uncommittedLogs` はエントリを中身で比べるので、移した後の `LOG.md` が `layer done` / `close` に未コミットのエントリと見えることはない。書庫の名前は `LOG-\d{4}-\d{2}\.md` と検証し、4つの状態ファイルと同じくプロジェクト内に留める検査を通して読み書きする。
 - `次: plan` はすべての層より後ろとみなす。`next set --layer plan` と最後の `layer done` の間で止まって残った未チェックの層を、警告し、`resume` で示し、`close` の対象にするため。`next set` の前で止まった `plan` も同じく示されるが、最初の層へ `soujo next set` すれば直る。
 - `layer done` と `close` はコミット前に PLAN・LOG・NEXT が書いたとおりにステージされたかを確かめる。それらを欠いたままコミットすると、`layer done` の再実行はコミット済みとして拒否され、`close` は「中断」エントリのない、または古い `NEXT.md` の `wip:` コミットを残すため。
 - git の状態はユーザーの設定によらず同じに読む：未追跡のファイルは `status.showUntrackedFiles` によらず数え、残った `sequencer/` は `git status` と同じく cherry-pick か revert の途中とみなす。
@@ -259,7 +262,6 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - `templates/CLAUDE.md` / `templates/AGENTS.md` はどのプロジェクトにも当てはまる内容だけを持ち、このリポジトリの写しは末尾に Soujo 本体の節を足す。`soujo init` がどのスタックのプロジェクトにもテンプレートを複製するため。
 
 未決：
-- `LOG.md` が長くなったときの巻き取り（月ごとに `LOG-YYYY-MM.md` へ退避する `soujo log rotate`）。
 - Codex 0.154 はユーザーが信頼すると `hooks/hooks.json` を実行する（`~/.codex/config.toml` の `[hooks.state]`）。そこで `${CLAUDE_PLUGIN_ROOT}` が展開されるか、`systemMessage` が表示されるかは未確認。
 - モデルがスキルの置き場所へ `cd` したり、そこの `.soujo/` を読もうとすることがある。ホスト側の保護で止まり、スキルにも警告を入れたが、CLI 側のガードは未対応。
 - `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち（L12 では再現せず）。

@@ -2,11 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   appendLog,
+  archiveLog,
   formatDate,
   formatItem,
   formatNext,
+  isMonth,
   lastLog,
   logLines,
+  logMonth,
+  logMonths,
   markDone,
   newlyDone,
   nextLayer,
@@ -15,6 +19,7 @@ import {
   parseNext,
   parsePlan,
   printable,
+  rotateLog,
   validateNext,
   validatePlan,
 } from '../src/state.js';
@@ -191,6 +196,68 @@ test('parseLog and lastLog return entries with their lines', () => {
   assert.deepEqual(lastLog(log), { date: '2026-09-13', layer: 'L1 scaffold', lines: ['a', 'b'] });
   assert.deepEqual(parseLog('# LOG\n'), []);
   assert.equal(lastLog('# LOG\n'), undefined);
+});
+
+test('isMonth, logMonth, and logMonths read months as YYYY-MM', () => {
+  assert.ok(isMonth('2026-09'));
+  for (const value of ['2026-9', '2026-09-01', ' 2026-09', '../x', '']) assert.ok(!isMonth(value), value);
+  assert.equal(logMonth({ date: '2026-08-31', layer: 'L1', lines: [] }), '2026-08');
+  assert.deepEqual(logMonths('# LOG\n\n## 2026-09-01 b\n## 2026-07-02 a\n## 2026-09-03 c\n'), ['2026-07', '2026-09']);
+  assert.deepEqual(logMonths('# LOG\n'), []);
+});
+
+test('rotateLog moves entries dated before the month wherever they are, and keeps the text before them and the last entry', () => {
+  const log = [
+    '# LOG',
+    '',
+    'intro',
+    '',
+    '## 2026-07-30 L1',
+    'a',
+    '',
+    '## 2026-09-01 L2',
+    'b',
+    '',
+    '## 2026-08-02 L3',
+    'c',
+    '',
+    '',
+    '## 2026-08-03 L4',
+    'd',
+    '',
+  ].join('\n');
+  const { kept, moved } = rotateLog(log, '2026-09');
+  assert.equal(kept, '# LOG\n\nintro\n\n## 2026-09-01 L2\nb\n\n## 2026-08-03 L4\nd\n');
+  assert.deepEqual(moved, [
+    { date: '2026-07-30', layer: 'L1', lines: ['a'] },
+    { date: '2026-08-02', layer: 'L3', lines: ['c'] },
+  ]);
+  assert.deepEqual(parseLog(kept).at(-1), parseLog(log).at(-1));
+});
+
+test('rotateLog keeps CRLF, moves nothing without an older entry or with one entry, and refuses a month not YYYY-MM', () => {
+  const crlf = '# LOG\r\n\r\n## 2026-08-01 L1\r\na\r\n\r\n## 2026-09-01 L2\r\nb\r\n';
+  assert.deepEqual(rotateLog(crlf, '2026-09'), {
+    kept: '# LOG\r\n\r\n## 2026-09-01 L2\r\nb\r\n',
+    moved: [{ date: '2026-08-01', layer: 'L1', lines: ['a'] }],
+  });
+  const one = '# LOG\n\n## 2026-01-01 L1\na\n';
+  assert.deepEqual(rotateLog(one, '2026-09'), { kept: one, moved: [] });
+  assert.deepEqual(rotateLog(crlf, '2026-08'), { kept: crlf, moved: [] });
+  assert.deepEqual(rotateLog('', '2026-09'), { kept: '', moved: [] });
+  assert.throws(() => rotateLog(crlf, '2026-9'), /^Error: 月は YYYY-MM: 2026-9$/);
+});
+
+test('archiveLog starts a missing or blank archive with its heading and appends to an existing one in its line break', () => {
+  const entries = [
+    { date: '2026-08-01', layer: 'L1', lines: ['a', 'b', 'c', 'd'] },
+    { date: '2026-08-02', layer: 'L2', lines: [] },
+  ];
+  assert.equal(archiveLog(undefined, '2026-08', entries), '# LOG 2026-08\n\n## 2026-08-01 L1\na\nb\nc\nd\n\n## 2026-08-02 L2\n');
+  assert.equal(archiveLog(' \n', '2026-08', entries.slice(1), '\r\n'), '# LOG 2026-08\r\n\r\n## 2026-08-02 L2\r\n');
+  assert.equal(archiveLog('# LOG 2026-08\r\n\r\n## 2026-08-01 L1\r\na', '2026-08', entries.slice(1)), '# LOG 2026-08\r\n\r\n## 2026-08-01 L1\r\na\r\n\r\n## 2026-08-02 L2\r\n');
+  assert.equal(archiveLog('# LOG 2026-08\n', '2026-08', []), '# LOG 2026-08\n');
+  assert.throws(() => archiveLog(undefined, '../2026-08', entries), /^Error: 月は YYYY-MM: \.\.\/2026-08$/);
 });
 
 test('nextStatus tells a finished layer and a layer left unclosed before NEXT.md', () => {
