@@ -114,6 +114,7 @@ effort: <low|medium|high|xhigh>
 - Behaves the same on any host. No host detection; only `--hook` switches to a Claude Code hook-friendly output.
 - `.soujo/` is searched upward from the current directory, stopping at the git top level (a directory containing `.git`).
 - `.soujo/` files are replaced through a temporary file created exclusively next to the real file, keeping its permissions. `init` creates them, and CLAUDE.md / AGENTS.md, by linking such a temporary file into place, so no file is left half-written and nothing existing is replaced. Commands that write or commit them first remove temporary files left by a killed write. Symlinks (of a file or of `.soujo/`) are followed only to files inside the project and outside `.git`; any other read or write is refused, and only regular files are read.
+- Inside a host's plugin directory — the real path of the current directory has a segment `.claude` or `.codex` followed by `plugins`, where the install caches and the marketplace clones of §8 live — `soujo` sees no project: `next show` / `next check` behave as outside a Soujo project (nothing with `--hook`), and every other command exits 1 with one line saying to run it in the project being worked on, before reading or writing anything. `--help` is unaffected.
 
 | Command | Behavior | Output |
 |---|---|---|
@@ -230,7 +231,7 @@ All ten were verified on 2026-09-13 in layer L12, with `soujo` from `npm link` a
 
 ## 13. Implementation
 
-Implemented in 12 layers of at most 30 minutes each, in dependency order; the list and completion conditions are in `.soujo/PLAN.md`. Compared with the original 10 phases, next and resume/close were split, skill authoring and host verification were split, and `map` was moved before the skills (the `plan` skill calls `soujo map plan`). After acceptance, L13–L15 implement former open issues of §14, now decided: `soujo --help`, the effort of `次: spec` / `次: plan`, and `soujo log rotate`. L16–L17 add `soujo brief` and the `節目` entries for returning after days away.
+Implemented in 12 layers of at most 30 minutes each, in dependency order; the list and completion conditions are in `.soujo/PLAN.md`. Compared with the original 10 phases, next and resume/close were split, skill authoring and host verification were split, and `map` was moved before the skills (the `plan` skill calls `soujo map plan`). After acceptance, L13–L15 implement former open issues of §14, now decided: `soujo --help`, the effort of `次: spec` / `次: plan`, and `soujo log rotate`. L16–L17 add `soujo brief` and the `節目` entries for returning after days away. L18 makes `soujo` refuse to run inside a host's plugin directory.
 
 ## 14. Decisions and open issues
 
@@ -262,10 +263,10 @@ Decided:
 - Reads and writes never leave the project (§6), because a cloned repository can carry symlinks planted to overwrite the user's files through ordinary record keeping, or to put them into hook output and warnings that reach the model.
 - A layer name appears once in PLAN and is never `spec` / `plan` / `節目`: `next set` and `layer done` refuse otherwise and `next check` warns, because a repeated layer cannot get its own `layer:` commit, `次: plan` cannot tell the phase from a layer of that name, and `brief` would take a `節目` layer's completion entry for a milestone. Phases are never matched to PLAN's layers.
 - `templates/CLAUDE.md` / `templates/AGENTS.md` hold only what fits any project, and this repository's copies add a last section on Soujo itself, because `soujo init` copies the templates into projects of any stack.
+- `soujo` refuses to run inside a host's plugin directory (L18, §6). The install caches and marketplace clones under `~/.claude/plugins/` and `~/.codex/plugins/` hold a copy of this repository with its `.soujo/` (with `.git` in Codex's cache and Claude Code's marketplace clone), and models sometimes tried to `cd` there or read that `.soujo/`, stopped only by host protections and the warning in the skills; `resume` there would show this repository's records, and `init` or a commit would land in the copy. The check is on the real path of the current directory, so a symlink into the copy is caught; reads of the copy with other tools are out of the CLI's reach. `next show` / `next check` stay silent as outside a Soujo project so that a session opened there gets no hook error. A checkout that a host reads in place (a local directory marketplace, `claude --plugin-dir`) is an ordinary project and is not refused.
 
 Open:
 - Codex 0.154 runs `hooks/hooks.json` once the user trusts it (`[hooks.state]` in `~/.codex/config.toml`); whether `${CLAUDE_PLUGIN_ROOT}` expands there and `systemMessage` is shown is unverified.
-- Models sometimes try to `cd` into the skill's install location or read its `.soujo/`. Host protections blocked it, and skills now warn against it; a CLI-side guard is still open.
 - The `spec` skill tends to write `SPEC.md` only at the end instead of after each answer (not reproduced in L12).
 - `spec` / `plan` do not commit. Until the first `layer done`, `.soujo/` changes stay uncommitted and the Stop hook warns every time.
 - Codex context size: one `$go` used ~295K–690K input tokens (mostly cached), largely from global Codex context; in L12 it also read an unrelated global skill and searched the Codex memory file.

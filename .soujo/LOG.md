@@ -273,3 +273,7 @@ CLAUDE.md・AGENTS.md（+templates）に節目と N日ぶり→soujo brief、REA
 grok レビュー L17 の13件を修正: log rotate は最後の 節目 も LOG.md に残し、PLAN の層名 節目 は spec/plan と同じく拒否。log add は HEAD にない同じ最後のエントリを再び足さない
 CLAUDE/AGENTS(+templates) の固定手順1番に最後の層の節目、resume と brief を別の行に。go スキルは締めの順と再実行を分け、skills テストで節目を固定。SPEC・README・CHANGELOG(+ja) 同期
 訂正: 2026-09-15 節目 の未決は §14 Open の9件（6件は誤り）
+
+## 2026-09-15 節目
+PLAN.md に 1層: L18 plugin-guard（SPEC §14 Open のスキル置き場所ガードを決定へ移した）
+外したもの: Open の残り8件（Codex フック・spec/plan の未コミット・reviewer の表 等）はそのまま
