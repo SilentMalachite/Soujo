@@ -329,3 +329,7 @@ git の出すパスは改行だけ除く。テストの git はグローバル�
 layer コミットの検索と brief の履歴を git log -- . でプロジェクトに限定（空コミットも数えない）
 headState は HEAD のエントリで読み symlink を HEAD のリンク先へ辿る。commitRecords は symlink 自身の staging も検証、gitCommitAll 削除
 全テストの1回だけ log rotate の既存テストが落ち、以後7回再発せず（要観察）
+
+## 2026-09-16 codex-fix-l21
+Codex レビュー L21 の2件を修正: headState は HEAD のパスを realpath と同じく1要素ずつ解き、途中のディレクトリ symlink とその後の .. を辿る（symlink は最大40回）
+symlinkTargetPath を symlinkTargetParts にし、Windows では相対リンクを \ でも区切る。SPEC(+ja)・CHANGELOG(+ja) 同期、指摘は REVIEW-FIX.md

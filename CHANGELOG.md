@@ -12,7 +12,7 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - A git failure other than "not a git repository" (git missing, a broken config) is no longer taken for a directory outside a repository: `soujo init` refuses instead of creating `.soujo/` in the current directory, `resume` and `brief` say `git の状態を読めない`, and `next check` warns with the other warnings.
 - Paths that git prints keep spaces at the start or end of a directory name.
 - `layer done` and `brief` read only the commits that change the project: a `layer: <layer>` commit of another project in the same repository no longer refuses `layer done`, and `brief` no longer shows other projects' commits or empty commits.
-- A state file at HEAD is read through HEAD's own entry: moving `PLAN.md` behind a symlink no longer makes `resume` and `close` take committed checks for a stopped `layer done`, and a symlink at HEAD later replaced by a file is no longer read as its link text.
+- A state file at HEAD is read through HEAD's own entries, following each symlink on its path, a directory's included: moving `PLAN.md` behind a symlink no longer makes `resume` and `close` take committed checks for a stopped `layer done`, and a symlink at HEAD later replaced by a file is no longer read as its link text.
 - `layer done`, `close`, and `log rotate` refuse to commit when a symlinked state file's symlink itself is left unstaged (skip-worktree), not only its target.
 
 ## 0.3.1 — 2026-09-15

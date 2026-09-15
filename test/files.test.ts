@@ -33,19 +33,24 @@ import {
   requireStateDir,
   statePath,
   stateTarget,
-  symlinkTargetPath,
+  symlinkTargetParts,
   writeState,
 } from '../src/files.js';
 import { temp } from './helpers.js';
 
-test('symlinkTargetPath resolves a relative link as committed and an absolute one through real paths', { skip: process.platform === 'win32' }, (t) => {
-  assert.equal(symlinkTargetPath('/nowhere', '.soujo/PLAN.md', '../docs/./PLAN.md'), 'docs/PLAN.md');
-  assert.equal(symlinkTargetPath('/nowhere', '.soujo/PLAN.md', '../../PLAN.md'), '../PLAN.md');
+test('symlinkTargetParts leaves a relative link unresolved and takes an absolute one through real paths', { skip: process.platform === 'win32' }, (t) => {
+  assert.deepEqual(symlinkTargetParts('/nowhere', '.soujo/PLAN.md', '../docs/./PLAN.md'), ['.soujo', '..', 'docs', '.', 'PLAN.md']);
+  assert.deepEqual(symlinkTargetParts('/nowhere', 'PLAN.md', '../../PLAN.md'), ['.', '..', '..', 'PLAN.md']);
   const root = temp(t);
   mkdirSync(join(root, 'docs'));
   symlinkSync('docs', join(root, 'linked'));
-  assert.equal(symlinkTargetPath(root, '.soujo/LOG.md', join(realpathSync(root), 'missing', 'LOG.md')), 'missing/LOG.md');
-  assert.equal(symlinkTargetPath(realpathSync(root), '.soujo/LOG.md', join(root, 'linked', 'LOG.md')), 'docs/LOG.md');
+  assert.deepEqual(symlinkTargetParts(root, '.soujo/LOG.md', join(realpathSync(root), 'missing', 'LOG.md')), ['missing', 'LOG.md']);
+  assert.deepEqual(symlinkTargetParts(realpathSync(root), '.soujo/LOG.md', join(root, 'linked', 'LOG.md')), ['docs', 'LOG.md']);
+});
+
+test('symlinkTargetParts splits a relative link at "\\" only where that is a separator', () => {
+  assert.deepEqual(symlinkTargetParts('/nowhere', '.soujo/PLAN.md', '..\\docs/PLAN.md', '\\'), ['.soujo', '..', 'docs', 'PLAN.md']);
+  assert.deepEqual(symlinkTargetParts('/nowhere', '.soujo/PLAN.md', '..\\docs/PLAN.md', '/'), ['.soujo', '..\\docs', 'PLAN.md']);
 });
 
 test('findStateDir walks up to the nearest .soujo directory and skips .soujo files', (t) => {

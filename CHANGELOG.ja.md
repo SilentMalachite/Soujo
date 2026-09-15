@@ -12,7 +12,7 @@
 - 「not a git repository」以外の git の失敗（git がない・設定が壊れている）を git 管理外とみなさない：`soujo init` はカレントディレクトリに `.soujo/` を作らずに拒否し、`resume` と `brief` は `git の状態を読めない` と出し、`next check` はほかの警告と並べて警告する。
 - git が出すパスで、ディレクトリ名の先頭や末尾の空白を削らない。
 - `layer done` と `brief` はプロジェクトを変えたコミットだけを読む：同じリポジトリの別プロジェクトにある `layer: <層名>` のコミットで `layer done` を拒否せず、`brief` に別プロジェクトのコミットや空のコミットを出さない。
-- 状態ファイルの HEAD の中身を HEAD のエントリで読む：`PLAN.md` を symlink の先へ移しても `resume` と `close` がコミット済みのチェックを止まった `layer done` とみなさず、HEAD の symlink を後でファイルに置き換えてもリンク先の文字列を中身として読まない。
+- 状態ファイルの HEAD の中身を、パス上の symlink を途中のディレクトリも含めて辿り、HEAD のエントリで読む：`PLAN.md` を symlink の先へ移しても `resume` と `close` がコミット済みのチェックを止まった `layer done` とみなさず、HEAD の symlink を後でファイルに置き換えてもリンク先の文字列を中身として読まない。
 - symlink の状態ファイルで、リンク先だけでなく symlink 自身がステージされていない（skip-worktree）ときも、`layer done`・`close`・`log rotate` はコミットしない。
 
 ## 0.3.1 — 2026-09-15

@@ -1,6 +1,6 @@
 // Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import {
   STATE_DIR,
   STATE_FILES,
@@ -10,7 +10,7 @@ import {
   requireStateDir,
   stateTarget,
   statePath,
-  symlinkTargetPath,
+  symlinkTargetParts,
   trackedStatePath,
   type StateFile,
 } from '../files.js';
@@ -27,6 +27,7 @@ import {
   gitToplevel,
   gitUnmergedCount,
   type Commit,
+  type HeadEntry,
 } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext, type LogEntry, type Next, type PlanItem } from '../state.js';
 
@@ -171,18 +172,42 @@ export function missingEntries<T>(items: readonly T[], present: readonly LogEntr
   });
 }
 
+// The most symlinks headState follows for one file before taking it as a loop, as Linux does for a path.
+const MAX_SYMLINKS = 40;
+
 /**
- * The state file as committed at HEAD, or undefined when HEAD has none. HEAD's entry decides: a symlink there is followed to
- * its target at HEAD (through a chain, undefined for a loop), whatever the working tree has now, so moving PLAN.md behind a
- * symlink, or replacing a symlink with the file, does not change what HEAD is taken to hold.
+ * The state file as committed at HEAD, or undefined when HEAD has none. HEAD's entries decide: the path is resolved part by
+ * part as realpath does, following each symlink at HEAD, a directory's included, to its target at HEAD (undefined beyond
+ * MAX_SYMLINKS, as for a loop), whatever the working tree has now, so moving PLAN.md behind a symlink, or replacing a symlink
+ * with the file, does not change what HEAD is taken to hold.
  */
 export function headState(root: string, file: StateFile): string | undefined {
-  const seen = new Set<string>();
-  for (let path = statePath(file); !seen.has(path); ) {
-    seen.add(path);
-    const entry = gitHeadEntry(root, path);
-    if (entry?.symlink !== true) return entry?.content;
-    path = symlinkTargetPath(root, path, entry.content);
+  const entries = new Map<string, HeadEntry | undefined>();
+  const entryAt = (path: string): HeadEntry | undefined => {
+    if (!entries.has(path)) entries.set(path, gitHeadEntry(root, path));
+    return entries.get(path);
+  };
+  const pending = statePath(file).split('/');
+  // The resolved directory, relative to root, "" for root itself.
+  let dir = '';
+  for (let links = 0; pending.length > 0; ) {
+    const part = pending.shift() ?? '';
+    if (part === '' || part === '.') continue;
+    const path = posix.join(dir, part);
+    if (part === '..') {
+      dir = path === '.' ? '' : path;
+      continue;
+    }
+    const entry = entryAt(path);
+    if (entry?.symlink === true) {
+      if (++links > MAX_SYMLINKS) return undefined;
+      pending.unshift(...symlinkTargetParts(root, path, entry.content));
+      dir = '';
+    } else if (pending.length === 0) {
+      return entry?.content;
+    } else {
+      dir = path;
+    }
   }
   return undefined;
 }

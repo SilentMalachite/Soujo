@@ -172,6 +172,21 @@ test('headState follows absolute and chained symlinks at HEAD, and is undefined 
   assert.equal(headState(dir, 'LOG.md'), undefined);
 });
 
+test('headState follows a symlinked directory in the path at HEAD, taking ".." after it from its target', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t));
+  mkdirSync(join(dir, 'docs', 'sub'), { recursive: true });
+  writeFileSync(join(dir, 'docs', 'PLAN.md'), 'through a directory\n');
+  writeFileSync(join(dir, 'docs', 'LOG.md'), 'after the target\n');
+  writeFileSync(join(dir, 'LOG.md'), 'lexical\n');
+  symlinkSync('docs', join(dir, 'alias'));
+  symlinkSync('docs/sub', join(dir, 'deep'));
+  symlinkSync('../alias/PLAN.md', join(dir, '.soujo', 'PLAN.md'));
+  symlinkSync('../deep/../LOG.md', join(dir, '.soujo', 'LOG.md'));
+  commitAll(dir);
+  assert.equal(headState(dir, 'PLAN.md'), 'through a directory\n');
+  assert.equal(headState(dir, 'LOG.md'), 'after the target\n');
+});
+
 test('commitRecords refuses when git add leaves the re-pointed symlink of a state file unstaged', { skip: process.platform === 'win32' }, (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT });
   writeFileSync(join(dir, 'PLAN-a.md'), 'a\n');

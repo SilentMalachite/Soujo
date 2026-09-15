@@ -79,15 +79,16 @@ export function trackedStatePath(root, file) {
     }
 }
 /**
- * Where a symlink at path (relative to root, "/"-separated) with the link text link points, relative to root and "/"-separated;
- * it may start with "..". A relative link is resolved without the file system, as it was committed. An absolute one is taken
+ * The parts of the path, relative to root, where a symlink at path (relative to root, "/"-separated) with the link text link
+ * points; they may include "." and "..". A relative link is joined to the symlink's directory unresolved, since a part before
+ * ".." may itself be a symlink, and split at separator as well as "/" (Windows splits at "\" too). An absolute one is taken
  * through the real paths of root and of the link's directory, so /tmp and /private/tmp compare equal.
  */
-export function symlinkTargetPath(root, path, link) {
+export function symlinkTargetParts(root, path, link, separator = sep) {
     if (!isAbsolute(link))
-        return posix.normalize(posix.join(posix.dirname(path), link));
+        return [...posix.dirname(path).split('/'), ...link.split(separator).flatMap((part) => part.split('/'))];
     const target = join(realPathOfAncestor(dirname(link)), basename(link));
-    return relative(realPathOfAncestor(root), target).split(sep).join('/');
+    return relative(realPathOfAncestor(root), target).split(sep);
 }
 // The directories under which hosts keep install caches and marketplace clones of plugins, this repository included (SPEC §8).
 const PLUGIN_DIRS = ['.claude', '.codex'];

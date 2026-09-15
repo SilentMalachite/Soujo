@@ -30,3 +30,10 @@
 - D6 #43: ノード ID の生成は変えずにコメントを直す（Mermaid の出力を変えない）。
 - D7 #3: 案内するコマンドは単一引用符で囲む（`soujo layer done 'L3 io'`）。スキルの表記に揃える。
 - D8 #33: 過去の履歴に実際の漏えいが見つかったら、履歴は書き換えず報告して止める。
+
+## L21 追加レビュー（Codex・d208e5a・2件・L22 の前に fix コミットで直す）
+| # | 指摘 | RED で書くテスト（要旨） |
+|---|---|---|
+| L21-1 | headState が HEAD のパス途中のディレクトリ symlink を辿らない | `.soujo/PLAN.md → ../alias/PLAN.md`・`alias → docs` の PLAN を読む / `deep → docs/sub` の後の `..` を字句でなく辿った先で解く |
+| L21-2 | Windows の相対リンク `..\docs\PLAN.md` を `\` で区切らない | 区切り文字が `\` のとき `\` でも分け、`/` のときは分けない |
+- 判断: HEAD の上で realpath と同じく1要素ずつ解く（symlink は最大40回、超えたら undefined）。
