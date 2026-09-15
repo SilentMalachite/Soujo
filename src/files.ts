@@ -1,4 +1,5 @@
-// Finding .soujo/ and reading/writing its files. Thin I/O layer: no parsing or validation here.
+// Finding .soujo/ and reading/writing its files. Thin I/O layer: file contents are neither parsed nor validated here, and only
+// file names are checked (months through state.ts), so that no read or write leaves .soujo/.
 
 import {
   closeSync,
@@ -18,34 +19,39 @@ import {
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMonth, requireMonth } from './state.js';
 
 export const STATE_DIR = '.soujo';
 export const STATE_FILES = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'] as const;
-/** A month of LOG.md moved out by soujo log rotate. */
+/** A month of LOG.md moved out by soujo log rotate. Only archiveFile and archiveFiles make one; other names are refused at use. */
 export type ArchiveFile = `LOG-${string}.md`;
 export type StateFile = (typeof STATE_FILES)[number] | ArchiveFile;
 
-const ARCHIVE = /^LOG-(\d{4}-\d{2})\.md$/;
-// A temporary file of writeState for an archive, named after it.
-const ARCHIVE_TEMP = /^\.(LOG-\d{4}-\d{2}\.md)\.\d+\.tmp$/;
+const ARCHIVE = /^LOG-(.+)\.md$/;
+// A temporary file of writeState, named after the file it replaces.
+const TEMP = /^\.(.+)\.\d+\.tmp$/;
 
-/** The pathspec (git glob) of every archive, relative to the project root. */
-export const ARCHIVE_PATHSPEC = `${STATE_DIR}/LOG-[0-9][0-9][0-9][0-9]-[0-9][0-9].md`;
+function isArchive(name: string): name is ArchiveFile {
+  return isMonth(ARCHIVE.exec(name)?.[1] ?? '');
+}
+
+function isStateFile(name: string): name is StateFile {
+  return (STATE_FILES as readonly string[]).includes(name) || isArchive(name);
+}
+
+function requireStateFile(file: string): void {
+  if (!isStateFile(file)) throw new Error(`状態ファイルの名前ではない: ${file}`);
+}
 
 /** The archive of month (YYYY-MM); anything else throws, so a name can never leave .soujo/. */
 export function archiveFile(month: string): ArchiveFile {
-  const file = `LOG-${month}.md` as const;
-  if (!ARCHIVE.test(file)) throw new Error(`月は YYYY-MM: ${month}`);
-  return file;
+  return `LOG-${requireMonth(month)}.md`;
 }
 
 /** The month (YYYY-MM) of an archive. */
 export function archiveMonth(file: ArchiveFile): string {
+  requireStateFile(file);
   return ARCHIVE.exec(file)?.[1] ?? '';
-}
-
-function isStateFile(name: string): name is StateFile {
-  return (STATE_FILES as readonly string[]).includes(name) || ARCHIVE.test(name);
 }
 
 function entryNames(dir: string): string[] {
@@ -59,12 +65,13 @@ function entryNames(dir: string): string[] {
 /** The archives in .soujo/ (a symlink or any other entry with an archive's name included), sorted by name. */
 export function archiveFiles(dir: string): ArchiveFile[] {
   return entryNames(dir)
-    .filter((name): name is ArchiveFile => ARCHIVE.test(name))
+    .filter(isArchive)
     .sort();
 }
 
 /** The state file relative to the project root, e.g. ".soujo/PLAN.md". */
 export function statePath(file: StateFile): string {
+  requireStateFile(file);
   return `${STATE_DIR}/${file}`;
 }
 
@@ -162,7 +169,7 @@ export interface StateTarget {
 
 /** Where writeState writes the file. Throws when .soujo/ or the project cannot be resolved. */
 export function stateTarget(dir: string, file: StateFile): StateTarget {
-  if (!isStateFile(file)) throw new Error(`状態ファイルの名前ではない: ${file}`);
+  requireStateFile(file);
   const path = join(dir, file);
   const real = existsSync(path) ? realpathSync(path) : join(realpathSync(dir), file);
   const inProject = relative(realpathSync(dirname(dir)), real);
@@ -235,19 +242,45 @@ export function writeState(dir: string, file: StateFile, text: string): void {
   }
 }
 
-/** Deletes the temporary files (or symlinks in their place) of target that a killed write left next to it. */
-export function removeTempsOf(target: string): void {
+// The temporary files (or symlinks in their place) of target that a killed write left next to it, as absolute paths.
+function tempsOf(target: string): string[] {
   let entries;
   try {
     entries = readdirSync(dirname(target), { withFileTypes: true });
   } catch {
-    return;
+    return [];
   }
-  for (const entry of entries) {
-    if ((entry.isFile() || entry.isSymbolicLink()) && isTempOf(target, entry.name)) {
-      rmSync(join(dirname(target), entry.name), { force: true });
+  return entries
+    .filter((entry) => (entry.isFile() || entry.isSymbolicLink()) && isTempOf(target, entry.name))
+    .map((entry) => join(dirname(target), entry.name));
+}
+
+/** Deletes the temporary files (or symlinks in their place) of target that a killed write left next to it. */
+export function removeTempsOf(target: string): void {
+  for (const path of tempsOf(target)) rmSync(path, { force: true });
+}
+
+// The leftovers of the four state files, and of archives that exist or whose temporary file is in .soujo/; none next to a
+// target outside the project or inside .git.
+function leftoverTempPaths(dir: string): string[] {
+  const named = entryNames(dir).flatMap((name) => TEMP.exec(name)?.[1] ?? []).filter(isArchive);
+  const archives = new Set([...archiveFiles(dir), ...named]);
+  return [...STATE_FILES, ...archives].flatMap((file) => {
+    try {
+      const target = stateTarget(dir, file);
+      return target.problem === undefined ? tempsOf(target.path) : [];
+    } catch {
+      return [];
     }
-  }
+  });
+}
+
+/** The temporary files removeLeftoverTemps would delete, relative to the project root (the directory above .soujo/), with "/". */
+export function leftoverTemps(dir: string): string[] {
+  const paths = leftoverTempPaths(dir);
+  if (paths.length === 0) return [];
+  const root = realpathSync(dirname(dir));
+  return paths.map((path) => relative(root, path).split(sep).join('/'));
 }
 
 /**
@@ -255,17 +288,7 @@ export function removeTempsOf(target: string): void {
  * them: those of the four state files, and those of archives that exist or whose temporary file is in .soujo/.
  */
 export function removeLeftoverTemps(dir: string): void {
-  const temps = entryNames(dir).flatMap((name) => ARCHIVE_TEMP.exec(name)?.[1] ?? []) as ArchiveFile[];
-  const archives = new Set([...archiveFiles(dir), ...temps]);
-  for (const file of [...STATE_FILES, ...archives]) {
-    let target: StateTarget;
-    try {
-      target = stateTarget(dir, file);
-    } catch {
-      continue;
-    }
-    if (target.problem === undefined) removeTempsOf(target.path);
-  }
+  for (const path of leftoverTempPaths(dir)) rmSync(path, { force: true });
 }
 
 export function ensureStateDir(root: string): string {

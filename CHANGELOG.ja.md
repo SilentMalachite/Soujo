@@ -4,12 +4,18 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
-## 0.2.0 — unreleased
+## 未リリース
 
 ### 追加
 
-- `soujo log rotate [--before YYYY-MM]` は、今月（か `--before`）より前の日付の `LOG.md` のエントリを月ごとに `.soujo/LOG-YYYY-MM.md` へ移す。最初のエントリより前の文と最後のエントリは残すので、`soujo resume` の `前回:` はそのまま出る。`log: rotate <月>` でコミットし、ほかの変更が未コミットの間は拒否する。書き込みかコミットに失敗した後の再実行は、エントリを二重に移さずに同じ移動を仕上げる。
-- `soujo next check` は `LOG.md` が3か月分以上にわたると警告する。
+- `soujo log rotate [--before YYYY-MM]` は、今月（か `--before`）より前の日付の `LOG.md` のエントリを、`LOG.md` にある形のまま月ごとに `.soujo/LOG-YYYY-MM.md` へ移す。最初のエントリより前の文と最後のエントリは残すので、`soujo resume` の `前回:` はそのまま出る。`log: rotate <月>` でコミットする。ほかの変更が未コミットの間は拒否し、書き込みかコミットに失敗した後の再実行は、エントリを二重に移さずに同じ移動を仕上げる。
+- `soujo next check` は、`soujo log rotate` が2か月分以上のエントリを移せるときに警告する。
+
+### 変更
+
+- `soujo next check` は `LOG.md` を読み、読めない（プロジェクトの外への symlink など）ときはほかの警告と並べて警告する。
+- `soujo init`・`soujo next set`・`soujo log add`・`soujo layer done`・`soujo close` は、書庫の書き込みが中断されて残った一時ファイルも消す。
+- `LOG.md` に足すエントリの日付は、実在する月と日でなければならない（`2026-13-01` は拒否）。
 
 ## 0.1.3 — 2026-09-15
 

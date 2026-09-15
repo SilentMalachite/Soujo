@@ -2,7 +2,7 @@
 import { dirname } from 'node:path';
 import { findStateDir, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitStatus, gitToplevel } from '../git.js';
-import { PHASES, formatNext, logMonths, nextStatus, parseNext, parsePlan, validateNext, validatePlan, } from '../state.js';
+import { PHASES, formatDate, formatNext, logMonths, rotateLog, nextStatus, parseNext, parsePlan, validateNext, validatePlan, } from '../state.js';
 /** NEXT.md as lines. With hook, silent when there is nothing to show (no project, no file, unreadable). */
 export function nextShow(cwd, hook) {
     try {
@@ -51,19 +51,20 @@ export function nextSet(cwd, input) {
     writeState(dir, 'NEXT.md', text);
     return [`NEXT.md を更新: 次: ${layer}`];
 }
-// LOG.md spanning this many months is worth rotating: a month just begun plus the one before it is not.
-const ROTATE_MONTHS = 3;
+// Rotating is suggested once it would move this many months: right after a month ends, only the month before is left behind.
+const ROTATE_MONTHS = 2;
 // Kept apart from the other checks, so that an unreadable LOG.md does not hide their warnings.
-function logProblems(dir) {
+function logProblems(dir, now) {
     try {
-        const months = logMonths(readState(dir, 'LOG.md') ?? '').length;
-        return months >= ROTATE_MONTHS ? [`LOG.md に${months}か月分のエントリ（soujo log rotate で移す）`] : [];
+        const { moved } = rotateLog(readState(dir, 'LOG.md') ?? '', formatDate(now).slice(0, 7));
+        const months = logMonths(moved.map(({ entry }) => entry)).length;
+        return months >= ROTATE_MONTHS ? [`LOG.md に移せる過去${months}か月分のエントリ（soujo log rotate）`] : [];
     }
     catch (error) {
         return [error.message];
     }
 }
-function problems(dir) {
+function problems(dir, now) {
     const found = [];
     const next = readState(dir, 'NEXT.md');
     const plan = readState(dir, 'PLAN.md');
@@ -80,7 +81,7 @@ function problems(dir) {
             found.push(`NEXT.md の次「${layer}」より前の「${status.unfinished.layer}」が PLAN で未完了`);
     }
     found.push(...validatePlan(plan ?? ''));
-    found.push(...logProblems(dir));
+    found.push(...logProblems(dir, now));
     const root = dirname(dir);
     if (gitToplevel(root) !== undefined) {
         const changes = gitStatus(root).length;
@@ -90,13 +91,13 @@ function problems(dir) {
     return found;
 }
 /** One warning line when the project is not safely resumable; nothing otherwise or outside Soujo projects. Never throws. */
-export function nextCheck(cwd, hook) {
+export function nextCheck(cwd, hook, now = new Date()) {
     let found;
     try {
         const dir = findStateDir(cwd);
         if (dir === undefined)
             return [];
-        found = problems(dir);
+        found = problems(dir, now);
     }
     catch (error) {
         found = [`確認できない: ${error instanceof Error ? error.message : String(error)}`];

@@ -56,12 +56,23 @@ export function gitStatus(cwd) {
     return git(cwd, ['status', '--porcelain', '--untracked-files=normal', ...HERE]).split('\n').filter((line) => line !== '');
 }
 /**
- * `git status --porcelain` lines for cwd and below, leaving out the paths matching the excluded git globs (relative to cwd).
- * Every untracked file has its own line, so an untracked directory holding only excluded files is not reported.
+ * `git status --porcelain` lines for cwd and below, leaving out the given paths (relative to cwd, taken literally). An untracked
+ * directory counts once, as in gitStatus.
  */
 export function gitStatusExcluding(cwd, excluded) {
-    const pathspecs = excluded.map((glob) => `:(exclude,glob)${glob}`);
-    return git(cwd, ['status', '--porcelain', '--untracked-files=all', ...HERE, ...pathspecs]).split('\n').filter((line) => line !== '');
+    const pathspecs = excluded.map((path) => `:(exclude,literal)${path}`);
+    return git(cwd, ['status', '--porcelain', '--untracked-files=normal', ...HERE, ...pathspecs]).split('\n').filter((line) => line !== '');
+}
+/** The given paths (relative to cwd, taken literally) with uncommitted changes, untracked and deleted files included, in the given order. */
+export function gitChangedPaths(cwd, paths) {
+    if (paths.length === 0)
+        return [];
+    const prefix = git(cwd, ['rev-parse', '--show-prefix']).trim();
+    const pathspecs = paths.map((path) => `:(literal)${path}`);
+    // -z keeps paths unquoted; --no-renames keeps one path per record. Porcelain paths are relative to the top level.
+    const output = git(cwd, ['status', '--porcelain', '-z', '--no-renames', '--untracked-files=all', '--', ...pathspecs]);
+    const changed = new Set(output.split('\0').filter((record) => record.length > 3).map((record) => record.slice(3)));
+    return paths.filter((path) => changed.has(`${prefix}${path}`));
 }
 const OPERATIONS = [
     ['MERGE_HEAD', 'merge'],

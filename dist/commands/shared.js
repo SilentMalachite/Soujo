@@ -87,18 +87,18 @@ export function requireCommittableFiles(root, files) {
  * are. Entries are compared whole and counted, so a repeated entry is uncommitted once HEAD has fewer copies of it.
  */
 export function uncommittedLogs(log, head) {
-    return missingEntries(parseLog(log), parseLog(head ?? ''));
+    return missingEntries(parseLog(log), parseLog(head ?? ''), (entry) => entry);
 }
-/** The entries, in order, that present does not have. Entries are compared whole and counted, as uncommittedLogs does. */
-export function missingEntries(entries, present) {
+/** The items, in order, whose entry present does not have. Entries are compared whole and counted, as uncommittedLogs does. */
+export function missingEntries(items, present, entryOf) {
     const key = (entry) => JSON.stringify([entry.date, entry.layer, entry.lines]);
     const copies = new Map();
     for (const entry of present)
         copies.set(key(entry), (copies.get(key(entry)) ?? 0) + 1);
-    return entries.filter((entry) => {
-        const left = copies.get(key(entry)) ?? 0;
+    return items.filter((item) => {
+        const left = copies.get(key(entryOf(item))) ?? 0;
         if (left > 0)
-            copies.set(key(entry), left - 1);
+            copies.set(key(entryOf(item)), left - 1);
         return left === 0;
     });
 }

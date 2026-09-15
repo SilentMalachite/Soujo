@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   gitAddAll,
   gitAddedFiles,
+  gitChangedPaths,
   gitCommit,
   gitCommitAll,
   gitFindCommit,
@@ -128,18 +129,29 @@ test('status, staging, and commits are limited to cwd and below', (t) => {
   assert.equal(gitCommitAll(app, 'nothing in app'), false);
 });
 
-test('gitStatusExcluding leaves out matching paths, untracked ones inside an untracked directory included', (t) => {
+test('gitStatusExcluding leaves out the given paths literally, and gitChangedPaths tells which given paths changed', (t) => {
   const top = repo(t);
   const app = join(top, 'app');
   mkdirSync(join(app, '.soujo'), { recursive: true });
+  writeFileSync(join(app, '.soujo', 'LOG.md'), 'a\n');
+  writeFileSync(join(app, '.soujo', 'LOG-2026-08.md'), 'a\n');
+  writeFileSync(join(app, '.soujo', 'LOG-2026-0?.md'), 'a\n');
+  gitAddAll(top);
+  gitCommit(top, 'base');
+
   writeFileSync(join(top, 'outside.txt'), '');
-  writeFileSync(join(app, '.soujo', 'LOG.md'), '');
-  writeFileSync(join(app, '.soujo', 'LOG-2026-08.md'), '');
-  const excluded = ['.soujo/LOG.md', '.soujo/LOG-[0-9][0-9][0-9][0-9]-[0-9][0-9].md'];
-  assert.deepEqual(gitStatusExcluding(app, excluded), []);
-  assert.deepEqual(gitStatusExcluding(app, []), ['?? app/.soujo/LOG-2026-08.md', '?? app/.soujo/LOG.md']);
-  writeFileSync(join(app, '.soujo', 'LOG-2026-8.md'), '');
-  assert.deepEqual(gitStatusExcluding(app, excluded), ['?? app/.soujo/LOG-2026-8.md']);
+  writeFileSync(join(app, '.soujo', 'LOG.md'), 'b\n');
+  writeFileSync(join(app, '.soujo', 'LOG-2026-09.md'), '');
+  execFileSync('git', ['rm', '-q', '.soujo/LOG-2026-08.md'], { cwd: app });
+  const excluded = ['.soujo/LOG.md', '.soujo/LOG-2026-09.md', '.soujo/LOG-2026-0?.md'];
+  assert.deepEqual(gitStatusExcluding(app, excluded), ['D  app/.soujo/LOG-2026-08.md']);
+  assert.deepEqual(gitStatusExcluding(app, [...excluded, '.soujo/LOG-2026-08.md']), []);
+  assert.deepEqual(gitChangedPaths(app, [...excluded, '.soujo/LOG-2026-08.md', 'missing.md']), [
+    '.soujo/LOG.md',
+    '.soujo/LOG-2026-09.md',
+    '.soujo/LOG-2026-08.md',
+  ]);
+  assert.deepEqual(gitChangedPaths(app, []), []);
 });
 
 test('gitUnmergedCount counts conflicts in the whole repository', (t) => {

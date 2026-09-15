@@ -40,7 +40,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 | `SPEC.md` | Goals, non-goals, acceptance criteria, technical decisions | ~100 lines |
 | `PLAN.md` | `- [ ] <layer> — <completion condition>` | 1 line per layer |
 | `LOG.md` | Append-only journal | 3 lines per entry |
-| `LOG-YYYY-MM.md` | Past months of `LOG.md`, moved by `soujo log rotate` | 3 lines per entry |
+| `LOG-YYYY-MM.md` | Past months of `LOG.md`, moved by `soujo log rotate` | — (entries as `LOG.md` had them) |
 | `NEXT.md` | The next step — all you need to resume | 5 lines |
 
 Runtime text (CLI output, skills, templates) is Japanese.
@@ -99,7 +99,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 
 | | Claude Code | Codex |
 |---|---|---|
-| Hooks | SessionStart adds `NEXT.md` to the context; Stop warns (never blocks) when `NEXT.md` is missing, invalid, or out of step with PLAN, changes are uncommitted, or `LOG.md` spans three months | Not relied on: use `$close` before stopping. Codex runs `hooks/hooks.json` only after you trust it; that is unverified, so leave it untrusted |
+| Hooks | SessionStart adds `NEXT.md` to the context; Stop warns (never blocks) when `NEXT.md` is missing, invalid, or out of step with PLAN, changes are uncommitted, or `soujo log rotate` would move entries of two or more months | Not relied on: use `$close` before stopping. Codex runs `hooks/hooks.json` only after you trust it; that is unverified, so leave it untrusted |
 | Effort | Set it yourself in the conversation before `/soujo:go`, from `effort:` in `NEXT.md` | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` or `model_reasoning_effort` in `~/.codex/config.toml` |
 | Commits | Normal permissions | The `workspace-write` sandbox cannot write `.git`: approve the escalation for `soujo layer done` / `soujo close` (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
 | Subagents | `review` starts one `soujo:reviewer`. `export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` caps parallel subagents | Not used |
@@ -117,7 +117,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo next check [--hook]` | Warns when the project is not resumable; always exits 0; `--hook` is for the Stop hook |
 | `soujo plan list` / `soujo plan next` | Layers with their state / the next layer |
 | `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md` |
-| `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md`, keeping the last entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
+| `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md` as they are, keeping the last entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
 | `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>` |
 | `soujo resume` | Four-line status |
 | `soujo close [--note '<note>']` | Logs the interruption → commits `wip: <layer>` |

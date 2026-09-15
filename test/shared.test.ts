@@ -55,9 +55,12 @@ test('uncommittedLogs lists entries HEAD lacks wherever they are, counting repea
 test('missingEntries lists entries absent from present, counting repeated entries', () => {
   const a = { date: '2026-08-01', layer: 'L1', lines: ['a'] };
   const b = { date: '2026-08-02', layer: 'L2', lines: ['b'] };
-  assert.deepEqual(missingEntries([a, b, a], [a]), [b, a]);
-  assert.deepEqual(missingEntries([a, b], [b, a, a]), []);
-  assert.deepEqual(missingEntries([{ ...a, lines: ['a', 'x'] }], [a]), [{ ...a, lines: ['a', 'x'] }]);
+  const same = (entry: typeof a) => entry;
+  assert.deepEqual(missingEntries([a, b, a], [a], same), [b, a]);
+  assert.deepEqual(missingEntries([a, b], [b, a, a], same), []);
+  assert.deepEqual(missingEntries([{ ...a, lines: ['a', 'x'] }], [a], same), [{ ...a, lines: ['a', 'x'] }]);
+  const blocks = [{ entry: a, id: 1 }, { entry: b, id: 2 }];
+  assert.deepEqual(missingEntries(blocks, [b], ({ entry }) => entry), [{ entry: a, id: 1 }]);
 });
 
 test('requireCommittableFiles refuses archives leaving the project or ignored by git', { skip: process.platform === 'win32' }, (t) => {
@@ -74,6 +77,12 @@ test('requireCommittableFiles refuses archives leaving the project or ignored by
   assert.throws(
     () => requireCommittableFiles(dir, ['LOG-2026-07.md']),
     /^Error: \.soujo\/LOG-2026-07\.md の実体（symlink の先）がプロジェクトの外なので記録をコミットできない$/,
+  );
+
+  symlinkSync('../.git/config', join(dir, '.soujo', 'LOG-2026-06.md'));
+  assert.throws(
+    () => requireCommittableFiles(dir, ['LOG-2026-06.md']),
+    /^Error: \.soujo\/LOG-2026-06\.md の実体（symlink の先）が\.git の中なので記録をコミットできない$/,
   );
 });
 

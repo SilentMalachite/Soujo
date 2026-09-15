@@ -241,3 +241,8 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.1.3 にし、
 rotateLog/archiveLog は純粋関数。書庫→LOG.md の順に書き、止まった rotate の変更だけは dirty でも許して再実行で仕上げる。
 書庫名は StateFile に LOG-YYYY-MM.md を足して同じ in-project 検査を通す。next check は3か月以上で警告。
 版は 0.2.0 — unreleased（package.json・Codex マニフェスト・CHANGELOG）。SPEC.ja.md も同期。
+
+## 2026-09-15 review-fix-l15
+L15 レビュー #1〜#25 を修正: 止まった rotate の例外を「LOG.md は丸ごとのエントリ削除だけ・書庫は丸ごとの追記だけ・消えたエントリは同じ月の書庫にある」に限定し、symlink の実パスも除外。重複省きは止まった rotate の書庫だけ。
+エントリは LOG.md の行の形のまま移す（LogBlock）。月は01〜12を state.ts の1か所で検証し statePath でも名前を検査。拒否時は一時ファイルを消さない。出力は2行、件名は <最初>..<最後>。next check は rotate が2か月分以上移せるとき警告。
+版は 0.1.3 に戻し CHANGELOG は Unreleased（Added/Changed）。サブディレクトリ・CRLF・HEAD の書庫・手でコミットした書庫・layer done/close 後続のテストを追加。SPEC(+ja)・README(+ja) を同期。

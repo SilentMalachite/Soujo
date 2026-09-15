@@ -182,13 +182,22 @@ test('next check counts untracked files even when git hides them from status', (
   assert.deepEqual(nextCheck(dir, false), ['soujo 警告: 未コミットの変更 1件']);
 });
 
-test('next check suggests log rotate once LOG.md spans three months, and reports an unreadable LOG.md with the other warnings', { skip: process.platform === 'win32' }, (t) => {
-  const two = '# LOG\n\n## 2026-08-31 L1\na\n\n## 2026-09-01 L2\nb\n';
-  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': two });
-  assert.deepEqual(nextCheck(dir, false), []);
-  writeFileSync(join(dir, '.soujo', 'LOG.md'), `## 2026-07-01 L0\nz\n\n${two}`);
-  assert.deepEqual(nextCheck(dir, false), ['soujo 警告: LOG.md に3か月分のエントリ（soujo log rotate で移す）']);
+test('next check suggests log rotate once it would move entries of two past months', (t) => {
+  const now = new Date(2026, 8, 15, 10, 0);
+  const warning = 'soujo 警告: LOG.md に移せる過去2か月分のエントリ（soujo log rotate）';
+  const cases: [string, string[]][] = [
+    ['## 2026-08-31 L1\na\n\n## 2026-09-01 L2\nb\n', []],
+    ['## 2026-07-01 L0\nz\n\n## 2026-08-31 L1\na\n\n## 2026-09-01 L2\nb\n', [warning]],
+    // Current and future months, dates naming no month, and the last entry are not moved, so they never warn.
+    ['## 2026-07-01 L0\nz\n\n## 2026-13-01 typo\nx\n\n## 2026-09-01 L1\na\n\n## 2027-01-01 typo\ny\n\n## 2026-06-01 L2\nb\n', []],
+  ];
+  for (const [log, expected] of cases) {
+    const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': `# LOG\n\n${log}` });
+    assert.deepEqual(nextCheck(dir, false, now), expected, log);
+  }
+});
 
+test('next check reports an unreadable LOG.md together with the other warnings', { skip: process.platform === 'win32' }, (t) => {
   const secret = join(temp(t), 'secret');
   writeFileSync(secret, '## 2026-01-01 token-123\n');
   const linked = project(temp(t), { 'PLAN.md': PLAN });

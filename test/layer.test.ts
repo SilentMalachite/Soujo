@@ -4,7 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { layerDone } from '../src/commands/layer.js';
+import { logRotate } from '../src/commands/log.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
+import { parseLog } from '../src/state.js';
 import { markDone } from '../src/state.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
@@ -34,6 +36,22 @@ test('layer done checks PLAN, appends LOG, and commits everything as "layer: <la
   assert.equal(commit?.subject, 'layer: L2 state');
   assert.equal(read(dir, 'PLAN.md'), PLAN.replace('- [ ] L2 state', '- [x] L2 state'));
   assert.equal(read(dir, 'LOG.md'), `${LOG}\n## 2026-09-13 L2 state\n一行目\n二行目\n`);
+  assert.deepEqual(gitStatus(dir), []);
+});
+
+test('layer done after a rotate stopped before its commit logs the layer once and commits the archive with it', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { ...STATE, 'LOG.md': '# LOG\n\n## 2026-07-01 L0\nz\n\n## 2026-09-12 L1 scaffold\nold\n' });
+  commitAll(dir, 'layer: L1 scaffold');
+  const hook = join(dir, '.git', 'hooks', 'pre-commit');
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  assert.throws(() => logRotate(dir, undefined, NOW), /git commit に失敗/);
+  rmSync(hook);
+
+  layerDone(dir, 'L2 state', 'note', NOW);
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
+  assert.equal(read(dir, 'LOG.md'), `${LOG}\n## 2026-09-13 L2 state\nnote\n`);
+  assert.equal(read(dir, 'LOG-2026-07.md'), '# LOG 2026-07\n\n## 2026-07-01 L0\nz\n');
+  assert.equal(parseLog(read(dir, 'LOG.md')).filter((entry) => entry.layer === 'L2 state').length, 1);
   assert.deepEqual(gitStatus(dir), []);
 });
 

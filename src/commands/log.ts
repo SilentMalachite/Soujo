@@ -2,28 +2,34 @@
 
 import { dirname } from 'node:path';
 import {
-  ARCHIVE_PATHSPEC,
   archiveFile,
   archiveFiles,
-  archiveMonth,
+  leftoverTemps,
   readState,
   removeLeftoverTemps,
   requireStateDir,
   statePath,
+  trackedStatePath,
   writeState,
   type ArchiveFile,
+  type StateFile,
 } from '../files.js';
-import { gitLastCommit, gitStatusExcluding } from '../git.js';
-import { appendLog, archiveLog, formatDate, isMonth, lastLog, logMonth, rotateLog } from '../state.js';
+import { gitChangedPaths, gitLastCommit, gitStatusExcluding } from '../git.js';
 import {
-  commitRecords,
-  headState,
-  missingEntries,
-  requireCommittable,
-  requireCommittableFiles,
-  resumable,
-  uncommittedLogs,
-} from './shared.js';
+  appendLog,
+  appendedEntries,
+  archiveLog,
+  formatDate,
+  isMonth,
+  lastLog,
+  logMonth,
+  logMonths,
+  removedEntries,
+  parseLog,
+  rotateLog,
+  type LogEntry,
+} from '../state.js';
+import { commitRecords, headState, missingEntries, requireCommittable, requireCommittableFiles, resumable } from './shared.js';
 
 export function logAdd(cwd: string, layer: string, lines: string[], now: Date = new Date()): string[] {
   if (!lines.some((line) => line.trim() !== '')) throw new Error('--line を1つ以上指定する');
@@ -37,30 +43,69 @@ export function logAdd(cwd: string, layer: string, lines: string[], now: Date = 
 
 const DIRTY = '未コミットの変更がある（soujo layer done か soujo close で締めてから）';
 const RESUME = '書いた分は再実行で二重に移さない。原因を直して同じコマンドを再実行する';
+const identity = (entry: LogEntry) => entry;
+
+// The path of file and of its symlink target, relative to the project root: where git reports its changes.
+function trackedPaths(root: string, file: StateFile): string[] {
+  return [...new Set([statePath(file), trackedStatePath(root, file)])];
+}
+
+interface StoppedRotation {
+  /** The entries LOG.md lost since HEAD. */
+  removed: LogEntry[];
+  /** The entries each archive gained since HEAD. */
+  pending: Map<ArchiveFile, LogEntry[]>;
+}
 
 /**
- * The archives holding entries that HEAD does not have: what a previous rotate wrote but did not commit. Throws DIRTY unless
- * every uncommitted change is such a rotate's: only LOG.md and archives changed, LOG.md has no entry HEAD lacks, and every
- * entry LOG.md lost since HEAD is in one of those archives.
+ * What a previous rotate wrote but did not commit. Throws DIRTY unless every uncommitted change could be such a rotate's: only
+ * LOG.md and existing archives changed (leftover temporary files aside), LOG.md is HEAD's with whole entries removed and nothing
+ * else changed, each changed archive is HEAD's with whole entries appended, and every entry removed from LOG.md is in the archive
+ * of its month (committed or not, so an archive committed by hand before LOG.md is fine).
  */
-function stoppedRotation(root: string, dir: string, log: string): ArchiveFile[] {
-  if (gitStatusExcluding(root, []).length === 0) return [];
-  if (gitStatusExcluding(root, [statePath('LOG.md'), ARCHIVE_PATHSPEC]).length > 0) throw new Error(DIRTY);
-  const head = headState(root, 'LOG.md');
-  const pending = archiveFiles(dir).map((file) => ({ file, entries: uncommittedLogs(readState(dir, file) ?? '', headState(root, file)) }));
-  const lost = missingEntries(uncommittedLogs(head ?? '', log), pending.flatMap(({ entries }) => entries));
-  if (uncommittedLogs(log, head).length > 0 || lost.length > 0) throw new Error(DIRTY);
-  return pending.filter(({ entries }) => entries.length > 0).map(({ file }) => file);
+function stoppedRotation(root: string, dir: string, log: string): StoppedRotation {
+  const pending = new Map<ArchiveFile, LogEntry[]>();
+  const archives = archiveFiles(dir);
+  // Read first, so an archive whose real path leaves the project is refused before its path reaches git.
+  const texts = new Map(archives.map((file) => [file, readState(dir, file) ?? ''] as const));
+  const allowed = [...trackedPaths(root, 'LOG.md'), ...archives.flatMap((file) => trackedPaths(root, file))];
+  if (gitStatusExcluding(root, [...allowed, ...leftoverTemps(dir)]).length > 0) throw new Error(DIRTY);
+  const changed = new Set(gitChangedPaths(root, allowed));
+  if (changed.size === 0) return { removed: [], pending };
+
+  const removed = removedEntries(headState(root, 'LOG.md') ?? '', log);
+  if (removed === undefined) throw new Error(DIRTY);
+  for (const [file, text] of texts) {
+    if (!trackedPaths(root, file).some((path) => changed.has(path))) continue;
+    const appended = appendedEntries(headState(root, file), text);
+    if (appended === undefined) throw new Error(DIRTY);
+    if (appended.length > 0) pending.set(file, appended);
+  }
+  for (const month of logMonths(removed)) {
+    const archive = isMonth(month) ? texts.get(archiveFile(month)) : undefined;
+    const lost = missingEntries(removed.filter((entry) => logMonth(entry) === month), parseLog(archive ?? ''), identity);
+    if (lost.length > 0) throw new Error(DIRTY);
+  }
+  return { removed, pending };
+}
+
+// "2026-08" for one month, "2026-01〜2026-08" (separator given) for more.
+function span(months: readonly string[], separator: string): string {
+  const first = months[0] ?? '';
+  const last = months.at(-1) ?? '';
+  return first === last ? first : `${first}${separator}${last}`;
 }
 
 /**
  * Decided before anything is written:
- * - not committable (see requireCommittable), or before not YYYY-MM                         → refuse
+ * - before not YYYY-MM, or not committable (see requireCommittable)                        → refuse
  * - uncommitted changes other than a stopped rotate's (see stoppedRotation)                  → refuse
- * - an archive to write whose real path leaves the project or enters .git, or is git-ignored → refuse
- * Then the entries of LOG.md dated before the month move (all but the last entry), archives first and LOG.md last, and the
- * project is committed as "log: rotate <months>". An entry already in an archive but not in HEAD (a previous run that stopped)
- * is not appended again, so re-running after any failure finishes the same rotation.
+ * - a stopped rotate's archive entry that this rotation would leave in LOG.md (another month) → refuse
+ * - an archive to write or to commit that git ignores                                        → refuse
+ * An archive whose real path leaves the project or enters .git is refused when it is read. Then leftover temporary files are
+ * removed, the entries of LOG.md dated before the month move (all but the last entry), archives first and LOG.md last, and the
+ * project is committed as "log: rotate <months>". An entry a stopped rotate already appended is not appended again, so
+ * re-running after any failure finishes the same rotation.
  */
 export function logRotate(cwd: string, before?: string, now: Date = new Date()): string[] {
   const dir = requireStateDir(cwd);
@@ -68,32 +113,37 @@ export function logRotate(cwd: string, before?: string, now: Date = new Date()):
   const month = before ?? formatDate(now).slice(0, 7);
   if (!isMonth(month)) throw new Error(`--before は YYYY-MM: ${month}`);
   requireCommittable(root);
-  removeLeftoverTemps(dir);
 
   const log = readState(dir, 'LOG.md') ?? '';
-  const pending = stoppedRotation(root, dir, log);
+  const stopped = stoppedRotation(root, dir, log);
+  const { pending } = stopped;
   const { kept, moved } = rotateLog(log, month);
-  const eol = log.includes('\r\n') ? '\r\n' : '\n';
-  const months = [...new Set(moved.map(logMonth))].sort();
-  const writes = months.flatMap((entryMonth) => {
-    const file = archiveFile(entryMonth);
-    const archive = readState(dir, file);
-    const already = uncommittedLogs(archive ?? '', headState(root, file));
-    const fresh = missingEntries(moved.filter((entry) => logMonth(entry) === entryMonth), already);
-    return fresh.length === 0 ? [] : [{ file, count: fresh.length, text: archiveLog(archive, entryMonth, fresh, eol) }];
-  });
-  requireCommittableFiles(root, writes.map(({ file }) => file));
+  const removed = [...stopped.removed, ...moved.map(({ entry }) => entry)];
+  const stranded = missingEntries([...pending.values()].flat(), removed, identity);
+  if (stranded.length > 0) {
+    throw new Error('前回の rotate が書庫に移したエントリが LOG.md に残る（前回と同じ --before で再実行する）');
+  }
 
+  const eol = log.includes('\r\n') ? '\r\n' : '\n';
+  const writes = logMonths(moved.map(({ entry }) => entry)).flatMap((entryMonth) => {
+    const file = archiveFile(entryMonth);
+    const blocks = moved.filter(({ entry }) => logMonth(entry) === entryMonth);
+    const fresh = missingEntries(blocks, pending.get(file) ?? [], ({ entry }) => entry);
+    return fresh.length === 0 ? [] : [{ file, text: archiveLog(readState(dir, file), entryMonth, fresh, eol) }];
+  });
+  const months = logMonths(removed);
+  const archives = [...new Set([...months.map(archiveFile), ...pending.keys()])].sort();
+  requireCommittableFiles(root, archives);
+  if (removed.length === 0) return ['移動なし'];
+
+  removeLeftoverTemps(dir);
   for (const { file, text } of writes) resumable(() => writeState(dir, file, text), RESUME);
   if (kept !== log) resumable(() => writeState(dir, 'LOG.md', kept), RESUME);
-  const archives = [...new Set([...pending, ...writes.map(({ file }) => file)])].sort();
-  if (archives.length === 0) return ['移動なし'];
-
-  const subject = ['log: rotate', ...archives.map(archiveMonth)].join(' ');
+  const subject = `log: rotate ${span(months, '..')}`;
   const committed = resumable(() => commitRecords(root, subject, archives), RESUME);
   if (!committed) throw new Error('コミットする変更がない（LOG.md と書庫の変更を git が拾っていない。skip-worktree などを確認）');
   return [
-    ...writes.map(({ file, count }) => `${file} に移動: ${count}件`),
+    `LOG.md から${removed.length}件を${months.length}書庫へ移動（${span(months, '〜')}）`,
     `コミット: ${gitLastCommit(root)?.hash ?? '?'} ${subject}`,
   ];
 }

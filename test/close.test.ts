@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { close } from '../src/commands/close.js';
 import { layerDone } from '../src/commands/layer.js';
+import { logRotate } from '../src/commands/log.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
@@ -31,6 +32,22 @@ function workingProject(t: TestContext): string {
   writeFileSync(join(dir, 'resume.ts'), 'export {};\n');
   return dir;
 }
+
+test('close after a rotate stopped before its commit logs the interruption once and commits the archive with it', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { ...STATE, 'LOG.md': '# LOG\n\n## 2026-07-01 L0\nz\n\n## 2026-09-12 L6 layer-done\nold\n' });
+  commitAll(dir, 'layer: L6 layer-done');
+  const hook = join(dir, '.git', 'hooks', 'pre-commit');
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  assert.throws(() => logRotate(dir, undefined, NOW), /git commit に失敗/);
+  assert.throws(() => close(dir, '途中', NOW), /git commit に失敗/);
+  rmSync(hook);
+
+  close(dir, '途中', NOW);
+  assert.equal(gitLastCommit(dir)?.subject, 'wip: L7 resume-close');
+  assert.equal(read(dir, 'LOG.md'), `${LOG}${ENTRY}中断: 途中\n`);
+  assert.equal(read(dir, 'LOG-2026-07.md'), '# LOG 2026-07\n\n## 2026-07-01 L0\nz\n');
+  assert.deepEqual(gitStatus(dir), []);
+});
 
 function lockIndex(dir: string): () => void {
   const lock = join(dir, '.git', 'index.lock');

@@ -40,7 +40,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 | `SPEC.md` | 目的・非目標・受け入れ基準・技術判断 | 約100行 |
 | `PLAN.md` | `- [ ] <層> — <完了条件>` | 1層1行 |
 | `LOG.md` | 追記だけの作業日誌 | 1エントリ3行 |
-| `LOG-YYYY-MM.md` | `soujo log rotate` が移した `LOG.md` の過去の月 | 1エントリ3行 |
+| `LOG-YYYY-MM.md` | `soujo log rotate` が移した `LOG.md` の過去の月 | —（`LOG.md` にあった形のまま） |
 | `NEXT.md` | 次の一手。再開にはこれだけ読めばよい | 5行 |
 
 実行時の文言（CLI の出力・スキル・テンプレート）は日本語。
@@ -99,7 +99,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 
 | | Claude Code | Codex |
 |---|---|---|
-| フック | SessionStart で `NEXT.md` を文脈に入れ、Stop で `NEXT.md` がない・無効・PLAN と食い違う、未コミットの変更がある、または `LOG.md` が3か月分にわたるときに警告する（止めない） | 頼らない。止まる前に `$close`。Codex は信頼した後だけ `hooks/hooks.json` を実行するが、未確認なので信頼しないでおく |
+| フック | SessionStart で `NEXT.md` を文脈に入れ、Stop で `NEXT.md` がない・無効・PLAN と食い違う、未コミットの変更がある、または `soujo log rotate` が2か月分以上のエントリを移せるときに警告する（止めない） | 頼らない。止まる前に `$close`。Codex は信頼した後だけ `hooks/hooks.json` を実行するが、未確認なので信頼しないでおく |
 | effort | `/soujo:go` の前に、`NEXT.md` の `effort:` を見て会話で自分で設定 | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` か `~/.codex/config.toml` の `model_reasoning_effort` |
 | コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`soujo layer done` / `soujo close` の昇格を承認する（`codex exec` は `--add-dir "$PWD/.git"`）。再実行はコミットだけをやり直す |
 | サブエージェント | `review` が `soujo:reviewer` を1体だけ起動。`export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` で並列数を抑える | 使わない |
@@ -117,7 +117,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo next check [--hook]` | 再開できない状態を警告する。終了コードは常に0。`--hook` は Stop フック用 |
 | `soujo plan list` / `soujo plan next` | 層と状態 / 次の層 |
 | `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記 |
-| `soujo log rotate [--before <YYYY-MM>]` | 今月（か `--before`）より前の月のエントリを `LOG-YYYY-MM.md` へ移し（最後のエントリは残す）、`log: rotate <月>` でコミット。ほかの未コミットの変更があれば拒否し、失敗後の再実行は同じ移動を仕上げる |
+| `soujo log rotate [--before <YYYY-MM>]` | 今月（か `--before`）より前の月のエントリをそのままの形で `LOG-YYYY-MM.md` へ移し（最後のエントリは残す）、`log: rotate <月>` でコミット。ほかの未コミットの変更があれば拒否し、失敗後の再実行は同じ移動を仕上げる |
 | `soujo layer done '<層>' [--note '<メモ>']` | PLAN の層にチェック → LOG に追記 → `layer: <層>` でコミット |
 | `soujo resume` | 4行の現在地 |
 | `soujo close [--note '<メモ>']` | 中断を記録 → `wip: <層>` でコミット |

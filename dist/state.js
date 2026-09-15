@@ -16,8 +16,8 @@ const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/;
 // Standalone tokens between the layer name and its completion condition. "—" is canonical; the rest are common typing variants.
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const MONTH = /^\d{4}-\d{2}$/;
+const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 // Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, U+2028/2029.
 const CONTROL = /[\u0000-\u001f\u007f\u2028\u2029]/g;
 function isEffort(value) {
@@ -209,74 +209,137 @@ export function appendLog(text, entry) {
     const block = `${[`## ${entry.date} ${layer}`, ...lines].join(eol)}${eol}`;
     return `${text}${logSeparator(text, eol)}${block}`;
 }
-/** Every `## YYYY-MM-DD <layer>` entry of LOG.md in order, each with its non-blank lines. */
-export function parseLog(text) {
-    const entries = [];
-    for (const raw of text.split('\n')) {
+// LOG.md split at "\n" into the lines before the first entry and one range per entry.
+function logBlocks(text) {
+    const lines = text.split('\n');
+    const blocks = [];
+    lines.forEach((raw, index) => {
         const line = raw.trim();
         const header = LOG_HEADER.exec(line);
-        if (header)
-            entries.push({ date: header[1] ?? '', layer: (header[2] ?? '').trim(), lines: [] });
-        else if (line !== '')
-            entries[entries.length - 1]?.lines.push(line);
-    }
-    return entries;
+        const last = blocks.at(-1);
+        if (header) {
+            if (last !== undefined)
+                last.end = index;
+            blocks.push({ entry: { date: header[1] ?? '', layer: (header[2] ?? '').trim(), lines: [] }, start: index, end: lines.length });
+        }
+        else if (line !== '') {
+            last?.entry.lines.push(line);
+        }
+    });
+    return { lines, preamble: blocks[0]?.start ?? lines.length, blocks };
+}
+/** Every `## YYYY-MM-DD <layer>` entry of LOG.md in order, each with its non-blank lines. */
+export function parseLog(text) {
+    return logBlocks(text).blocks.map(({ entry }) => entry);
 }
 /** The last entry of LOG.md, or undefined when there is none. */
 export function lastLog(text) {
     return parseLog(text).at(-1);
 }
-/** Whether value is a month as log rotation names it: YYYY-MM. */
+/** Whether value is a month as log rotation names it: YYYY-MM, the month from 01 to 12. */
 export function isMonth(value) {
     return MONTH.test(value);
 }
-/** The month (YYYY-MM) of a LOG entry. */
+/** value when it is a month (see isMonth); throws otherwise. */
+export function requireMonth(value) {
+    if (!MONTH.test(value))
+        throw new Error(`月は YYYY-MM: ${value}`);
+    return value;
+}
+/** The YYYY-MM part of a LOG entry's date; not a month (see isMonth) when the date names none. */
 export function logMonth(entry) {
     return entry.date.slice(0, 7);
 }
-/** The months (YYYY-MM) of LOG.md's entries, distinct and in ascending order. */
-export function logMonths(text) {
-    return [...new Set(parseLog(text).map(logMonth))].sort();
+/** The months of the entries, distinct and in ascending order. */
+export function logMonths(entries) {
+    return [...new Set(entries.map(logMonth))].sort();
 }
 /**
- * LOG.md split for rotation: every entry dated before the month `before` (YYYY-MM) moves, wherever it is, except the last
- * entry, which resume reads. An entry moves with the blank lines after it, so the kept entries stay separated as they were.
+ * LOG.md split for rotation: every entry dated in a month before `before` (YYYY-MM) moves, wherever it is, except the last
+ * entry, which resume reads, and entries whose date names no month. An entry moves with the blank lines after it, so the
+ * kept entries stay separated as they were.
  */
 export function rotateLog(text, before) {
-    if (!MONTH.test(before))
-        throw new Error(`月は YYYY-MM: ${before}`);
-    const lines = text.split('\n');
-    // The same rule parseLog uses, so starts[i] is the heading of parseLog(text)[i].
-    const starts = lines.flatMap((line, index) => (LOG_HEADER.test(line.trim()) ? [index] : []));
-    const entries = parseLog(text);
+    requireMonth(before);
+    const { lines, blocks } = logBlocks(text);
     const dropped = new Set();
     const moved = [];
-    for (let index = 0; index < starts.length - 1; index++) {
-        const entry = entries[index];
-        if (entry === undefined || logMonth(entry) >= before)
+    for (const { entry, start, end } of blocks.slice(0, -1)) {
+        const month = logMonth(entry);
+        if (!isMonth(month) || month >= before)
             continue;
-        moved.push(entry);
-        for (let line = starts[index] ?? 0; line < (starts[index + 1] ?? 0); line++)
+        const raw = lines.slice(start, end).map((line) => line.replace(/\r$/, ''));
+        while (raw.length > 1 && (raw.at(-1) ?? '').trim() === '')
+            raw.pop();
+        moved.push({ entry, lines: raw });
+        for (let line = start; line < end; line++)
             dropped.add(line);
     }
     return { kept: lines.filter((_, index) => !dropped.has(index)).join('\n'), moved };
 }
 /**
- * The archive LOG-<month>.md with entries appended after a blank line each. A missing or blank archive starts with
- * "# LOG <month>" and uses eol; an existing one keeps its own line break. Entries are written as parseLog read them, without
- * the limits of appendLog, so entries written by hand still move.
+ * The archive LOG-<month>.md with each block appended after a blank line, its lines as LOG.md had them. A missing or blank
+ * archive starts with "# LOG <month>" and uses eol; an existing one keeps its own line break. No limit of appendLog applies,
+ * so entries written by hand move too.
  */
-export function archiveLog(archive, month, entries, eol = '\n') {
-    if (!MONTH.test(month))
-        throw new Error(`月は YYYY-MM: ${month}`);
+export function archiveLog(archive, month, blocks, eol = '\n') {
+    requireMonth(month);
     const fresh = archive === undefined || archive.trim() === '';
     const lineBreak = fresh ? eol : archive.includes('\r\n') ? '\r\n' : '\n';
     let text = fresh ? `# LOG ${month}${lineBreak}` : archive;
-    for (const entry of entries) {
-        const block = `${[`## ${entry.date} ${entry.layer}`, ...entry.lines].join(lineBreak)}${lineBreak}`;
-        text = `${text}${logSeparator(text, lineBreak)}${block}`;
-    }
+    for (const { lines } of blocks)
+        text = `${text}${logSeparator(text, lineBreak)}${lines.join(lineBreak)}${lineBreak}`;
     return text;
+}
+/**
+ * The entries appended to before to make after, or undefined when after is not before followed by whole entries (blank lines
+ * allowed): what archiveLog writes. CRLF and LF compare equal, as git's line-ending conversion may change them. A missing or
+ * blank before (a new archive) gives every entry of after.
+ */
+export function appendedEntries(before, after) {
+    if (before === undefined || before.trim() === '')
+        return parseLog(after);
+    const [old, now] = [lf(before), lf(after)];
+    if (!now.startsWith(old))
+        return undefined;
+    const rest = now.slice(old.length);
+    // Text added to before's last line is an edit, not an appended entry.
+    if (!old.endsWith('\n') && rest !== '' && !rest.startsWith('\n'))
+        return undefined;
+    const { lines, preamble } = logBlocks(rest);
+    if (lines.slice(0, preamble).some((line) => line.trim() !== ''))
+        return undefined;
+    return parseLog(rest);
+}
+function lf(text) {
+    return text.replace(/\r\n/g, '\n');
+}
+function sameLines(a, aStart, b, bStart, length) {
+    if (aStart + length > a.length)
+        return false;
+    for (let offset = 0; offset < length; offset++)
+        if (a[aStart + offset] !== b[bStart + offset])
+            return false;
+    return true;
+}
+/**
+ * The entries removed from before to make after, in before's order, or undefined unless after is before with whole entries
+ * removed and nothing else changed: what rotateLog keeps. CRLF and LF compare equal, as in appendedEntries.
+ */
+export function removedEntries(before, after) {
+    const old = logBlocks(lf(before));
+    const now = lf(after).split('\n');
+    if (!sameLines(now, 0, old.lines, 0, old.preamble))
+        return undefined;
+    let at = old.preamble;
+    const removed = [];
+    for (const { entry, start, end } of old.blocks) {
+        if (sameLines(now, at, old.lines, start, end - start))
+            at += end - start;
+        else
+            removed.push(entry);
+    }
+    return at === now.length ? removed : undefined;
 }
 /** YYYY-MM-DD in local time. */
 export function formatDate(date) {

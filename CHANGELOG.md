@@ -4,12 +4,18 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.2.0 — unreleased
+## Unreleased
 
 ### Added
 
-- `soujo log rotate [--before YYYY-MM]` moves the entries of `LOG.md` dated before the current month (or `--before`) into `.soujo/LOG-YYYY-MM.md`, one archive per month, keeping the text before the first entry and the last entry so that `soujo resume` still shows `前回:`. It commits `log: rotate <months>`, refuses while other changes are uncommitted, and a re-run after a failed write or commit finishes the same rotation without moving an entry twice.
-- `soujo next check` warns when `LOG.md` spans three or more months.
+- `soujo log rotate [--before YYYY-MM]` moves the entries of `LOG.md` dated before the current month (or `--before`) into `.soujo/LOG-YYYY-MM.md`, one archive per month, as `LOG.md` has them. It keeps the text before the first entry and the last entry, so that `soujo resume` still shows `前回:`, and commits `log: rotate <months>`. It refuses while other changes are uncommitted; a re-run after a failed write or commit finishes the same rotation without moving an entry twice.
+- `soujo next check` warns when `soujo log rotate` would move entries of two or more months.
+
+### Changed
+
+- `soujo next check` reads `LOG.md`, and warns when it cannot be read (e.g. a symlink leaving the project) along with the other warnings.
+- `soujo init`, `soujo next set`, `soujo log add`, `soujo layer done`, and `soujo close` also remove temporary files left by a killed write of an archive.
+- A date in a new `LOG.md` entry must name a real month and day (`2026-13-01` is refused).
 
 ## 0.1.3 — 2026-09-15
 
