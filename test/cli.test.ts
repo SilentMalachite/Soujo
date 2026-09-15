@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { commitAll, repo, temp } from './helpers.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
@@ -302,6 +302,62 @@ test('map plan and map code print their diagrams through the CLI', (t) => {
   );
   const missing = soujoIn(dir, 'map', 'code', 'nope');
   assert.deepEqual([missing.status, missing.stderr], [1, 'soujo: ディレクトリがない: nope\n']);
+});
+
+test('inside a host plugin directory only --help and the hook commands run, as outside a project; the rest write nothing', { skip: process.platform === 'win32' }, (t) => {
+  const root = temp(t);
+  for (const host of ['.claude', '.codex']) {
+    // A copy of a Soujo project with a missing CLAUDE.md for init to create and an uncommitted file for next check to warn about.
+    const dir = repo(t);
+    soujoIn(dir, 'init');
+    rmSync(join(dir, 'CLAUDE.md'));
+    writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [ ] L1 scaffold — build\n');
+    commitAll(dir);
+    writeFileSync(join(dir, 'a.ts'), "import './b.js';\n");
+    assert.match(soujoIn(dir, 'next', 'check', '--hook').stdout, /systemMessage/);
+    const copy = join(root, host, 'plugins', 'cache', 'soujo', 'soujo');
+    mkdirSync(dirname(copy), { recursive: true });
+    renameSync(dir, copy);
+    const link = join(root, `${host}-link`);
+    symlinkSync(copy, link);
+
+    const snapshot = () => [
+      readdirSync(copy).sort(),
+      readdirSync(join(copy, '.soujo')).sort(),
+      ...['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'].map((file) => readFileSync(join(copy, '.soujo', file), 'utf8')),
+      execFileSync('git', ['log', '--oneline'], { cwd: copy, encoding: 'utf8' }),
+      execFileSync('git', ['status', '--porcelain'], { cwd: copy, encoding: 'utf8' }),
+    ];
+    const before = snapshot();
+    const refused = `soujo: プラグインの置き場所（${host}/plugins）では実行しない: 作業中のプロジェクトで実行する\n`;
+    const cases: [string[], number, string, string][] = [
+      [['init'], 1, '', refused],
+      [['next', 'set', '--layer', 'L1 scaffold', '--premise', 'p', '--check', 'c'], 1, '', refused],
+      [['plan', 'list'], 1, '', refused],
+      [['plan', 'next'], 1, '', refused],
+      [['log', 'add', 'L1 scaffold', '--line', 'a'], 1, '', refused],
+      [['log', 'rotate'], 1, '', refused],
+      [['layer', 'done', 'L1 scaffold', '--note', 'a'], 1, '', refused],
+      [['resume'], 1, '', refused],
+      [['brief'], 1, '', refused],
+      [['close', '--note', 'a'], 1, '', refused],
+      [['map', 'plan'], 1, '', refused],
+      [['map', 'code'], 1, '', refused],
+      [['next', 'show'], 1, '', 'soujo: .soujo/ が見つからない（soujo init で作る）\n'],
+      [['next', 'show', '--hook'], 0, '', ''],
+      [['next', 'check'], 0, '', ''],
+      [['next', 'check', '--hook'], 0, '', ''],
+      [['--help'], 0, lines(...Object.values(USAGES)), ''],
+      [['resume', '--help'], 0, lines(USAGES.resume), ''],
+    ];
+    for (const cwd of [copy, join(copy, '.soujo'), link]) {
+      for (const [args, status, stdout, stderr] of cases) {
+        const result = soujoIn(cwd, ...args);
+        assert.deepEqual([result.status, result.stdout, result.stderr], [status, stdout, stderr], `${cwd}: ${args.join(' ')}`);
+        assert.deepEqual(snapshot(), before, `${cwd}: ${args.join(' ')}`);
+      }
+    }
+  }
 });
 
 test('argument errors are one Japanese line with exit 1', () => {

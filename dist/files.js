@@ -78,11 +78,32 @@ export function trackedStatePath(root, file) {
         return statePath(file);
     }
 }
+// The directories under which hosts keep install caches and marketplace clones of plugins, this repository included (SPEC §8).
+const PLUGIN_DIRS = ['.claude', '.codex'];
 /**
- * The nearest .soujo/ directory from start upward, or undefined outside Soujo projects.
+ * The host plugin directory (".claude/plugins" or ".codex/plugins") that the real path of dir is in, or undefined. A symlink
+ * into a copy of Soujo there is caught; a path that cannot be resolved is checked as given.
+ */
+export function pluginDir(dir) {
+    let real;
+    try {
+        real = realpathSync(dir);
+    }
+    catch {
+        real = resolve(dir);
+    }
+    const segments = real.split(sep);
+    const index = segments.findIndex((segment, i) => PLUGIN_DIRS.includes(segment) && segments[i + 1] === 'plugins');
+    return index === -1 ? undefined : `${segments[index]}/plugins`;
+}
+/**
+ * The nearest .soujo/ directory from start upward, or undefined outside Soujo projects and inside a host plugin directory,
+ * whose copy of Soujo carries this repository's .soujo/.
  * The search stops at the git top level (a directory with .git), so a nested repository never uses an outer project.
  */
 export function findStateDir(start = process.cwd()) {
+    if (pluginDir(start) !== undefined)
+        return undefined;
     let dir = resolve(start);
     for (;;) {
         const candidate = join(dir, STATE_DIR);

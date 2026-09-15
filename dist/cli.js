@@ -10,6 +10,7 @@ import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
+import { pluginDir } from './files.js';
 import { printable } from './state.js';
 const HELP_HINT = '（soujo --help で一覧）';
 function usageError(usage) {
@@ -35,6 +36,7 @@ const COMMANDS = {
     init: noArguments('init', init),
     'next show': {
         usage: 'next show [--hook]',
+        hook: true,
         run: (args, cwd, usage) => {
             const { positionals, values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true });
             expectPositionals(positionals, 0, usage);
@@ -65,6 +67,7 @@ const COMMANDS = {
     // Hooks call this: unknown arguments are ignored so that it always exits 0.
     'next check': {
         usage: 'next check [--hook]',
+        hook: true,
         run: (args, cwd) => {
             const { values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true, strict: false });
             return nextCheck(cwd, values.hook === true);
@@ -194,10 +197,20 @@ function oneLine(text) {
         .filter((line) => line !== '')
         .join(' ');
 }
+// A host plugin directory holds a copy of Soujo with this repository's .soujo/ (SPEC §6): commands other than the hooks' refuse
+// there before reading or writing anything, so that resume never shows those records and init or a commit never lands in the copy.
+function run(found, cwd) {
+    if (found === undefined)
+        return undefined;
+    const plugin = found.command.hook ? undefined : pluginDir(cwd);
+    if (plugin !== undefined)
+        throw new Error(`プラグインの置き場所（${plugin}）では実行しない: 作業中のプロジェクトで実行する`);
+    return found.command.run(found.args, cwd, found.command.usage);
+}
 function main(argv) {
     try {
         const found = resolve(argv);
-        const lines = help(argv, found) ?? found?.command.run(found.args, process.cwd(), found.command.usage);
+        const lines = help(argv, found) ?? run(found, process.cwd());
         if (lines === undefined) {
             throw new Error(argv.length === 0 ? `コマンドがありません${HELP_HINT}` : unknownCommand(argv));
         }

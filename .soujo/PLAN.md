@@ -17,5 +17,5 @@
 - [x] L15 log-rotate — log rotate が当月より前（--before 指定可）のエントリを日付の月ごとに LOG-YYYY-MM.md へ移して先頭部分と最後のエントリを残し log: rotate でコミットし、汚れたツリー・不正な --before で無書込・移動なしで終了0、next check が rotate で2か月分以上移せるとき警告することがテストで通り、README・CHANGELOG(+.ja) に載る
 - [x] L16 brief — soujo brief が SPEC §6 の5行（進捗・以後・節目・空白・次）を記録から導出し、git なし・LOG なし・NEXT 無効でその行だけ縮退することがテストで通り、resume の 再開: が最終コミットから3日以上で `・N日ぶり: 先に soujo brief` を付け、README(+.ja)・CHANGELOG(+.ja) に載る
 - [x] L17 milestones — spec・plan・go スキルがフェーズの区切りに `soujo log add 節目` を書き（各節は3行以内のまま）、plan スキルが層名を 節目 にしないと言い、templates/CLAUDE.md・AGENTS.md と README(+.ja) が節目と brief に触れ、skills テストが通る
-- [ ] L18 plugin-guard — cwd の実パスに .claude/plugins か .codex/plugins があるとき --help 以外のコマンドが何も読み書きせず終了1、next show/next check は Soujo 外と同じ（--hook は無音）ことがテストで通り、README(+.ja)・CHANGELOG(+.ja) に載る
+- [x] L18 plugin-guard — cwd の実パスに .claude/plugins か .codex/plugins があるとき --help 以外のコマンドが何も読み書きせず終了1、next show/next check は Soujo 外と同じ（--hook は無音）ことがテストで通り、README(+.ja)・CHANGELOG(+.ja) に載る
 

@@ -24,6 +24,7 @@ import {
   isSymlink,
   leftoverTemps,
   packageDir,
+  pluginDir,
   readState,
   readTemplate,
   removeLeftoverTemps,
@@ -64,6 +65,38 @@ test('findStateDir returns undefined and requireStateDir throws outside Soujo pr
   const root = temp(t);
   assert.equal(findStateDir(root), undefined);
   assert.throws(() => requireStateDir(root), /^Error: \.soujo\/ が見つからない（soujo init で作る）$/);
+});
+
+test('pluginDir finds .claude/plugins or .codex/plugins in the real path, where findStateDir sees no project', { skip: process.platform === 'win32' }, (t) => {
+  const root = temp(t);
+  const copy = join(root, '.claude', 'plugins', 'cache', 'soujo', 'soujo', 'abc');
+  mkdirSync(join(copy, '.soujo'), { recursive: true });
+  mkdirSync(join(copy, 'src'));
+  mkdirSync(join(root, '.codex', 'plugins'), { recursive: true });
+  assert.equal(pluginDir(copy), '.claude/plugins');
+  assert.equal(pluginDir(join(copy, 'src')), '.claude/plugins');
+  assert.equal(pluginDir(join(root, '.claude', 'plugins')), '.claude/plugins');
+  assert.equal(pluginDir(join(root, '.codex', 'plugins')), '.codex/plugins');
+  assert.equal(pluginDir(join(root, '.codex', 'plugins', 'missing')), '.codex/plugins');
+  assert.equal(findStateDir(copy), undefined);
+  assert.equal(findStateDir(join(copy, 'src')), undefined);
+  assert.throws(() => requireStateDir(copy), /^Error: \.soujo\/ が見つからない（soujo init で作る）$/);
+
+  // A symlink into the copy is caught; one from a plugin directory to an ordinary project is not.
+  const project = join(root, 'project');
+  mkdirSync(join(project, '.soujo'), { recursive: true });
+  symlinkSync(copy, join(root, 'link'));
+  symlinkSync(project, join(root, '.codex', 'plugins', 'project'));
+  assert.equal(pluginDir(join(root, 'link')), '.claude/plugins');
+  assert.equal(findStateDir(join(root, 'link')), undefined);
+  assert.equal(pluginDir(join(root, '.codex', 'plugins', 'project')), undefined);
+  assert.equal(realpathSync(findStateDir(join(root, '.codex', 'plugins', 'project')) ?? ''), realpathSync(join(project, '.soujo')));
+
+  for (const near of [['.claude'], ['.claude', 'plugins-old'], ['claude', 'plugins'], ['.codex', 'plugin'], ['plugins', '.claude'], ['.claude', 'x', 'plugins']]) {
+    mkdirSync(join(root, ...near, '.soujo'), { recursive: true });
+    assert.equal(pluginDir(join(root, ...near)), undefined, near.join('/'));
+    assert.equal(findStateDir(join(root, ...near)), join(root, ...near, '.soujo'), near.join('/'));
+  }
 });
 
 test('readState returns undefined for a missing file and the text otherwise', (t) => {

@@ -277,3 +277,11 @@ CLAUDE/AGENTS(+templates) の固定手順1番に最後の層の節目、resume �
 ## 2026-09-15 節目
 PLAN.md に 1層: L18 plugin-guard（SPEC §14 Open のスキル置き場所ガードを決定へ移した）
 外したもの: Open の残り8件（Codex フック・spec/plan の未コミット・reviewer の表 等）はそのまま
+
+## 2026-09-15 節目
+L18 まで完了: プラグインの置き場所（.claude/plugins・.codex/plugins）で soujo が動かないガードを実装
+未決: SPEC §14 Open の各項目（Codex フックの展開、spec の逐次書き込み、review の表の無編集など）
+
+## 2026-09-15 L18 plugin-guard
+cwd の実パスに .claude/plugins か .codex/plugins があれば --help とフック以外を読み書き前に拒否
+next show/next check は findStateDir が undefined を返しプロジェクト外と同じに振る舞う

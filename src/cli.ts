@@ -11,12 +11,15 @@ import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
+import { pluginDir } from './files.js';
 import { printable } from './state.js';
 
 // usage is what follows "soujo " in the --help line and in the usage error; run gets it too, so each entry spells it once.
 interface Command {
   usage: string;
   run: (args: string[], cwd: string, usage: string) => string[];
+  /** Called by hooks/hooks.json: runs inside a host plugin directory too, where it finds no project. */
+  hook?: true;
 }
 
 const HELP_HINT = '（soujo --help で一覧）';
@@ -46,6 +49,7 @@ const COMMANDS: Record<string, Command> = {
   init: noArguments('init', init),
   'next show': {
     usage: 'next show [--hook]',
+    hook: true,
     run: (args, cwd, usage) => {
       const { positionals, values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true });
       expectPositionals(positionals, 0, usage);
@@ -75,6 +79,7 @@ const COMMANDS: Record<string, Command> = {
   // Hooks call this: unknown arguments are ignored so that it always exits 0.
   'next check': {
     usage: 'next check [--hook]',
+    hook: true,
     run: (args, cwd) => {
       const { values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true, strict: false });
       return nextCheck(cwd, values.hook === true);
@@ -206,10 +211,19 @@ function oneLine(text: string): string {
     .join(' ');
 }
 
+// A host plugin directory holds a copy of Soujo with this repository's .soujo/ (SPEC §6): commands other than the hooks' refuse
+// there before reading or writing anything, so that resume never shows those records and init or a commit never lands in the copy.
+function run(found: ReturnType<typeof resolve>, cwd: string): string[] | undefined {
+  if (found === undefined) return undefined;
+  const plugin = found.command.hook ? undefined : pluginDir(cwd);
+  if (plugin !== undefined) throw new Error(`プラグインの置き場所（${plugin}）では実行しない: 作業中のプロジェクトで実行する`);
+  return found.command.run(found.args, cwd, found.command.usage);
+}
+
 function main(argv: string[]): number {
   try {
     const found = resolve(argv);
-    const lines = help(argv, found) ?? found?.command.run(found.args, process.cwd(), found.command.usage);
+    const lines = help(argv, found) ?? run(found, process.cwd());
     if (lines === undefined) {
       throw new Error(argv.length === 0 ? `コマンドがありません${HELP_HINT}` : unknownCommand(argv));
     }
