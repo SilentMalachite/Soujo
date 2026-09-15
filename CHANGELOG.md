@@ -4,7 +4,9 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 — 2026-09-15
+
+Release: [v0.2.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.2.0).
 
 ### Added
 

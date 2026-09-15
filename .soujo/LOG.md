@@ -251,3 +251,7 @@ L15 レビュー #1〜#25 を修正: 止まった rotate の例外を「LOG.md �
 grok レビュー10件を修正: 止まった rotate は「追記した書庫はその月のエントリを1件以上」「消えた・足されたエントリは HEAD の LOG.md を rotate して移るもの」に限り、この --before で移らなければ前回と同じ --before を案内。
 重複省きは書庫の作業ツリーの中身（今回より前に LOG.md から消えた分を除く）と比べ、書庫だけ先に手でコミットしても二重に足さない。移動なしでも拒否判定の後は一時ファイルを消す。LOG の日付は暦日まで検証。
 PLAN L15 の完了条件を2か月分に、SPEC(+ja)・README(+ja) の LOG.md を「追記だけ」から直し、CHANGELOG の Unreleased を docs テストと CONTRIBUTING(+ja) で明示。cli の --help 無書込に log rotate を追加。
+
+## 2026-09-15 release-0.2.0
+0.2.0 をリリース（2026-09-15）: soujo log rotate（過去の月を LOG-YYYY-MM.md へ移してコミット、止まった rotate は再実行で仕上げる）と next check の rotate 警告。
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.2.0 にし、CHANGELOG(+ja) の未リリース節を 0.2.0 — 2026-09-15 にした。
