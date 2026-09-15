@@ -263,6 +263,16 @@ test('rotateLog keeps CRLF, moves nothing without an older entry or with one ent
   for (const month of ['2026-9', '2026-13']) assert.throws(() => rotateLog(crlf, month), new RegExp(`^Error: 月は YYYY-MM: ${month}$`));
 });
 
+test('rotateLog keeps the last milestone whatever its month, so brief still finds it, and moves earlier ones', () => {
+  const log = '# LOG\n\n## 2026-06-01 節目\nold\n\n## 2026-07-01  節目 \nnew\n\n## 2026-08-01 L1\na\n\n## 2026-09-01 L2\nb\n';
+  const { kept, moved } = rotateLog(log, '2026-10');
+  assert.equal(kept, '# LOG\n\n## 2026-07-01  節目 \nnew\n\n## 2026-09-01 L2\nb\n');
+  assert.deepEqual(moved.map(({ entry }) => entry.date), ['2026-06-01', '2026-08-01']);
+  assert.deepEqual(lastMilestone(kept), lastMilestone(log));
+  const last = '# LOG\n\n## 2026-07-01 節目\nx\n\n## 2026-08-01 節目\ny\n';
+  assert.deepEqual(rotateLog(last, '2026-10').moved.map(({ entry }) => entry.date), ['2026-07-01']);
+});
+
 test('archiveLog starts a missing or blank archive with its heading and appends blocks as they are in its line break', () => {
   const blocks = rotateLog(ROTATING, '2026-09').moved;
   assert.equal(archiveLog(undefined, '2026-07', blocks.slice(0, 1)), '# LOG 2026-07\n\n## 2026-07-30 L1\n  - nested\n\na\n');
@@ -330,13 +340,14 @@ test('nextStatus never takes a phase for a PLAN layer of the same name', () => {
   assert.deepEqual(nextStatus('plan', named), { state: 'skipped', unfinished: { layer: 'L3', condition: 'c', done: false } });
 });
 
-test('validatePlan reports repeated layer names and layers named like a phase, once each', () => {
+test('validatePlan reports repeated layer names and layers named like a phase or a milestone, once each', () => {
   assert.deepEqual(validatePlan(PLAN), []);
   assert.deepEqual(validatePlan(''), []);
-  assert.deepEqual(validatePlan('- [x] L1 — a\n- [ ] L1 — b\n- [ ] L1\n- [ ] plan — c\n- [x] spec\n- [ ] Plan — d\n'), [
+  assert.deepEqual(validatePlan('- [x] L1 — a\n- [ ] L1 — b\n- [ ] L1\n- [ ] plan — c\n- [x] spec\n- [ ] Plan — d\n- [ ] 節目 — e\n- [x] 節目\n'), [
     'PLAN.md の層「L1」が重複',
     'PLAN.md の層名「plan」がフェーズ名と同じ',
     'PLAN.md の層名「spec」がフェーズ名と同じ',
+    'PLAN.md の層名「節目」が LOG の節目と同じ',
   ]);
 });
 

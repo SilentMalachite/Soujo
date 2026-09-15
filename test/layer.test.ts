@@ -83,6 +83,7 @@ test('layer done refuses while PLAN repeats a layer name or names a layer like a
   const plans: [string, RegExp][] = [
     [`${PLAN}- [ ] L2 state — again\n`, /^Error: PLAN\.md の層「L2 state」が重複（PLAN\.md の層名を直してから）$/],
     [`${PLAN}- [ ] spec — SPEC\n`, /^Error: PLAN\.md の層名「spec」がフェーズ名と同じ（/],
+    [`${PLAN}- [ ] 節目 — LOG\n`, /^Error: PLAN\.md の層名「節目」が LOG の節目と同じ（/],
   ];
   for (const [plan, error] of plans) {
     writeFileSync(join(dir, '.soujo', 'PLAN.md'), plan);

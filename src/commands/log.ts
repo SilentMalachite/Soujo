@@ -15,7 +15,7 @@ import {
   type ArchiveFile,
   type StateFile,
 } from '../files.js';
-import { gitChangedPaths, gitLastCommit, gitStatusExcluding } from '../git.js';
+import { gitChangedPaths, gitLastCommit, gitStatusExcluding, gitToplevel } from '../git.js';
 import {
   appendLog,
   appendedEntries,
@@ -30,16 +30,39 @@ import {
   rotateLog,
   type LogEntry,
 } from '../state.js';
-import { commitRecords, headState, missingEntries, requireCommittable, requireCommittableFiles, resumable } from './shared.js';
+import {
+  commitRecords,
+  headState,
+  missingEntries,
+  requireCommittable,
+  requireCommittableFiles,
+  resumable,
+  uncommittedLogs,
+} from './shared.js';
 
+/**
+ * Appends the entry, unless LOG.md already ends with the same entry (date, layer, and lines) and HEAD does not have that copy:
+ * a re-run of a line like "log add 節目 → next set" after its later command failed must not write the entry twice.
+ */
 export function logAdd(cwd: string, layer: string, lines: string[], now: Date = new Date()): string[] {
   if (!lines.some((line) => line.trim() !== '')) throw new Error('--line を1つ以上指定する');
   const dir = requireStateDir(cwd);
   const date = formatDate(now);
-  const text = appendLog(readState(dir, 'LOG.md') ?? '', { date, layer, lines });
+  const log = readState(dir, 'LOG.md') ?? '';
+  const text = appendLog(log, { date, layer, lines });
+  const added = lastLog(text) as LogEntry;
   removeLeftoverTemps(dir);
+  if (repeated(dirname(dir), log, added)) return [`LOG.md に同じエントリが未コミットであるので追記しない: ${date} ${added.layer}`];
   writeState(dir, 'LOG.md', text);
-  return [`LOG.md に追記: ${date} ${layer.trim()}（${lastLog(text)?.lines.length ?? 0}行）`];
+  return [`LOG.md に追記: ${date} ${added.layer}（${added.lines.length}行）`];
+}
+
+// Whether log ends with entry and HEAD lacks that copy. Git is asked only when the last entry is the same.
+function repeated(root: string, log: string, entry: LogEntry): boolean {
+  const last = lastLog(log);
+  if (last === undefined || missingEntries([entry], [last], identity).length > 0) return false;
+  const head = gitToplevel(root) === undefined ? undefined : headState(root, 'LOG.md');
+  return missingEntries([entry], uncommittedLogs(log, head), identity).length === 0;
 }
 
 const DIRTY = '未コミットの変更がある（soujo layer done か soujo close で締めてから）';
@@ -70,8 +93,8 @@ interface StoppedRotation {
  * What a previous rotate wrote but did not commit. Throws DIRTY unless every uncommitted change could be a rotate's: only
  * LOG.md and existing archives changed (leftover temporary files aside); LOG.md is HEAD's with whole entries removed and
  * nothing else changed; each changed archive is HEAD's with at least one whole entry of its month appended; every removed or
- * appended entry is one a rotate of HEAD's LOG.md may move (not the last entry, not one whose date names no month, not one
- * LOG.md never had); and every removed entry is in the archive of its month (committed or not, so an archive committed by
+ * appended entry is one a rotate of HEAD's LOG.md may move (not the last entry or the last milestone, not one whose date names
+ * no month, not one LOG.md never had); and every removed entry is in the archive of its month (committed or not, so an archive committed by
  * hand before LOG.md is fine). Throws OTHER_BEFORE when those entries are not all moved by a rotate with this before.
  */
 function stoppedRotation(root: string, dir: string, log: string, before: string): StoppedRotation {
@@ -121,7 +144,7 @@ function span(months: readonly string[], separator: string): string {
  * - an archive to write or to commit that git ignores                               → refuse
  * An archive whose real path leaves the project or enters .git is refused when it is read. Then leftover temporary files are
  * removed; with nothing to move or commit that is all. Otherwise the entries of LOG.md dated before the month move (all but
- * the last entry), archives first and LOG.md last, and the project is committed as "log: rotate <months>". An entry the
+ * the last entry and the last milestone), archives first and LOG.md last, and the project is committed as "log: rotate <months>". An entry the
  * archive of its month already has is not appended again, so re-running after any failure finishes the same rotation, also
  * when the archives were committed by hand in between.
  */

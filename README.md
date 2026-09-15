@@ -27,9 +27,9 @@ Design and decisions: [SPEC.md](SPEC.md).
 
 | Skill | Claude Code | Codex | Result |
 |---|---|---|---|
-| spec | `/soujo:spec` | `$spec` | One question at a time (at most 7) → `.soujo/SPEC.md` |
-| plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md` |
-| go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md`, commits `layer: <layer>` |
+| spec | `/soujo:spec` | `$spec` | One question at a time (at most 7) → `.soujo/SPEC.md`, then a `節目` entry in `LOG.md` |
+| plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added |
+| go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>` |
 | resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
@@ -116,8 +116,8 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md`; `spec` / `plan` always get effort `high` |
 | `soujo next check [--hook]` | Warns when the project is not resumable; always exits 0; `--hook` is for the Stop hook |
 | `soujo plan list` / `soujo plan next` | Layers with their state / the next layer |
-| `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md` |
-| `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md` as they are, keeping the last entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
+| `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md`; nothing when `LOG.md` already ends with the same uncommitted entry |
+| `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md` as they are, keeping the last entry and the last `節目` entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
 | `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>` |
 | `soujo resume` | Four-line status; from 3 days after the last commit, `再開:` points to `soujo brief` |
 | `soujo brief` | Five lines for returning after days away: PLAN progress and the last layer, commits since it, the last `節目` entry, days since the last commit, the next step; writes nothing |

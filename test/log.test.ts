@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, 
 import { join } from 'node:path';
 import { logAdd, logRotate } from '../src/commands/log.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
+import { parseLog } from '../src/state.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
 const NOW = new Date(2026, 8, 13, 10, 0);
@@ -33,6 +34,26 @@ test('log add removes temporary files a killed write left, one with its own proc
   logAdd(dir, 'L1', ['a'], NOW);
   assert.equal(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), '# LOG\n\n## 2026-09-13 L1\na\n');
   assert.deepEqual(leftovers.filter((path) => existsSync(path)), []);
+});
+
+test('log add does not repeat the last entry while it is uncommitted, so re-running a line whose later command failed is safe', (t) => {
+  const milestone = ['PLAN の全層完了: a', '未決: なし'];
+  const outside = project(temp(t), { 'LOG.md': '# LOG\n' });
+  logAdd(outside, '節目', milestone, NOW);
+  assert.deepEqual(logAdd(outside, ' 節目 ', ['PLAN の全層完了: a ', '未決: なし'], NOW), [
+    'LOG.md に同じエントリが未コミットであるので追記しない: 2026-09-13 節目',
+  ]);
+  assert.equal(state(outside, 'LOG.md'), '# LOG\n\n## 2026-09-13 節目\nPLAN の全層完了: a\n未決: なし\n');
+  for (const [layer, lines, now] of [['節目', ['PLAN の全層完了: b', '未決: なし'], NOW], ['L1', milestone, NOW], ['節目', milestone, new Date(2026, 8, 14, 10, 0)]] as const) {
+    assert.match(logAdd(outside, layer, [...lines], now)[0] ?? '', /^LOG\.md に追記: /);
+  }
+
+  const committed = project(repo(t), { 'LOG.md': '# LOG\n' });
+  logAdd(committed, '節目', milestone, NOW);
+  commitAll(committed);
+  assert.match(logAdd(committed, '節目', milestone, NOW)[0] ?? '', /^LOG\.md に追記: /);
+  assert.match(logAdd(committed, '節目', milestone, NOW)[0] ?? '', /^LOG\.md に同じエントリが未コミット/);
+  assert.equal(parseLog(state(committed, 'LOG.md')).length, 2);
 });
 
 test('log add writes nothing when the lines are missing or too many', (t) => {
@@ -122,6 +143,19 @@ test('log rotate --before moves up to that month, keeps the last entry and dates
   const odd = logProject(t, { 'LOG.md': '# LOG\n\n## 2026-13-01 typo\nx\n\n## 2026-00-02 typo\ny\n\n## 2026-01-01 L1\na\n' });
   assert.deepEqual(logRotate(odd, undefined, SEPTEMBER), ['移動なし']);
   assert.deepEqual(readdirSync(join(odd, '.soujo')), ['LOG.md']);
+});
+
+test('log rotate keeps the last 節目 entry in LOG.md, so brief still shows it, and refuses a stopped rotate that moved it', (t) => {
+  const log = ROTATING.replace('## 2026-08-01 L2', '## 2026-07-31 節目\nSPEC.md を書いた\n\n## 2026-08-01 L2');
+  const dir = logProject(t, { 'LOG.md': log });
+  assert.deepEqual(logRotate(dir, undefined, SEPTEMBER), [MOVED, commitLine(dir)]);
+  assert.equal(state(dir, 'LOG.md'), '# LOG\n\n## 2026-07-31 節目\nSPEC.md を書いた\n\n## 2026-09-01 L3\nc\n\n## 2026-09-10 L5\ne\n');
+  assert.deepEqual([state(dir, 'LOG-2026-07.md'), state(dir, 'LOG-2026-08.md')], [JULY, AUGUST]);
+
+  const moved = logProject(t, { 'LOG.md': log });
+  writeFileSync(join(moved, '.soujo', 'LOG.md'), log.replace('## 2026-07-31 節目\nSPEC.md を書いた\n\n', ''));
+  writeFileSync(join(moved, '.soujo', 'LOG-2026-07.md'), '# LOG 2026-07\n\n## 2026-07-31 節目\nSPEC.md を書いた\n');
+  assert.throws(() => logRotate(moved, undefined, SEPTEMBER), DIRTY);
 });
 
 test('log rotate refuses a month not YYYY-MM and no repository, writing nothing', (t) => {

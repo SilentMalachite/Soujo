@@ -13,8 +13,11 @@
 
 ### 変更
 
-- `spec`・`plan` スキルと、最後の層の後の `go` スキルは、`LOG.md` に `節目` エントリ（何が終わったか・何が未決か）を書き、`soujo brief` がそれを示す。`plan` スキルは層名を `節目` にしない。
-- `soujo init` が作る CLAUDE.md と AGENTS.md は、`節目` エントリを説明し、何日か空いたら `soujo brief` を指す。
+- `spec` スキル、層を足したときの `plan` スキル、最後の層を終える `go` スキル（`next set` の前）は、`LOG.md` に `節目` エントリ（何が終わったか・何が未決か）を書き、`soujo brief` がそれを示す。
+- `soujo next set` と `soujo layer done` は、`spec` / `plan` と同じく PLAN の `節目` という層を拒否し、`soujo next check` は警告する。
+- `soujo log rotate` は最後の `節目` エントリを `LOG.md` に残すので、rotate の後も `soujo brief` がそれを示す。
+- `soujo log add` は、`LOG.md` が HEAD にない同じエントリで終わっていれば追記しない。拒否された `next set` と一緒に `log add 節目` を再実行しても節目は1つになる。
+- `soujo init` が作る CLAUDE.md と AGENTS.md は、層を締める固定手順の最初に最後の層の `節目` エントリを置き、ほかの `節目` エントリを説明し、何日か空いたら `soujo brief` を指す。
 
 ## 0.2.0 — 2026-09-15
 

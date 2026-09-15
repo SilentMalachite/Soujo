@@ -119,6 +119,12 @@ test('next set refuses while PLAN.md repeats a layer name or names a layer like 
   const phase = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': `${PLAN}- [ ] plan — PLAN を書く\n` });
   assert.throws(() => nextSet(phase, { ...base, layer: 'L2 state' }), /PLAN\.md の層名「plan」がフェーズ名と同じ/);
   assert.equal(readNext(phase), NEXT);
+
+  const milestone = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': `${PLAN}- [ ] 節目 — LOG に書く\n` });
+  for (const layer of ['L2 state', '節目']) {
+    assert.throws(() => nextSet(milestone, { ...base, layer }), /^Error: NEXT\.md を書かない: PLAN\.md の層名「節目」が LOG の節目と同じ（/);
+  }
+  assert.equal(readNext(milestone), NEXT);
 });
 
 test('next check is silent for a clean tree with a valid NEXT.md, and outside Soujo projects', (t) => {
@@ -153,10 +159,10 @@ test('next check warns when NEXT.md moved past a layer that was never closed', (
 });
 
 test('next check warns about repeated layer names and layers named like a phase, even without NEXT.md', (t) => {
-  const done = '- [x] L1 scaffold — build\n- [x] plan — PLAN\n- [x] L1 scaffold — again\n';
+  const done = '- [x] L1 scaffold — build\n- [x] plan — PLAN\n- [x] L1 scaffold — again\n- [x] 節目 — LOG\n';
   const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'plan'), 'PLAN.md': done });
   assert.deepEqual(nextCheck(dir, false), [
-    'soujo 警告: PLAN.md の層名「plan」がフェーズ名と同じ / PLAN.md の層「L1 scaffold」が重複',
+    'soujo 警告: PLAN.md の層名「plan」がフェーズ名と同じ / PLAN.md の層「L1 scaffold」が重複 / PLAN.md の層名「節目」が LOG の節目と同じ',
   ]);
   const missing = project(temp(t), { 'PLAN.md': done });
   assert.match(nextCheck(missing, false)[0] ?? '', /^soujo 警告: NEXT\.md がない \/ PLAN\.md の層名「plan」/);

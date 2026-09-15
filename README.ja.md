@@ -27,9 +27,9 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 
 | スキル | Claude Code | Codex | 結果 |
 |---|---|---|---|
-| spec | `/soujo:spec` | `$spec` | 1問ずつ（最大7問）→ `.soujo/SPEC.md` |
-| plan | `/soujo:plan` | `$plan` | 30分以内の層、各1行の完了条件 → `.soujo/PLAN.md` |
-| go | `/soujo:go` | `$go` | 次の層を実装し、次の `NEXT.md` を書いて `layer: <層>` でコミット |
+| spec | `/soujo:spec` | `$spec` | 1問ずつ（最大7問）→ `.soujo/SPEC.md`、続けて `LOG.md` に `節目` エントリ |
+| plan | `/soujo:plan` | `$plan` | 30分以内の層、各1行の完了条件 → `.soujo/PLAN.md`、層を足したら `節目` エントリ |
+| go | `/soujo:go` | `$go` | 次の層を実装し、次の `NEXT.md` を書いて（最後の層はその前に `節目` エントリ）`layer: <層>` でコミット |
 | resume | `/soujo:resume` | `$resume` | 4行：次の層・前回のログ・最新コミット・再開方法 |
 | close | `/soujo:close` | `$close` | `中断: …` をログに残し `wip: <層>` でコミット |
 | map | `/soujo:map` | `$map` | 計画の図、import のグラフ、直近の層の Before/After |
@@ -116,8 +116,8 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える。`spec` / `plan` の effort は常に `high` |
 | `soujo next check [--hook]` | 再開できない状態を警告する。終了コードは常に0。`--hook` は Stop フック用 |
 | `soujo plan list` / `soujo plan next` | 層と状態 / 次の層 |
-| `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記 |
-| `soujo log rotate [--before <YYYY-MM>]` | 今月（か `--before`）より前の月のエントリをそのままの形で `LOG-YYYY-MM.md` へ移し（最後のエントリは残す）、`log: rotate <月>` でコミット。ほかの未コミットの変更があれば拒否し、失敗後の再実行は同じ移動を仕上げる |
+| `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記。`LOG.md` が同じ未コミットのエントリで終わっていれば足さない |
+| `soujo log rotate [--before <YYYY-MM>]` | 今月（か `--before`）より前の月のエントリをそのままの形で `LOG-YYYY-MM.md` へ移し（最後のエントリと最後の `節目` エントリは残す）、`log: rotate <月>` でコミット。ほかの未コミットの変更があれば拒否し、失敗後の再実行は同じ移動を仕上げる |
 | `soujo layer done '<層>' [--note '<メモ>']` | PLAN の層にチェック → LOG に追記 → `layer: <層>` でコミット |
 | `soujo resume` | 4行の現在地。最終コミットから3日以上なら `再開:` が `soujo brief` を指す |
 | `soujo brief` | 何日か離れた後に戻るための5行：PLAN の進捗と最後の層、その後のコミット、最後の `節目` エントリ、最終コミットからの日数、次の一手。何も書かない |

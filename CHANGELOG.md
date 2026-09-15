@@ -13,8 +13,11 @@ The English version is canonical; the Japanese page is a translation. Versions f
 
 ### Changed
 
-- The `spec` and `plan` skills and the `go` skill after the last layer write a `節目` entry to `LOG.md` (what ended, what is open), which `soujo brief` shows; the `plan` skill never names a layer `節目`.
-- The CLAUDE.md and AGENTS.md that `soujo init` creates describe `節目` entries and point to `soujo brief` after days away.
+- The `spec` skill, the `plan` skill when it adds layers, and the `go` skill that finishes the last layer (before its `next set`) write a `節目` entry to `LOG.md` (what ended, what is open), which `soujo brief` shows.
+- `soujo next set` and `soujo layer done` refuse, and `soujo next check` warns about, a PLAN layer named `節目`, as for `spec` / `plan`.
+- `soujo log rotate` keeps the last `節目` entry in `LOG.md`, so `soujo brief` still shows it after a rotate.
+- `soujo log add` appends nothing when `LOG.md` already ends with the same entry that HEAD lacks, so re-running `log add 節目` with a refused `next set` leaves one milestone.
+- The CLAUDE.md and AGENTS.md that `soujo init` creates put the `節目` entry of the last layer first in the fixed closing steps, describe the other `節目` entries, and point to `soujo brief` after days away.
 
 ## 0.2.0 — 2026-09-15
 

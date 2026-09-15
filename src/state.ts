@@ -174,13 +174,15 @@ export function parsePlan(text: string): PlanItem[] {
 
 /**
  * Problems that make a layer name of PLAN.md ambiguous; empty when valid. A repeated name cannot get its own "layer: <layer>"
- * commit, and a layer named like a phase cannot be told from that phase in NEXT.md.
+ * commit, a layer named like a phase cannot be told from that phase in NEXT.md, and the completion entry of a layer named
+ * 節目 would be taken for a milestone.
  */
 export function validatePlan(text: string): string[] {
   const problems = new Set<string>();
   const seen = new Set<string>();
   for (const { layer } of parsePlan(text)) {
     if (PHASES.includes(layer)) problems.add(`PLAN.md の層名「${layer}」がフェーズ名と同じ`);
+    else if (layer === MILESTONE) problems.add(`PLAN.md の層名「${layer}」が LOG の節目と同じ`);
     else if (seen.has(layer)) problems.add(`PLAN.md の層「${layer}」が重複`);
     seen.add(layer);
   }
@@ -339,17 +341,18 @@ export interface LogRotation {
 
 /**
  * LOG.md split for rotation: every entry dated in a month before `before` (YYYY-MM) moves, wherever it is, except the last
- * entry, which resume reads, and entries whose date names no month. An entry moves with the blank lines after it, so the
- * kept entries stay separated as they were.
+ * entry, which resume reads, the last milestone, which brief reads, and entries whose date names no month. An entry moves
+ * with the blank lines after it, so the kept entries stay separated as they were.
  */
 export function rotateLog(text: string, before: string): LogRotation {
   requireMonth(before);
   const { lines, blocks } = logBlocks(text);
+  const milestone = blocks.map(({ entry }) => entry.layer).lastIndexOf(MILESTONE);
   const dropped = new Set<number>();
   const moved: LogBlock[] = [];
-  for (const { entry, start, end } of blocks.slice(0, -1)) {
+  for (const [index, { entry, start, end }] of blocks.entries()) {
     const month = logMonth(entry);
-    if (!isMonth(month) || month >= before) continue;
+    if (index === blocks.length - 1 || index === milestone || !isMonth(month) || month >= before) continue;
     const raw = lines.slice(start, end).map((line) => line.replace(/\r$/, ''));
     while (raw.length > 1 && (raw.at(-1) ?? '').trim() === '') raw.pop();
     moved.push({ entry, lines: raw });

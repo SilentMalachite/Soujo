@@ -127,6 +127,22 @@ test('next set for spec or plan in the skills passes no --effort; spec and go ea
   assert.deepEqual([...withPhase].sort(), ['go', 'spec']);
 });
 
+// SPEC §7: spec, plan, and go leave a 節目 entry at their phase boundary, which soujo brief shows.
+test('spec, plan, and go write a 節目 entry, spec and go before next set to plan, and plan forbids 節目 as a layer name', () => {
+  const body = (name: string) => split(join(packageDir(), 'skills', name, 'SKILL.md')).body;
+  for (const name of ['spec', 'plan', 'go']) {
+    const argvs = commands(body(name));
+    const milestone = argvs.findIndex((argv) => argv[0] === 'log' && argv[1] === 'add' && argv[2] === '節目');
+    assert.ok(milestone !== -1, `${name}: soujo log add '節目'`);
+    assert.equal(argvs[milestone]?.filter((token) => token === '--line').length, 2, `${name}: 節目は2行`);
+    if (name === 'plan') continue;
+    const toPlan = argvs.findIndex((argv) => phaseSet(argv).phase && option(argv, '--layer')?.trim() === 'plan');
+    assert.ok(toPlan > milestone, `${name}: log add '節目' が next set --layer 'plan' より前`);
+  }
+  const naming = sections(body('plan')).get('やること')?.find((line) => line.startsWith('- 層名は')) ?? '';
+  for (const word of ['`spec`', '`plan`', '`節目`', 'CLI が拒否する']) assert.ok(naming.includes(word), `plan の層名の行に ${word}`);
+});
+
 test('agents/reviewer.md is the subagent the review skill names', () => {
   const { keys, body } = split(join(packageDir(), 'agents', 'reviewer.md'));
   assert.deepEqual([...keys.keys()], ['name', 'description', 'tools']);
