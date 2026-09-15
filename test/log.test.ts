@@ -1,7 +1,7 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { logAdd, logRotate } from '../src/commands/log.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
@@ -238,6 +238,22 @@ test('log rotate refuses an archive leaving the project or ignored by git before
   commitAll(linked);
   assert.throws(() => logRotate(linked, undefined, SEPTEMBER), /^Error: LOG-2026-08\.md を読まない: 実体（symlink の先）がプロジェクトの外$/);
   assert.deepEqual([state(linked, 'LOG.md'), readFileSync(elsewhere, 'utf8')], [ROTATING, 'keep\n']);
+});
+
+test('log rotate refuses an archive that is LOG.md, or that becomes another archive once written, before writing anything', { skip: process.platform === 'win32' }, (t) => {
+  const dir = logProject(t);
+  symlinkSync('LOG.md', join(dir, '.soujo', 'LOG-2026-08.md'));
+  commitAll(dir);
+  assert.throws(() => logRotate(dir, undefined, SEPTEMBER), /^Error: \.soujo\/LOG\.md の実体（symlink の先）がLOG-2026-08\.md と同じなので記録をコミットできない$/);
+  assert.equal(state(dir, 'LOG.md'), ROTATING);
+
+  const chained = logProject(t);
+  symlinkSync('missing.md', join(chained, '.soujo', 'LOG-2026-07.md'));
+  symlinkSync('LOG-2026-07.md', join(chained, '.soujo', 'LOG-2026-08.md'));
+  commitAll(chained);
+  assert.throws(() => logRotate(chained, undefined, SEPTEMBER), /^Error: LOG-2026-07\.md を読まない: 実体（symlink の先）がLOG-2026-08\.md と同じ$/);
+  assert.equal(state(chained, 'LOG.md'), ROTATING);
+  assert.ok(lstatSync(join(chained, '.soujo', 'LOG-2026-07.md')).isSymbolicLink());
 });
 
 test('log rotate re-run after a failed commit commits the same rotation without moving entries twice', { skip: process.platform === 'win32' }, (t) => {

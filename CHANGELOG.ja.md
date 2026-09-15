@@ -14,6 +14,8 @@
 - `layer done` と `brief` はプロジェクトを変えたコミットだけを読む：同じリポジトリの別プロジェクトにある `layer: <層名>` のコミットで `layer done` を拒否せず、`brief` に別プロジェクトのコミットや空のコミットを出さない。
 - 状態ファイルの HEAD の中身を、パス上の symlink を途中のディレクトリも含めて辿り、HEAD のエントリで読む：`PLAN.md` を symlink の先へ移しても `resume` と `close` がコミット済みのチェックを止まった `layer done` とみなさず、HEAD の symlink を後でファイルに置き換えてもリンク先の文字列を中身として読まない。
 - symlink の状態ファイルで、リンク先だけでなく symlink 自身がステージされていない（skip-worktree）ときも、`layer done`・`close`・`log rotate` はコミットしない。
+- 状態ファイルや `.soujo/` の symlink が大小文字違いの `.git`（`.GIT`）を指すときも、`.git` と同じく拒否する。これまでは大小文字を区別しないファイルシステムで、`soujo init` や書き込みがそこから `.git` の中へ入っていた。
+- `.soujo/` の別の状態ファイルや書庫と同じ実体（symlink・大小文字違いのパス・ハードリンク経由）の状態ファイルや書庫、別のものが作られる場所を指す壊れた symlink を、何か書く前に拒否する。これまでは、たとえば `LOG.md` への symlink の書庫で `log rotate` が移したばかりの内容を上書きし、`PLAN.md` への symlink の `LOG.md` で `layer done` が LOG を PLAN に追記していた。
 
 ## 0.3.1 — 2026-09-15
 

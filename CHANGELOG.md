@@ -14,6 +14,8 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - `layer done` and `brief` read only the commits that change the project: a `layer: <layer>` commit of another project in the same repository no longer refuses `layer done`, and `brief` no longer shows other projects' commits or empty commits.
 - A state file at HEAD is read through HEAD's own entries, following each symlink on its path, a directory's included: moving `PLAN.md` behind a symlink no longer makes `resume` and `close` take committed checks for a stopped `layer done`, and a symlink at HEAD later replaced by a file is no longer read as its link text.
 - `layer done`, `close`, and `log rotate` refuse to commit when a symlinked state file's symlink itself is left unstaged (skip-worktree), not only its target.
+- A symlink of a state file or of `.soujo/` into `.git` spelled in another letter case (`.GIT`) is refused like one into `.git`. Before, on a file system ignoring case, `soujo init` and writes went into `.git` through it.
+- A state file or archive that is the same file as another one in `.soujo/` (through a symlink, a differently cased path, or a hard link), or a dangling symlink to where another one is created, is refused before anything is written. Before, e.g. an archive symlinked to `LOG.md` made `log rotate` overwrite what it had just moved, and `LOG.md` symlinked to `PLAN.md` made `layer done` append the log to PLAN.
 
 ## 0.3.1 — 2026-09-15
 

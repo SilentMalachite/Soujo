@@ -1,6 +1,6 @@
 // Finding .soujo/ and reading/writing its files. Thin I/O layer: file contents are neither parsed nor validated here, and only
 // file names are checked (months through state.ts), so that no read or write leaves .soujo/.
-import { closeSync, existsSync, fchmodSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
+import { closeSync, existsSync, fchmodSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMonth, requireMonth } from './state.js';
@@ -192,9 +192,42 @@ export function stateTarget(dir, file) {
     const inProject = relative(realpathSync(dirname(dir)), real);
     if (inProject === '..' || inProject.startsWith(`..${sep}`) || isAbsolute(inProject))
         return { path: real, problem: 'プロジェクトの外' };
-    if (inProject.split(sep).includes('.git'))
+    if (inProject.split(sep).some((part) => part.toLowerCase() === '.git'))
         return { path: real, problem: '.git の中' };
-    return { path: real };
+    const same = sameFileAs(dir, file);
+    return same === undefined ? { path: real } : { path: real, problem: `${same} と同じ` };
+}
+// Paths are compared in any letter case, since the file system may ignore it; inodes catch other spellings of an existing file.
+function identity(dir, file) {
+    const path = join(dir, file);
+    if (existsSync(path)) {
+        const { dev, ino } = statSync(path, { bigint: true });
+        return { file: ino === 0n ? `path:${realpathSync(path).toLowerCase()}` : `inode:${dev}:${ino}` };
+    }
+    const own = `path:${join(realpathSync(dir), file).toLowerCase()}`;
+    if (!isSymlink(path))
+        return { file: own };
+    return { file: own, pointsTo: `path:${realPathOfAncestor(resolve(realpathSync(dir), readlinkSync(path))).toLowerCase()}` };
+}
+/**
+ * The first other state file or archive in .soujo/ that reading or writing the file would reach: the same file (a symlink,
+ * possibly through a differently cased path, or a hard link), or, for a dangling symlink, the file one of them creates where it
+ * points (or the other way round). Refusing it keeps a command writing several of them, as layer done and log rotate do, from
+ * overwriting what it has just written. Other files that cannot be resolved are skipped; using them fails by itself.
+ */
+function sameFileAs(dir, file) {
+    const own = identity(dir, file);
+    return [...STATE_FILES, ...archiveFiles(dir)].find((other) => {
+        if (other === file)
+            return false;
+        try {
+            const them = identity(dir, other);
+            return own.file === them.file || own.pointsTo === them.file || them.pointsTo === own.file;
+        }
+        catch {
+            return false;
+        }
+    });
 }
 // The temporary file writeState and createFile use for target: ".<name>.<pid>.tmp" next to it.
 function tempOf(target) {
@@ -224,8 +257,9 @@ function modeOf(path) {
 }
 /**
  * Replaces the file via a temporary file and rename, so an interruption never leaves it half-written. Symlinks are kept,
- * but only followed to files inside the project and outside .git, so a symlink planted in a repository cannot overwrite
- * other files. The temporary file is created exclusively, never through an existing entry, and gets the file's permissions.
+ * but only followed where stateTarget allows (inside the project, outside .git, not another state file), so a symlink planted
+ * in a repository cannot overwrite other files. The temporary file is created exclusively, never through an existing entry,
+ * and gets the file's permissions.
  */
 export function writeState(dir, file, text) {
     let target;
@@ -283,7 +317,7 @@ export function removeTempsOf(target) {
         rmSync(path, { force: true });
 }
 // The leftovers of the four state files, and of archives that exist or whose temporary file is in .soujo/; none next to a
-// target outside the project or inside .git.
+// target stateTarget refuses.
 function leftoverTempPaths(dir) {
     const named = entryNames(dir).flatMap((name) => TEMP.exec(name)?.[1] ?? []).filter(isArchive);
     const archives = new Set([...archiveFiles(dir), ...named]);

@@ -72,6 +72,14 @@ test('init refuses a .soujo/ or state file whose real path is outside the projec
   assert.throws(() => init(intoGit), /^Error: \.soujo\/SPEC\.md の実体（symlink の先）が\.git の中なので init しない$/);
   assert.deepEqual(readdirSync(join(intoGit, '.git', 'hooks')), hooks);
 
+  // Where the file system ignores case, .GIT is .git.
+  const intoCasedGit = repo(t);
+  if (existsSync(join(intoCasedGit, '.GIT'))) {
+    symlinkSync('.GIT/hooks', join(intoCasedGit, '.soujo'));
+    assert.throws(() => init(intoCasedGit), /^Error: \.soujo\/SPEC\.md の実体（symlink の先）が\.git の中なので init しない$/);
+    assert.deepEqual(readdirSync(join(intoCasedGit, '.git', 'hooks')), hooks);
+  }
+
   const file = repo(t);
   mkdirSync(join(file, '.soujo'));
   writeFileSync(join(outside, 'LOG.md'), 'theirs\n');
