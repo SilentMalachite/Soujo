@@ -18,8 +18,8 @@ import { printable } from './state.js';
 interface Command {
   usage: string;
   run: (args: string[], cwd: string, usage: string) => string[];
-  /** Called by hooks/hooks.json: runs inside a host plugin directory too, where it finds no project. */
-  hook?: true;
+  /** Whether the call runs inside a host plugin directory too, where it finds no project: the calls of hooks/hooks.json. */
+  hook?: (args: string[]) => boolean;
 }
 
 const HELP_HINT = '（soujo --help で一覧）';
@@ -49,7 +49,8 @@ const COMMANDS: Record<string, Command> = {
   init: noArguments('init', init),
   'next show': {
     usage: 'next show [--hook]',
-    hook: true,
+    // Without --hook it refuses there, instead of pointing to soujo init, which is refused there too.
+    hook: (args) => options(args).includes('--hook'),
     run: (args, cwd, usage) => {
       const { positionals, values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true });
       expectPositionals(positionals, 0, usage);
@@ -76,10 +77,10 @@ const COMMANDS: Record<string, Command> = {
       return nextSet(cwd, { layer, premise, check, caution, effort });
     },
   },
-  // Hooks call this: unknown arguments are ignored so that it always exits 0.
+  // Hooks call this: unknown arguments are ignored so that it always exits 0, in a host plugin directory too.
   'next check': {
     usage: 'next check [--hook]',
-    hook: true,
+    hook: () => true,
     run: (args, cwd) => {
       const { values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true, strict: false });
       return nextCheck(cwd, values.hook === true);
@@ -157,10 +158,15 @@ function isHelp(arg: string | undefined): boolean {
   return arg === '--help' || arg === '-h';
 }
 
+// The arguments before "--", the only ones that can be options.
+function options(args: string[]): string[] {
+  const end = args.indexOf('--');
+  return end === -1 ? args : args.slice(0, end);
+}
+
 // Only an argument of its own before "--" asks for help; "--note=--help" and anything after "--" are ordinary.
 function asksHelp(args: string[]): boolean {
-  const end = args.indexOf('--');
-  return (end === -1 ? args : args.slice(0, end)).some(isHelp);
+  return options(args).some(isHelp);
 }
 
 function usageLines(include: (key: string) => boolean): string[] {
@@ -211,11 +217,11 @@ function oneLine(text: string): string {
     .join(' ');
 }
 
-// A host plugin directory holds a copy of Soujo with this repository's .soujo/ (SPEC §6): commands other than the hooks' refuse
+// A host plugin directory holds a copy of Soujo with this repository's .soujo/ (SPEC §6): calls other than the hooks' refuse
 // there before reading or writing anything, so that resume never shows those records and init or a commit never lands in the copy.
 function run(found: ReturnType<typeof resolve>, cwd: string): string[] | undefined {
   if (found === undefined) return undefined;
-  const plugin = found.command.hook ? undefined : pluginDir(cwd);
+  const plugin = found.command.hook?.(found.args) ? undefined : pluginDir(cwd);
   if (plugin !== undefined) throw new Error(`プラグインの置き場所（${plugin}）では実行しない: 作業中のプロジェクトで実行する`);
   return found.command.run(found.args, cwd, found.command.usage);
 }

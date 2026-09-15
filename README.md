@@ -106,7 +106,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 
 ## CLI
 
-`soujo` takes arguments and exits. Output is usually a few Japanese lines (`map` prints diagrams, `--help` one usage line per command); errors are one line on stderr with exit code 1. Inside a host's plugin directory (`.claude/plugins` or `.codex/plugins` in the real path of the current directory, where installed copies of Soujo live), `soujo next show` / `soujo next check` behave as outside a Soujo project and every other command but `--help` exits 1 without reading or writing anything: run `soujo` in the project you are working on. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
+`soujo` takes arguments and exits. Output is usually a few Japanese lines (`map` prints diagrams, `--help` one usage line per command); errors are one line on stderr with exit code 1. Inside a host's plugin directory (`.claude/plugins` or `.codex/plugins`, in any letter case, in the real path of the current directory, where installed copies of Soujo live), `soujo next check` and `soujo next show --hook` behave as outside a Soujo project and print nothing, and every other command but `--help`, `soujo next show` without `--hook` included, exits 1 without reading or writing anything: run `soujo` in the project you are working on. Any directory there is refused, a copy of Soujo or not; a checkout that a host reads in place (`claude --plugin-dir`, a local directory marketplace) is not. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
 
 | Command | Does |
 |---|---|

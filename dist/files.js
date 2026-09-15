@@ -80,19 +80,31 @@ export function trackedStatePath(root, file) {
 }
 // The directories under which hosts keep install caches and marketplace clones of plugins, this repository included (SPEC §8).
 const PLUGIN_DIRS = ['.claude', '.codex'];
+// The real path of dir. When a part cannot be resolved (missing, unreadable, or a symlink loop), the real path of the nearest
+// ancestor that can be, with the rest of the absolute path appended, so that a symlink before that part is still followed.
+function realPathOfAncestor(dir) {
+    const rest = [];
+    let path = resolve(dir);
+    for (;;) {
+        try {
+            return join(realpathSync(path), ...rest);
+        }
+        catch {
+            const parent = dirname(path);
+            if (parent === path)
+                return resolve(dir);
+            rest.unshift(basename(path));
+            path = parent;
+        }
+    }
+}
 /**
- * The host plugin directory (".claude/plugins" or ".codex/plugins") that the real path of dir is in, or undefined. A symlink
- * into a copy of Soujo there is caught; a path that cannot be resolved is checked as given.
+ * The host plugin directory (".claude/plugins" or ".codex/plugins") that the real path of dir is in, in any letter case, since
+ * the file system may ignore case, or undefined. A symlink into a copy of Soujo there is caught; when the real path cannot be
+ * found, the real path of the nearest ancestor that can be is checked with the rest of the absolute path.
  */
 export function pluginDir(dir) {
-    let real;
-    try {
-        real = realpathSync(dir);
-    }
-    catch {
-        real = resolve(dir);
-    }
-    const segments = real.split(sep);
+    const segments = realPathOfAncestor(dir).split(sep).map((segment) => segment.toLowerCase());
     const index = segments.findIndex((segment, i) => PLUGIN_DIRS.includes(segment) && segments[i + 1] === 'plugins');
     return index === -1 ? undefined : `${segments[index]}/plugins`;
 }

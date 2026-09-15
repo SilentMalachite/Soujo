@@ -106,7 +106,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 
 ## CLI
 
-`soujo` は引数を受けて終了する。出力は通常数行の日本語（`map` は図、`--help` は1コマンド1行の使い方）、エラーは標準エラーに1行で終了コード1。ホストのプラグインの置き場所（現在のディレクトリの実パスに `.claude/plugins` か `.codex/plugins` があるところ。インストールされた Soujo の写しがある）では、`soujo next show` / `soujo next check` は Soujo のプロジェクトの外と同じに振る舞い、`--help` 以外のコマンドは何も読み書きせずに終了コード1で終わる。`soujo` は作業中のプロジェクトで実行する。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
+`soujo` は引数を受けて終了する。出力は通常数行の日本語（`map` は図、`--help` は1コマンド1行の使い方）、エラーは標準エラーに1行で終了コード1。ホストのプラグインの置き場所（現在のディレクトリの実パスに `.claude/plugins` か `.codex/plugins` があるところ。大文字小文字は区別しない。インストールされた Soujo の写しがある）では、`soujo next check` と `soujo next show --hook` は Soujo のプロジェクトの外と同じに振る舞って何も出さず、それ以外のコマンド（`--hook` なしの `soujo next show` も）は `--help` を除き、何も読み書きせずに終了コード1で終わる。`soujo` は作業中のプロジェクトで実行する。そこにあるディレクトリは Soujo の写しでなくても対象で、ホストがその場で読む作業ツリー（`claude --plugin-dir`、ローカルディレクトリのマーケットプレイス）は対象外。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
 
 | コマンド | 動作 |
 |---|---|

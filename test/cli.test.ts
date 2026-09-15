@@ -304,8 +304,11 @@ test('map plan and map code print their diagrams through the CLI', (t) => {
   assert.deepEqual([missing.status, missing.stderr], [1, 'soujo: ディレクトリがない: nope\n']);
 });
 
-test('inside a host plugin directory only --help and the hook commands run, as outside a project; the rest write nothing', { skip: process.platform === 'win32' }, (t) => {
+test('inside a host plugin directory only --help, next check, and next show --hook run, as outside a project; the rest write nothing', (t) => {
   const root = temp(t);
+  // An ordinary project that map code is pointed at from inside the plugin directory.
+  const project = repo(t);
+  writeFileSync(join(project, 'a.ts'), '');
   for (const host of ['.claude', '.codex']) {
     // A copy of a Soujo project with a missing CLAUDE.md for init to create and an uncommitted file for next check to warn about.
     const dir = repo(t);
@@ -318,8 +321,12 @@ test('inside a host plugin directory only --help and the hook commands run, as o
     const copy = join(root, host, 'plugins', 'cache', 'soujo', 'soujo');
     mkdirSync(dirname(copy), { recursive: true });
     renameSync(dir, copy);
-    const link = join(root, `${host}-link`);
-    symlinkSync(copy, link);
+    const cwds = [copy, join(copy, '.soujo')];
+    if (process.platform !== 'win32') {
+      const link = join(root, `${host}-link`);
+      symlinkSync(copy, link);
+      cwds.push(link);
+    }
 
     const snapshot = () => [
       readdirSync(copy).sort(),
@@ -343,14 +350,22 @@ test('inside a host plugin directory only --help and the hook commands run, as o
       [['close', '--note', 'a'], 1, '', refused],
       [['map', 'plan'], 1, '', refused],
       [['map', 'code'], 1, '', refused],
-      [['next', 'show'], 1, '', 'soujo: .soujo/ が見つからない（soujo init で作る）\n'],
+      [['map', 'code', project], 1, '', refused],
+      [['next', 'show'], 1, '', refused],
+      [['next', 'show', '--', '--hook'], 1, '', refused],
       [['next', 'show', '--hook'], 0, '', ''],
       [['next', 'check'], 0, '', ''],
       [['next', 'check', '--hook'], 0, '', ''],
+      [['foo'], 1, '', unknown('foo')],
+      [[], 1, '', 'soujo: コマンドがありません（soujo --help で一覧）\n'],
       [['--help'], 0, lines(...Object.values(USAGES)), ''],
+      [['-h'], 0, lines(...Object.values(USAGES)), ''],
+      [['next', '--help'], 0, lines(USAGES.nextShow, USAGES.nextSet, USAGES.nextCheck), ''],
+      [['next', 'show', '--help'], 0, lines(USAGES.nextShow), ''],
+      [['next', 'check', '--help'], 0, lines(USAGES.nextCheck), ''],
       [['resume', '--help'], 0, lines(USAGES.resume), ''],
     ];
-    for (const cwd of [copy, join(copy, '.soujo'), link]) {
+    for (const cwd of cwds) {
       for (const [args, status, stdout, stderr] of cases) {
         const result = soujoIn(cwd, ...args);
         assert.deepEqual([result.status, result.stdout, result.stderr], [status, stdout, stderr], `${cwd}: ${args.join(' ')}`);

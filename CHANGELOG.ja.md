@@ -15,7 +15,7 @@
 
 - `spec` スキル、層を足したときの `plan` スキル、最後の層を終える `go` スキル（`next set` の前）は、`LOG.md` に `節目` エントリ（何が終わったか・何が未決か）を書き、`soujo brief` がそれを示す。
 - `soujo next set` と `soujo layer done` は、`spec` / `plan` と同じく PLAN の `節目` という層を拒否し、`soujo next check` は警告する。
-- `soujo` は、現在のディレクトリの実パスに `.claude/plugins` か `.codex/plugins` があるホストのプラグインの置き場所では動かない：`--help` 以外のコマンドは何も読み書きせずに1行を出して終了コード1で終わり、`soujo next show` / `soujo next check` は Soujo のプロジェクトの外と同じに振る舞う（`--hook` なら何も出さない）。以前は、インストールされた Soujo の写しへ移ったモデルに `soujo resume` がこのリポジトリの記録を示し、`soujo init` やコミットが写しの中で行われた。
+- `soujo` は、現在のディレクトリの実パスに `.claude/plugins` か `.codex/plugins`（大文字小文字は区別しない）があるホストのプラグインの置き場所では、Soujo の写しかどうかによらず動かない：`soujo next check` と `soujo next show --hook` は Soujo のプロジェクトの外と同じに振る舞って何も出さず、それ以外のコマンド（`--hook` なしの `soujo next show` も）は `--help` を除き、何も読み書きせずに1行を出して終了コード1で終わる。以前は、インストールされた Soujo の写しへ移ったモデルに `soujo resume` がこのリポジトリの記録を示し、`soujo init` やコミットが写しの中で行われた。
 - `soujo log rotate` は最後の `節目` エントリを `LOG.md` に残すので、rotate の後も `soujo brief` がそれを示す。
 - `soujo log add` は、`LOG.md` が HEAD にない同じエントリで終わっていれば追記しない。拒否された `next set` と一緒に `log add 節目` を再実行しても節目は1つになる。
 - `soujo init` が作る CLAUDE.md と AGENTS.md は、層を締める固定手順の最初に最後の層の `節目` エントリを置き、ほかの `節目` エントリを説明し、何日か空いたら `soujo brief` を指す。

@@ -67,22 +67,54 @@ test('findStateDir returns undefined and requireStateDir throws outside Soujo pr
   assert.throws(() => requireStateDir(root), /^Error: \.soujo\/ が見つからない（soujo init で作る）$/);
 });
 
-test('pluginDir finds .claude/plugins or .codex/plugins in the real path, where findStateDir sees no project', { skip: process.platform === 'win32' }, (t) => {
+test('pluginDir finds .claude/plugins or .codex/plugins in any letter case, where findStateDir sees no project', (t) => {
+  const root = temp(t);
+  for (const host of ['.claude', '.codex']) {
+    const copy = join(root, host, 'plugins', 'cache', 'soujo', 'soujo', 'abc');
+    mkdirSync(join(copy, '.soujo'), { recursive: true });
+    mkdirSync(join(copy, 'src'));
+    for (const dir of [copy, join(copy, 'src'), join(copy, '.soujo'), join(root, host, 'plugins'), join(root, host, 'plugins', 'missing', 'deeper')]) {
+      assert.equal(pluginDir(dir), `${host}/plugins`, dir);
+      assert.equal(findStateDir(dir), undefined, dir);
+    }
+    assert.throws(() => requireStateDir(copy), /^Error: \.soujo\/ が見つからない（soujo init で作る）$/);
+  }
+
+  const cased = temp(t);
+  for (const [host, plugins, found] of [['.Claude', 'Plugins', '.claude/plugins'], ['.CODEX', 'PLUGINS', '.codex/plugins']] as const) {
+    const copy = join(cased, host, plugins, 'cache', 'x');
+    mkdirSync(join(copy, '.soujo'), { recursive: true });
+    assert.equal(pluginDir(copy), found, copy);
+    assert.equal(findStateDir(copy), undefined, copy);
+  }
+
+  for (const near of [['.claude'], ['.claude', 'plugins-old'], ['claude', 'plugins'], ['.codex', 'plugin'], ['plugins', '.claude'], ['.claude', 'x', 'plugins']]) {
+    mkdirSync(join(root, ...near, '.soujo'), { recursive: true });
+    assert.equal(pluginDir(join(root, ...near)), undefined, near.join('/'));
+    assert.equal(findStateDir(join(root, ...near)), join(root, ...near, '.soujo'), near.join('/'));
+  }
+});
+
+test('findStateDir never reaches a .soujo above an install cache without .git', (t) => {
+  const root = temp(t);
+  mkdirSync(join(root, '.soujo'));
+  mkdirSync(join(root, 'plain', 'x'), { recursive: true });
+  assert.equal(findStateDir(join(root, 'plain', 'x')), join(root, '.soujo'));
+  for (const host of ['.claude', '.codex']) {
+    // Claude Code's install cache copies the working tree without .git; x has no .soujo of its own, y has one.
+    const bare = join(root, host, 'plugins', 'cache', 'x');
+    const copy = join(root, host, 'plugins', 'cache', 'y');
+    mkdirSync(join(bare, 'src'), { recursive: true });
+    mkdirSync(join(copy, '.soujo'), { recursive: true });
+    for (const dir of [bare, join(bare, 'src'), copy]) assert.equal(findStateDir(dir), undefined, dir);
+  }
+});
+
+test('pluginDir follows symlinks: one into a plugin directory is caught, one from there to an ordinary project is not', { skip: process.platform === 'win32' }, (t) => {
   const root = temp(t);
   const copy = join(root, '.claude', 'plugins', 'cache', 'soujo', 'soujo', 'abc');
   mkdirSync(join(copy, '.soujo'), { recursive: true });
-  mkdirSync(join(copy, 'src'));
   mkdirSync(join(root, '.codex', 'plugins'), { recursive: true });
-  assert.equal(pluginDir(copy), '.claude/plugins');
-  assert.equal(pluginDir(join(copy, 'src')), '.claude/plugins');
-  assert.equal(pluginDir(join(root, '.claude', 'plugins')), '.claude/plugins');
-  assert.equal(pluginDir(join(root, '.codex', 'plugins')), '.codex/plugins');
-  assert.equal(pluginDir(join(root, '.codex', 'plugins', 'missing')), '.codex/plugins');
-  assert.equal(findStateDir(copy), undefined);
-  assert.equal(findStateDir(join(copy, 'src')), undefined);
-  assert.throws(() => requireStateDir(copy), /^Error: \.soujo\/ が見つからない（soujo init で作る）$/);
-
-  // A symlink into the copy is caught; one from a plugin directory to an ordinary project is not.
   const project = join(root, 'project');
   mkdirSync(join(project, '.soujo'), { recursive: true });
   symlinkSync(copy, join(root, 'link'));
@@ -91,11 +123,24 @@ test('pluginDir finds .claude/plugins or .codex/plugins in the real path, where 
   assert.equal(findStateDir(join(root, 'link')), undefined);
   assert.equal(pluginDir(join(root, '.codex', 'plugins', 'project')), undefined);
   assert.equal(realpathSync(findStateDir(join(root, '.codex', 'plugins', 'project')) ?? ''), realpathSync(join(project, '.soujo')));
+});
 
-  for (const near of [['.claude'], ['.claude', 'plugins-old'], ['claude', 'plugins'], ['.codex', 'plugin'], ['plugins', '.claude'], ['.claude', 'x', 'plugins']]) {
-    mkdirSync(join(root, ...near, '.soujo'), { recursive: true });
-    assert.equal(pluginDir(join(root, ...near)), undefined, near.join('/'));
-    assert.equal(findStateDir(join(root, ...near)), join(root, ...near, '.soujo'), near.join('/'));
+test('pluginDir follows the symlinks of the nearest resolvable ancestor when the real path fails', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
+  const root = temp(t);
+  const cache = join(root, '.codex', 'plugins', 'cache');
+  const locked = join(cache, 'locked');
+  mkdirSync(join(locked, 'inner'), { recursive: true });
+  symlinkSync('loop', join(cache, 'loop'));
+  symlinkSync(cache, join(root, 'link'));
+  chmodSync(locked, 0o000);
+  try {
+    const cases: [string, string][] = [[join(root, 'link', 'locked', 'inner'), 'EACCES'], [join(root, 'link', 'loop', 'x'), 'ELOOP'], [join(root, 'link', 'missing'), 'ENOENT']];
+    for (const [dir, code] of cases) {
+      assert.throws(() => realpathSync(dir), { code }, dir);
+      assert.equal(pluginDir(dir), '.codex/plugins', dir);
+    }
+  } finally {
+    chmodSync(locked, 0o755);
   }
 });
 

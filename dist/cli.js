@@ -36,7 +36,8 @@ const COMMANDS = {
     init: noArguments('init', init),
     'next show': {
         usage: 'next show [--hook]',
-        hook: true,
+        // Without --hook it refuses there, instead of pointing to soujo init, which is refused there too.
+        hook: (args) => options(args).includes('--hook'),
         run: (args, cwd, usage) => {
             const { positionals, values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true });
             expectPositionals(positionals, 0, usage);
@@ -64,10 +65,10 @@ const COMMANDS = {
             return nextSet(cwd, { layer, premise, check, caution, effort });
         },
     },
-    // Hooks call this: unknown arguments are ignored so that it always exits 0.
+    // Hooks call this: unknown arguments are ignored so that it always exits 0, in a host plugin directory too.
     'next check': {
         usage: 'next check [--hook]',
-        hook: true,
+        hook: () => true,
         run: (args, cwd) => {
             const { values } = parseArgs({ args, options: { hook: { type: 'boolean' } }, allowPositionals: true, strict: false });
             return nextCheck(cwd, values.hook === true);
@@ -143,10 +144,14 @@ function resolve(argv) {
 function isHelp(arg) {
     return arg === '--help' || arg === '-h';
 }
+// The arguments before "--", the only ones that can be options.
+function options(args) {
+    const end = args.indexOf('--');
+    return end === -1 ? args : args.slice(0, end);
+}
 // Only an argument of its own before "--" asks for help; "--note=--help" and anything after "--" are ordinary.
 function asksHelp(args) {
-    const end = args.indexOf('--');
-    return (end === -1 ? args : args.slice(0, end)).some(isHelp);
+    return options(args).some(isHelp);
 }
 function usageLines(include) {
     return Object.entries(COMMANDS)
@@ -197,12 +202,12 @@ function oneLine(text) {
         .filter((line) => line !== '')
         .join(' ');
 }
-// A host plugin directory holds a copy of Soujo with this repository's .soujo/ (SPEC §6): commands other than the hooks' refuse
+// A host plugin directory holds a copy of Soujo with this repository's .soujo/ (SPEC §6): calls other than the hooks' refuse
 // there before reading or writing anything, so that resume never shows those records and init or a commit never lands in the copy.
 function run(found, cwd) {
     if (found === undefined)
         return undefined;
-    const plugin = found.command.hook ? undefined : pluginDir(cwd);
+    const plugin = found.command.hook?.(found.args) ? undefined : pluginDir(cwd);
     if (plugin !== undefined)
         throw new Error(`プラグインの置き場所（${plugin}）では実行しない: 作業中のプロジェクトで実行する`);
     return found.command.run(found.args, cwd, found.command.usage);

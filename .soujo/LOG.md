@@ -285,3 +285,8 @@ L18 まで完了: プラグインの置き場所（.claude/plugins・.codex/plug
 ## 2026-09-15 L18 plugin-guard
 cwd の実パスに .claude/plugins か .codex/plugins があれば --help とフック以外を読み書き前に拒否
 next show/next check は findStateDir が undefined を返しプロジェクト外と同じに振る舞う
+
+## 2026-09-15 grok-fix-l18
+grok レビュー L18 の14件を修正: pluginDir は大文字小文字を区別せず、実パスが求まらないとき求まる最も近い祖先の実パスで判定
+--hook なしの next show もプラグイン配下で拒否（soujo init への誤誘導をなくす）。SPEC §6/§14・README・CHANGELOG(+ja)・PLAN L18 の文言を next check/next show --hook とそれ以外に分けた
+テスト: 判定は全 OS、symlink・EACCES・ELOOP は win32 skip。.git なしキャッシュ、-h・next --help、未知コマンド・空 argv・外の dir への map code を追加
