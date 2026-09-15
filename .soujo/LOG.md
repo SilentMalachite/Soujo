@@ -295,3 +295,7 @@ grok レビュー L18 の14件を修正: pluginDir は大文字小文字を区�
 0.3.0 をリリース（2026-09-15）: soujo brief と resume の N日ぶり、節目エントリ（spec/plan/go）、プラグインの置き場所での実行拒否
 数週間の空白を再現して確認（26日ぶり→brief→rotate 後も節目が残る）。README(+ja)・SPEC(+ja) の再開を「数日〜数週間」に
 package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.0 にし、CHANGELOG(+ja) の未リリース節を 0.3.0 — 2026-09-15 にした
+
+## 2026-09-15 節目
+PLAN.md に 1層: L19 resume-brief（resume スキルが N日ぶり のとき soujo brief も返す。SPEC §3・§7・§14 に決定を記載）
+外したもの: なし

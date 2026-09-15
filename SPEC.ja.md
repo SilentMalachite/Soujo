@@ -47,7 +47,7 @@ Spec-kit の「仕様→計画→実装」と Superpowers の「作法をスキ�
 1. `/soujo:spec`（Codex では `$spec`）で一問一答のうちに `SPEC.md` ができる。
 2. `/soujo:plan` で、30分以内の「層」の一覧 `PLAN.md` ができる。各層に完了条件が1行ある。
 3. `/soujo:go` で次の層が実装・テスト・コミットされ、`LOG.md` と `NEXT.md` が更新される。
-4. 数日〜数週間空けて `/soujo:resume` を打つと短い状況説明が出て（3日以上なら `soujo brief` を指す）、そのまま続けられる。
+4. 数日〜数週間空けて `/soujo:resume` を打つと短い状況説明が出て（3日以上なら `soujo brief` の5行も）、そのまま続けられる。
 5. Claude Code で L3 まで進めた同じリポジトリを Codex で開き、`$resume` → `$go` で L4 が続く。逆も同じ。
 6. `/soujo:map` で現在の構造が図になる。`/soujo:review` で見落としが全部列挙される。
 
@@ -146,7 +146,7 @@ effort: <low|medium|high|xhigh>
 | `spec` | `soujo init` 後の `SPEC.md`。技術の候補を出すときは設定ファイル | 質問1つずつ（答えを受けてから次）・最大7問。各問に番号付きの答え候補。答えるたびに書く。技術スタックは設定ファイルで決まればそれ、決まらなければ質問（既定値を持たない） | `soujo init` → `soujo log add 節目`（SPEC を書いた・何が未決か）→ `soujo next set`（次: plan） | `SPEC.md` の骨組みの表1つと init が作ったファイル | high |
 | `plan` | `SPEC.md` と既存の `PLAN.md` | 未実装を30分以内の層に分割。依存順。未完了は最大12層。未実装がなければ層を足さず終える | `soujo log add 節目`（層を足したときだけ：何層か・何を外したか）→ `soujo next set`（`次:` が最初の未完了の層でないときだけ）→ `soujo map plan` | `PLAN.md` と図 | high |
 | `go` | `soujo resume` → `NEXT.md` → `SPEC.md` → PLAN の該当層 | `再開:` が go 以外ならそれに従う。層を完了条件まで実装。**終わったら次の層の `NEXT.md` を先に書き（最後の層の後は `次: plan`）、その後 `layer done`。最後の層では `NEXT.md` の前に `節目` エントリを LOG へ書く**。拒否されたコマンドは失敗したところから再実行する。NEXT が spec / plan を指すならそちらへ | `soujo resume` → `soujo log add 節目`（最後の層だけ：層で何ができたか・何が未決か）→ `soujo next set` → `soujo layer done` | 結果1文＋変更ファイル | `NEXT.md` の指定 |
-| `resume` | — | CLI の出力をそのまま返す | `soujo resume` | 4行 | low |
+| `resume` | — | CLI の出力をそのまま返す。`再開:` に `N日ぶり` があれば `soujo brief` も実行する | `soujo resume` → `soujo brief`（`再開:` に `N日ぶり` があるときだけ） | 4行。`brief` を実行したらその後に5行 | low |
 | `map` | `diff` のときだけ、直近の層の diff とその周辺 | `plan` / `code [dir]` は CLI の図をそのまま示す。`diff` は Before/After を自分で描く | `soujo map` | 図＋5行以内 | medium |
 | `review` | 引数の範囲、なければ最新の `layer:` コミットの親から作業ツリーまでの diff（未追跡も含む） | **見つけたものは全部**、表 `# / 場所 / 何が / なぜ / 直し方`。`soujo:reviewer` を起動できれば1体だけ起動し、表を加工せず出す | — | 表 | medium |
 | `close` | — | 引数の一言を `--note` に渡す。なければ進んだところを1行にして渡す | `soujo close` | 2行 | low |
@@ -231,7 +231,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 ## 13. 実装
 
-依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。受け入れ後の L13〜L15 は、§14 の未決だったもの（決定へ移した）を実装する：`soujo --help`、`次: spec` / `次: plan` の effort、`soujo log rotate`。L16〜L17 は、何日か離れた後に戻るための `soujo brief` と `節目` エントリを足す。L18 は、ホストのプラグインの置き場所での `soujo` の実行を拒否する。
+依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。受け入れ後の L13〜L15 は、§14 の未決だったもの（決定へ移した）を実装する：`soujo --help`、`次: spec` / `次: plan` の effort、`soujo log rotate`。L16〜L17 は、何日か離れた後に戻るための `soujo brief` と `節目` エントリを足す。L18 は、ホストのプラグインの置き場所での `soujo` の実行を拒否する。L19 は、`soujo resume` が `soujo brief` を指したときに `resume` スキルがそれも実行するようにする。
 
 ## 14. 決定事項と未決事項
 
@@ -255,7 +255,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - `soujo --help` と `soujo <コマンド> --help` は使い方の行を出し、ほかは何も実行しない（L13）。両ホストが `soujo --help` を試してエラーになったため。また `--help` を付けた書き込みコマンドは、いま不明なオプションとして拒否して何も書かないのと同じく、何も書かないままにするため。
 - `soujo next set` は `次: spec` / `次: plan` に `effort: high`（§7 のそのスキルの effort）を書き、ほかの値を拒否する（L14）。最後の層の後の `NEXT.md` に場当たりの effort が残らないため。ほかの手段で書かれた `NEXT.md` は検査しない。
 - `soujo log rotate` は `LOG.md` の過去の月のエントリを、位置ではなくエントリの日付で `LOG-YYYY-MM.md` へ `LOG.md` にある形のまま移し、最後のエントリと最後の `節目` エントリは必ず残す（L15・L17 レビュー）。`resume` は `前回:` を、`brief` は `節目:` を `LOG.md` から読み、状態を示すコマンドは書庫を読まないため。`layer done` には組み込まず手で実行し、ほかの未コミットの変更があれば拒否する。`commitRecords` がプロジェクト全体をステージするため。止まった rotate の変更だけは例外にする。Codex の sandbox は承認なしにコミットできず、再実行は拒否ではなく仕上げるべきだから。例外は rotate が書くもの（`LOG.md` から消したエントリ、書庫に足したエントリ）だけを認めるので、手の編集や消した書庫が `log: rotate` としてコミットされることはない。`uncommittedLogs` はエントリを中身で比べるので、移した後の `LOG.md` が `layer done` / `close` に未コミットのエントリと見えることはない。書庫の名前は `LOG-<月>.md` で月は `state.ts` が検査し、状態ファイルの名前はパスを作る前に必ず検査するので、書庫も4つの状態ファイルと同じくプロジェクト内に留める検査を通して読み書きする。
-- 何日も・何週間も離れた後に戻るには、`NEXT.md`（次の一手）と `LOG.md`（全部の記録）の間の数行が要る。`soujo brief` は事実（進捗・最終 layer 後のコミット・空白・次の一手）を記録から導出するので、新たに保守するものはない。理由は、スキルがフェーズの区切り（`spec` が SPEC を書いたとき・`plan` が層を足したとき・最後の層を終える `go` の `next set` の前）に書く `節目` エントリと、この節の決定に置く（L16〜L17）。5つ目の状態ファイルは作らず、`resume` の4行も変えない（3日以上空いたときに `brief` を指すだけ）。PLAN の `節目` という層は `spec` / `plan` と同じく拒否する（下記）。その層の完了エントリが節目に見えるため。`soujo log add` は、HEAD にない最後のエントリと同じものを再び足さない。スキルは `log add 節目` の直後に `next set` を実行し、`next set` が拒否された後に両方を再実行すると節目が2つになるため。
+- 何日も・何週間も離れた後に戻るには、`NEXT.md`（次の一手）と `LOG.md`（全部の記録）の間の数行が要る。`soujo brief` は事実（進捗・最終 layer 後のコミット・空白・次の一手）を記録から導出するので、新たに保守するものはない。理由は、スキルがフェーズの区切り（`spec` が SPEC を書いたとき・`plan` が層を足したとき・最後の層を終える `go` の `next set` の前）に書く `節目` エントリと、この節の決定に置く（L16〜L17）。5つ目の状態ファイルは作らず、`resume` の4行も変えない（3日以上空いたときに `brief` を指すだけ）。`resume` スキルはその案内に従い、4行の後に `brief` の5行を返すので、何週間ぶりの再開も1つのスキルで済む。`go` は4行だけを読むまま（L19）。PLAN の `節目` という層は `spec` / `plan` と同じく拒否する（下記）。その層の完了エントリが節目に見えるため。`soujo log add` は、HEAD にない最後のエントリと同じものを再び足さない。スキルは `log add 節目` の直後に `next set` を実行し、`next set` が拒否された後に両方を再実行すると節目が2つになるため。
 - `次: plan` はすべての層より後ろとみなす。`next set --layer plan` と最後の `layer done` の間で止まって残った未チェックの層を、警告し、`resume` で示し、`close` の対象にするため。`next set` の前で止まった `plan` も同じく示されるが、最初の層へ `soujo next set` すれば直る。
 - `layer done` と `close` はコミット前に PLAN・LOG・NEXT が書いたとおりにステージされたかを確かめる。それらを欠いたままコミットすると、`layer done` の再実行はコミット済みとして拒否され、`close` は「中断」エントリのない、または古い `NEXT.md` の `wip:` コミットを残すため。
 - git の状態はユーザーの設定によらず同じに読む：未追跡のファイルは `status.showUntrackedFiles` によらず数え、残った `sequencer/` は `git status` と同じく cherry-pick か revert の途中とみなす。
