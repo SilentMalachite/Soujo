@@ -38,7 +38,8 @@ Codex 用の `AGENTS.md` は**写しではない**（GPT-6 Astra 向けに文面
   1. 次の層の `NEXT.md` を書く：`soujo next set --layer ... --premise ... --check ... [--caution ...] [--effort ...]`（`--effort` は PLAN の層にだけ付ける。`spec` / `plan` は CLI が high にする）
   2. 締める：`soujo layer done "<層名>" --note "<1〜3行>"`（PLAN チェック → LOG 追記 → コミットまで一括）
 - 中断の恐れが出たら、止まる前に `soujo close --note "<一言>"`。
-- 再開は `soujo resume` の4行だけを根拠にする。会話履歴に依存しない。
+- フェーズの区切り（SPEC を書き終えた・PLAN を立てた・最後の層を締める前）には節目を残す：`soujo log add '節目' --line '<何が終わったか>' --line '<何が未決か>'`。層名を `節目` にしない。
+- 再開は `soujo resume` の4行だけを根拠にする。会話履歴に依存しない。`再開:` が `N日ぶり` と言えば、先に `soujo brief` の5行（進捗・以後・節目・空白・次）で現在地を掴む。
 - 手順・状態・決定を会話の中だけに残さない。`.soujo/` に書く。
 
 ## 5. 書く文書の長さ

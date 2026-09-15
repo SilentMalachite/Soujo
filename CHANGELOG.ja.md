@@ -11,6 +11,11 @@
 - `soujo brief` は、何日か離れた後に戻るための5行を、何も書かずに記録から導出して出す：PLAN の進捗と最後の `layer:` コミット、その後のコミット、`LOG.md` の最後の `節目` エントリ、最終コミットからの日数、`soujo resume` と同じ次の一手。読めないファイルや git の失敗はその行だけを縮退させる。
 - `soujo resume` は、最終コミットが3日以上前なら `再開:` の末尾に `・N日ぶり: 先に soujo brief` を付ける。
 
+### 変更
+
+- `spec`・`plan` スキルと、最後の層の後の `go` スキルは、`LOG.md` に `節目` エントリ（何が終わったか・何が未決か）を書き、`soujo brief` がそれを示す。`plan` スキルは層名を `節目` にしない。
+- `soujo init` が作る CLAUDE.md と AGENTS.md は、`節目` エントリを説明し、何日か空いたら `soujo brief` を指す。
+
 ## 0.2.0 — 2026-09-15
 
 リリース：[v0.2.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.2.0)。

@@ -25,7 +25,8 @@ Claude Code 用の `CLAUDE.md` より短いのは意図的（Astra は指示が�
 
 ## 記録（`soujo` CLI）
 
-- 再開：`soujo resume`。層を締める：`soujo next set ...` のあと `soujo layer done "<層名>" --note "..."`。中断：`soujo close --note "..."`。
+- 再開：`soujo resume`（`N日ぶり` と出たら先に `soujo brief`）。層を締める：`soujo next set ...` のあと `soujo layer done "<層名>" --note "..."`。中断：`soujo close --note "..."`。
+- 節目：SPEC 完成・PLAN 作成・最後の層の前に `soujo log add '節目' --line '<終わったこと>' --line '<未決>'`。`節目` を層名に使わない。
 - `layer done` / `close` がサンドボックスで git に書けず失敗したら、権限の昇格を求めて同じコマンドを再実行してよい（記録は重複せず、コミットだけやり直る）。
 - `NEXT.md` は5行、`LOG.md` の1エントリは3行。上限は CLI が検証する。
 

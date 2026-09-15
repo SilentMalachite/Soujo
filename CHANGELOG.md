@@ -11,6 +11,11 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - `soujo brief` prints five lines for returning after days away, derived from the records without writing anything: PLAN progress with the last `layer:` commit, the commits after it, the last `節目` entry of `LOG.md`, the days since the last commit, and the next step as `soujo resume` shows it. An unreadable file or a git failure degrades only its line.
 - `soujo resume` ends `再開:` with `・N日ぶり: 先に soujo brief` when the last commit is 3 or more days old.
 
+### Changed
+
+- The `spec` and `plan` skills and the `go` skill after the last layer write a `節目` entry to `LOG.md` (what ended, what is open), which `soujo brief` shows; the `plan` skill never names a layer `節目`.
+- The CLAUDE.md and AGENTS.md that `soujo init` creates describe `節目` entries and point to `soujo brief` after days away.
+
 ## 0.2.0 — 2026-09-15
 
 Release: [v0.2.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.2.0).

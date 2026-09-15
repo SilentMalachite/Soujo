@@ -260,3 +260,11 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.2.0 にし、
 soujo brief（進捗・以後・節目・空白・次の5行、行ごとに縮退）を追加
 resume の 再開: に最終コミットから3日以上で ・N日ぶり: 先に soujo brief
 Commit に committer date、git に gitFindCommitStarting / gitCommitsAfter
+
+## 2026-09-15 節目
+PLAN の全層完了: L16 brief と L17 節目で、数日空いた後の戻り道ができた
+未決: SPEC §14 Open の6件（Codex フック・skill 置き場所ガード・spec 途中書き 等）
+
+## 2026-09-15 L17 milestones
+spec・plan・go スキルがフェーズの区切りに soujo log add 節目 を書く（plan は層名を 節目 にしない）
+CLAUDE.md・AGENTS.md（+templates）に節目と N日ぶり→soujo brief、README(+.ja)・CHANGELOG(+.ja) に記載

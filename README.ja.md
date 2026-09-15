@@ -22,7 +22,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 
 ```
 /soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:plan（層が尽きたら）
-                                 ↑ 中断後は /soujo:resume ・ 止まる前に /soujo:close
+                                 ↑ 中断後は /soujo:resume（何日も空いたら soujo brief）・ 止まる前に /soujo:close
 ```
 
 | スキル | Claude Code | Codex | 結果 |
@@ -39,7 +39,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 |---|---|---|
 | `SPEC.md` | 目的・非目標・受け入れ基準・技術判断 | 約100行 |
 | `PLAN.md` | `- [ ] <層> — <完了条件>` | 1層1行 |
-| `LOG.md` | コマンドが追記する作業日誌。エントリを外へ移すのは `soujo log rotate` だけ | 1エントリ3行 |
+| `LOG.md` | コマンドが追記する作業日誌。エントリを外へ移すのは `soujo log rotate` だけ。`節目` エントリは spec / plan / go がフェーズの区切りに書き、何が終わり何が未決かを残す。最後のものを `soujo brief` が示す | 1エントリ3行 |
 | `LOG-YYYY-MM.md` | `soujo log rotate` が移した `LOG.md` の過去の月 | —（`LOG.md` にあった形のまま） |
 | `NEXT.md` | 次の一手。再開にはこれだけ読めばよい | 5行 |
 
