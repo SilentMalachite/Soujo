@@ -77,3 +77,12 @@
 | 14, 15 | `currentDir` が失敗理由を捨てる。`findStateDir` / `requireStateDir` の既定値 `process.cwd()` が残る | `ENOENT` 以外は `code` を添える。既定値を外すか必ず渡す旨のコメント |
 | 16, 17 | 同じ行の `soujo next set` は `-` 始まりの層名で実行できない。空・制御文字の層名は貼っても一致しない | `optionArg('--layer', 層名)` で `--layer='…'` を示す。17 は前提を `quoted` のコメントに書く（検証は L25） |
 - 判断: `commandArg` の `--` は位置引数の前に置くので、`--note` を足すときは `--` より前に書く（`soujo layer done --note x -- '-L1'`）。案内の行に `--note` は無いので、出たまま貼れば通る。
+
+## L25 追加レビュー（reviewer 28件・15f841e の後の fix コミット）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| 1, 2, 15 | 閉じ忘れたフェンスが以降の層を無言で消す。`PLAN_FENCE` に `s` がない。`startsWith(fence[0] ?? '')` が危険側の既定値 | `planItems` が `{ items, unclosed }` を返し、`validatePlan` が先頭で `<N>行目のコードフェンスが閉じていない` を出す。`PLAN_FENCE` に `/s`、判定を `marker[0] === fence[0]` に |
+| 9 | 完了条件の検査がコミット済み判定より前 | コミット済み・HEAD チェック済みの後ろへ移す |
+| 10 | `- [ ] L2 state —`（区切りだけ）で層名が `L2 state —` になる | `splitItem` の走査上限を `parts.length` にし、後ろに語がない区切りでも分けて `condition: ''` にする |
+| 28（併せて） | 行番号の指摘に「PLAN.md の層名を直してから」が続き、フェンスに合わない | ヒントを `（PLAN.md を直してから）` に（`next set` と `layer done`） |
+- 未対応: 3〜8, 11〜14, 16〜27（挙動のバグ以外。ユーザーが選んだ 1, 2, 9, 10, 15 のみ先に直した）

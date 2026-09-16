@@ -78,10 +78,11 @@ test('layer done writes nothing on invalid input', (t) => {
   assert.equal(read(outsideGit, 'PLAN.md'), PLAN);
 });
 
-test('layer done refuses while PLAN repeats a layer name or names a layer like a phase, and writes nothing', (t) => {
+test('layer done refuses while PLAN repeats a layer name, names a layer like a phase, or leaves a fence open, and writes nothing', (t) => {
   const dir = workingProject(t);
   const plans: [string, RegExp][] = [
-    [`${PLAN}- [ ] L2 state — again\n`, /^Error: PLAN\.md の層「L2 state」が重複（PLAN\.md の層名を直してから）$/],
+    [`${PLAN}- [ ] L2 state — again\n`, /^Error: PLAN\.md の層「L2 state」が重複（PLAN\.md を直してから）$/],
+    [`${PLAN}\`\`\`\n`, /^Error: PLAN\.md の6行目のコードフェンスが閉じていない（以降の層が読まれない）（PLAN\.md を直してから）$/],
     [`${PLAN}- [ ] spec — SPEC\n`, /^Error: PLAN\.md の層名「spec」がフェーズ名と同じ（/],
     [`${PLAN}- [ ] 節目 — LOG\n`, /^Error: PLAN\.md の層名「節目」が LOG の節目と同じ（/],
   ];
@@ -103,9 +104,27 @@ test('layer done refuses a layer without a completion condition and writes nothi
   );
   assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'LOG.md')], [plan, LOG]);
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L1 scaffold');
-  // A layer whose PLAN item is inside a code fence is not in PLAN at all.
+  // The separator left without a condition after it, the way the condition is most often forgotten.
+  const dangling = PLAN.replace('- [ ] L2 state — test', '- [ ] L2 state —');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), dangling);
+  assert.throws(
+    () => layerDone(dir, 'L2 state', 'note', NOW),
+    /^Error: PLAN\.md の層「L2 state」に完了条件がない（「— <完了条件>」を書いてから）$/,
+  );
+  assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'LOG.md')], [dangling, LOG]);
+});
+
+test('layer done ignores a checklist item inside a code fence', (t) => {
+  const dir = workingProject(t);
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), `${PLAN}\n\`\`\`\n- [ ] L9 例 — c\n\`\`\`\n`);
   assert.throws(() => layerDone(dir, 'L9 例', 'note', NOW), /^Error: PLAN\.md に層「L9 例」がない$/);
+  assert.equal(read(dir, 'LOG.md'), LOG);
+});
+
+test('a committed layer is reported as committed even after its completion condition was removed', (t) => {
+  const dir = workingProject(t);
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN.replace('- [x] L1 scaffold — build', '- [x] L1 scaffold'));
+  assert.throws(() => layerDone(dir, 'L1 scaffold', 'note', NOW), /^Error: 層「L1 scaffold」はコミット済み（[0-9a-f]+）$/);
   assert.equal(read(dir, 'LOG.md'), LOG);
 });
 

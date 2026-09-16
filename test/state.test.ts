@@ -383,6 +383,39 @@ test('parsePlan, markDone, and validatePlan ignore checklist items inside code f
   assert.deepEqual(parsePlan('- [ ] L1 — a\n````\n- [ ] X — b\n~~~\n```\n- [ ] Y — c\n').map((item) => item.layer), ['L1']);
 });
 
+test('validatePlan reports a code fence left open, which hides every layer after it', () => {
+  const text = ['- [ ] L1 — a', '```markdown', '- [ ] X — b', '- [ ] Y — c', ''].join('\n');
+  assert.deepEqual(parsePlan(text).map((item) => item.layer), ['L1']);
+  assert.deepEqual(validatePlan(text), ['PLAN.md の2行目のコードフェンスが閉じていない（以降の層が読まれない）']);
+  // A closing fence that is shorter or of the other character leaves the first one open.
+  assert.deepEqual(validatePlan('- [ ] L1 — a\n````\n- [ ] X — b\n~~~\n```\n'), [
+    'PLAN.md の2行目のコードフェンスが閉じていない（以降の層が読まれない）',
+  ]);
+  // The problem comes first: without it, the missing layers have no explanation.
+  assert.deepEqual(validatePlan('- [ ] \n~~~\n'), [
+    'PLAN.md の2行目のコードフェンスが閉じていない（以降の層が読まれない）',
+    'PLAN.md の1行目の層名が空',
+  ]);
+  assert.deepEqual(validatePlan('```\n- [ ] X — b\n```\n- [ ] L1 — a\n'), []);
+});
+
+test('a code fence line ending in a line separator is still read as a fence', () => {
+  const lineSeparator = String.fromCharCode(0x2028);
+  const text = `- [ ] L1 — a\n\`\`\`ts${lineSeparator}\n- [ ] X — b\n`;
+  assert.deepEqual(parsePlan(text).map((item) => item.layer), ['L1']);
+  assert.deepEqual(validatePlan(text), ['PLAN.md の2行目のコードフェンスが閉じていない（以降の層が読まれない）']);
+});
+
+test('parsePlan reads a layer whose separator has no completion condition after it', () => {
+  for (const separator of ['—', '–', '--', '-']) {
+    assert.deepEqual(parsePlan(`- [ ] L2 state ${separator}\n`), [{ layer: 'L2 state', condition: '', done: false }], separator);
+  }
+  assert.deepEqual(parsePlan('- [x] L1 —\r\n'), [{ layer: 'L1', condition: '', done: true }]);
+  assert.equal(markDone('- [ ] L2 state —\n', 'L2 state'), '- [x] L2 state —\n');
+  // A separator with no layer name before it is part of the name, as it was.
+  assert.deepEqual(parsePlan('- [ ] —\n- [ ] - x\n').map((item) => item.layer), ['—', '- x']);
+});
+
 test('newlyDone lists layers checked only in the later PLAN', () => {
   const head = parsePlan('- [x] L1\n- [ ] L2\n- [ ] L3\n');
   const working = parsePlan('- [x] L1\n- [x] L2\n- [ ] L3\n- [x] L4\n');

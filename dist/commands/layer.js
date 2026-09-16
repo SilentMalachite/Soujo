@@ -30,10 +30,10 @@ function describeAdded(root) {
 /**
  * States, decided before anything is written:
  * - not committable (no repository, unfinished merge/rebase, unmerged files, ignored .soujo/ files) → refuse
- * - PLAN with a repeated layer name or a layer named like a phase (see validatePlan) → refuse
- * - the layer's PLAN item has no completion condition                                → refuse
+ * - PLAN with an unclosed code fence, or a repeated, phase-like, empty, or control-character layer name (see validatePlan) → refuse
  * - committed ("layer: <layer>" exists)                       → refuse
  * - checked in PLAN at HEAD (committed under another subject), even if unchecked again in the working tree → refuse
+ * - the layer's PLAN item has no completion condition         → refuse
  * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
  * - --note starting with "中断:"                              → refuse (only close writes those, so a re-run can tell them apart)
  * - unchecked in PLAN                                         → check PLAN, append LOG, commit
@@ -49,14 +49,12 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     const name = layer.trim();
     const plan = requireState(dir, 'PLAN.md');
     const planProblems = validatePlan(plan);
+    // "PLAN.md を" rather than "PLAN.md の層名を": a problem can be an unclosed code fence, which is not a name.
     if (planProblems.length > 0)
-        throw new Error(`${planProblems.join('、')}（PLAN.md の層名を直してから）`);
+        throw new Error(`${planProblems.join('、')}（PLAN.md を直してから）`);
     const item = parsePlan(plan).find((candidate) => candidate.layer === name);
     if (item === undefined)
         throw new Error(`PLAN.md に層「${name}」がない`);
-    // Without it there is nothing to close the layer against, and resume's 確認: line would be blank for the next one.
-    if (item.condition === '')
-        throw new Error(`PLAN.md の層「${name}」に完了条件がない（「— <完了条件>」を書いてから）`);
     const subject = `${LAYER_COMMIT}${name}`;
     const committed = gitFindCommit(root, subject);
     if (committed !== undefined)
@@ -64,6 +62,10 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     if (isChecked(headState(root, 'PLAN.md'), name)) {
         throw new Error(`層「${name}」は PLAN のチェックごとコミット済み（件名が「${subject}」ではない）`);
     }
+    // After the committed checks, so that a layer already closed is still reported as closed when its condition was since removed.
+    // Without a condition there is nothing to close the layer against, and the 確認: line of the next NEXT.md would be blank.
+    if (item.condition === '')
+        throw new Error(`PLAN.md の層「${name}」に完了条件がない（「— <完了条件>」を書いてから）`);
     requireNextStep(dir, name);
     if (note !== undefined && INTERRUPTION_NOTE.test(logLines([note])[0] ?? '')) {
         throw new Error('--note を「中断:」で始めない（close の中断の記録と区別できなくなる）');

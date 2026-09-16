@@ -111,7 +111,7 @@ test('next set refuses while PLAN.md repeats a layer name or names a layer like 
   for (const layer of ['L2 state', 'plan']) {
     assert.throws(
       () => nextSet(repeated, { ...base, layer }),
-      /^Error: NEXT\.md を書かない: PLAN\.md の層「L2 state」が重複（PLAN\.md の層名を直してから）$/,
+      /^Error: NEXT\.md を書かない: PLAN\.md の層「L2 state」が重複（PLAN\.md を直してから）$/,
     );
   }
   assert.equal(readNext(repeated), NEXT);

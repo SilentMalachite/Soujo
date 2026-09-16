@@ -40,8 +40,9 @@ export function nextSet(cwd, input) {
     }
     const plan = readState(dir, 'PLAN.md') ?? '';
     const planProblems = validatePlan(plan);
+    // "PLAN.md を" rather than "PLAN.md の層名を": a problem can be an unclosed code fence, which is not a name.
     if (planProblems.length > 0)
-        throw new Error(`NEXT.md を書かない: ${planProblems.join('、')}（PLAN.md の層名を直してから）`);
+        throw new Error(`NEXT.md を書かない: ${planProblems.join('、')}（PLAN.md を直してから）`);
     const items = parsePlan(plan);
     if (items.length > 0 && !phase && !items.some((item) => item.layer === layer)) {
         throw new Error(`NEXT.md を書かない: PLAN.md に層「${layer}」がない（PLAN の層名をそのまま、または ${PHASES.join(' / ')}）`);

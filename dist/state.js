@@ -18,8 +18,9 @@ const NEXT_LINE = /^(次|前提|確認|注意|effort)\s*[:：]\s*(.*)$/;
 // and validatePlan can report it instead of the line being dropped without a word.
 const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/s;
 // A code fence as CommonMark writes one: three or more backticks or tildes indented by at most three spaces, with the info
-// string after an opening fence and nothing but spaces after a closing one.
-const PLAN_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/;
+// string after an opening fence and nothing but spaces after a closing one. dotAll as in PLAN_ITEM, so that a line ending in
+// U+2028/2029 is still read as a fence instead of matching nothing.
+const PLAN_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/s;
 // Standalone tokens between the layer name and its completion condition. "—" is canonical; the rest are common typing variants.
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
@@ -121,11 +122,12 @@ export function formatNext(input) {
 function matchItem(line) {
     return PLAN_ITEM.exec(line.replace(/\r$/, ''));
 }
-// Splits at the first separator token that has a word on both sides. Token-based rather than a /\s+—\s+/ search,
-// which backtracks quadratically on long whitespace runs.
+// Splits at the first separator token that has a word before it. Token-based rather than a /\s+—\s+/ search, which backtracks
+// quadratically on long whitespace runs. A separator with nothing after it is the usual way a completion condition is
+// forgotten, so it splits too and leaves the condition empty rather than becoming part of the layer name.
 function splitItem(body) {
     const parts = body.trim().split(/(\s+)/); // word, space, word, space, ...
-    for (let index = 2; index < parts.length - 2; index += 2) {
+    for (let index = 2; index < parts.length; index += 2) {
         if (PLAN_SEPARATORS.has(parts[index] ?? '')) {
             return { layer: parts.slice(0, index - 1).join(''), condition: parts.slice(index + 2).join('') };
         }
@@ -133,47 +135,52 @@ function splitItem(body) {
     return { layer: body.trim(), condition: '' };
 }
 /**
- * Checklist items of PLAN.md with the 1-based line each is on, in order. Other lines are ignored, code fences included: an
- * item inside one is an example the plan skill wrote, not a layer, and neither markDone nor validatePlan may touch it. A
- * fence closes on the same character, at least as long, with nothing but spaces after; one left open ends the file.
+ * PLAN.md read as a checklist. Lines that are not items are ignored, and so is everything inside a code fence: an item there
+ * is an example of the format, not a layer, and neither markDone nor validatePlan may touch it. A fence closes on the same
+ * character, at least as long, with nothing but spaces after; one left open runs to the end of the file, which validatePlan
+ * reports, since the layers it swallows would otherwise go missing without a word.
  */
 function planItems(text) {
     const items = [];
     let fence;
+    let opened = 0;
     text.split('\n').forEach((raw, index) => {
         const line = raw.replace(/\r$/, '');
         const fenced = PLAN_FENCE.exec(line);
         if (fence !== undefined) {
             const marker = fenced?.[1] ?? '';
-            const closes = marker.startsWith(fence[0] ?? '') && marker.length >= fence.length && (fenced?.[2] ?? '') === '';
-            if (closes)
+            if (marker[0] === fence[0] && marker.length >= fence.length && (fenced?.[2] ?? '') === '')
                 fence = undefined;
             return;
         }
         if (fenced) {
-            fence = fenced[1];
+            [fence, opened] = [fenced[1], index + 1];
             return;
         }
         const match = matchItem(line);
         if (match)
             items.push({ item: { ...splitItem(match[2] ?? ''), done: match[1] !== ' ' }, line: index + 1 });
     });
-    return items;
+    return fence === undefined ? { items } : { items, unclosed: opened };
 }
 /** Checklist items of PLAN.md in order; other lines and code fences are ignored (see planItems). */
 export function parsePlan(text) {
-    return planItems(text).map(({ item }) => item);
+    return planItems(text).items.map(({ item }) => item);
 }
 /**
- * Problems that make a layer name of PLAN.md unusable; empty when valid. An empty name and one with control characters are
- * named by line, since neither can be quoted back to the user or matched when pasted; the rest are named by the name itself.
- * A repeated name cannot get its own "layer: <layer>" commit, a layer named like a phase cannot be told from that phase in
- * NEXT.md, and the completion entry of a layer named 節目 would be taken for a milestone.
+ * Problems that make PLAN.md's layers unusable; empty when valid. A fence left open comes first, since it explains the layers
+ * missing after it. An empty name and one with control characters are named by line, since neither can be quoted back to the
+ * user or matched when pasted; the rest are named by the name itself. A repeated name cannot get its own "layer: <layer>"
+ * commit, a layer named like a phase cannot be told from that phase in NEXT.md, and the completion entry of a layer named
+ * 節目 would be taken for a milestone.
  */
 export function validatePlan(text) {
     const problems = new Set();
     const seen = new Set();
-    for (const { item, line } of planItems(text)) {
+    const { items, unclosed } = planItems(text);
+    if (unclosed !== undefined)
+        problems.add(`PLAN.md の${unclosed}行目のコードフェンスが閉じていない（以降の層が読まれない）`);
+    for (const { item, line } of items) {
         const { layer } = item;
         if (layer === '')
             problems.add(`PLAN.md の${line}行目の層名が空`);
@@ -220,7 +227,7 @@ export function newlyDone(before, after) {
 /** PLAN.md text with the layer checked. Already checked layers are left as is; unknown layers throw. */
 export function markDone(text, layer) {
     const name = layer.trim();
-    const found = planItems(text).find(({ item }) => item.layer === name);
+    const found = planItems(text).items.find(({ item }) => item.layer === name);
     if (found === undefined)
         throw new Error(`PLAN.md に層「${layer}」がない`);
     const lines = text.split('\n');
