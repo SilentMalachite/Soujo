@@ -117,3 +117,16 @@
 | 6 | SPEC の CLI 一覧（`next check` の行）に完了条件の警告と4件の表示制限がない | 英日の該当行に追記（`ほか<N>件` と hook の隠蔽順も） |
 | 7 | 4スペース字下げ・HTML コメント内の項目が層である契約に直接テストがない | `parsePlan` / `validatePlan` / `markDone` の3点でテスト |
 | 8 | `LOG_HEADER` の `/s` のテストが `parseLog` だけで、`rotateLog`・追記/削除判定・見出し拒否を守っていない | U+2028/2029 の見出しで rotate・`archiveLog`・`appendedEntries`・`removedEntries`・`appendLog` の拒否を1テストに
+
+## L27 追加レビュー（reviewer 25件・layer コミットの前に直した分）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| 8 | `scanRegex` が `\` の次を無条件に飛ばし、`\` + 行終端で行をまたぐ | 行終端の判定を `\` の分岐より先に置き、`\` の次が行終端なら進めない |
+| 5, 6 | `opensBlock` と `regexAllowed` が同じ `}` を別の基準で読む。対応する `{` のない `}` がオブジェクトリテラル扱い | `opensBlock` の `}` も `previous.block` を見る。`blocks.pop() ?? true`（未対応の `}` はブロックの閉じ） |
+| 7 | `depth` と `blocks.length` の二重管理が `}` 過多で乖離する | `depth` を消して `blocks.length` を使う |
+| 9, 10 | 文字列の行終端規則が `LINE_ENDS` と直書きに分かれ、`scanQuoted` の説明が古い | `QUOTE_ENDS` を足して `LINE_ENDS = [...QUOTE_ENDS, ...SEPARATORS]` に。説明を CR 込みに |
+| 1〜4 | `opensBlock` の既知の誤判定（ラベル・`case` の後のブロック、`as` / `satisfies` / 型位置の `=>` / `export default` の後のオブジェクト） | 直さず、`opensBlock` の doc コメントに既知の誤判定として列挙（実害は `} /` が隣接するときだけ） |
+| 13, 15 | `isWordChar` がコード単位で判定することと `BLOCK_AFTER` の規則がコメントから読めない | コメントを規則の側から書き直す |
+| 17〜23 | テストの抜け（入れ子の波括弧・壊れた波括弧・U+2029 の正規表現・LF と `"…"` の閉じ忘れ・CR 区切りの複数行・BOM が RED でない・性能） | 8件を追加し、BOM を `import` と指定の間へ移し、性能テストに長い行コメント・CR 区切りのコメント・非 ASCII の語を足す |
+| 24 | CHANGELOG の英日で行終端の数え方が違う | 英を「all four」に、日に「直前に `\` があっても」を足す |
+- 残り（この層では直さない）: #11（`lineEnd` の定数倍。性能テストを足して 2 秒以内を確認済み）・#12（`\s` に U+200B がない。不正な JS でしか起きない）・#14（テンプレートリテラルの CR を LF に正規化しない）・#16（`blocks` に上限がない。読込みバイト数の上限は L29 の #30）・#25（波括弧のヒューリスティックの限界を SPEC に書くか。完了条件はテストのみを求めている）

@@ -87,13 +87,49 @@ export function scanNotes(scan, limits = MAP_LIMITS) {
 }
 // Words after which "/" starts a regular expression instead of a division.
 const REGEX_AFTER = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
+// Words after which "{" opens a block: every word outside REGEX_AFTER, and these two inside it.
+const BLOCK_AFTER = new Set(['do', 'else']);
 // Words whose "(" opens a statement's condition.
 const CONDITION_BEFORE = new Set(['if', 'while', 'for', 'with']);
 const SINGLE_ESCAPES = new Map([['b', '\b'], ['f', '\f'], ['n', '\n'], ['r', '\r'], ['t', '\t'], ['v', '\v']]);
 // LINE SEPARATOR and PARAGRAPH SEPARATOR, which a backslash turns into a line continuation like a line break.
 const SEPARATORS = new Set([0x2028, 0x2029]);
+// What ends a '...' or "..." literal left unterminated. The two separators are allowed inside one (ES2019), so they are out.
+const QUOTE_ENDS = new Set([0x0a, 0x0d]);
+// Line terminators: a line comment ends at one, and a regular expression literal cannot hold one.
+const LINE_ENDS = new Set([...QUOTE_ENDS, ...SEPARATORS]);
+// Characters of a name, judged one UTF-16 code unit at a time. Above ASCII everything but white space counts, so that names
+// in any script hold together (white space is all in the BMP, so a surrogate pair is never split) while a no-break or
+// ideographic space still ends the word before it.
 function isWordChar(char) {
-    return /[\w$]/.test(char) || char > '\u007f';
+    return /[\w$]/.test(char) || (char.charCodeAt(0) > 0x7f && !/\s/.test(char));
+}
+// The first line terminator at or after from, or -1.
+function lineEnd(text, from) {
+    for (let index = from; index < text.length; index += 1)
+        if (LINE_ENDS.has(text.charCodeAt(index)))
+            return index;
+    return -1;
+}
+/**
+ * Whether a "{" opens a block (a statement) rather than an object literal, judged from the token before it. Known
+ * misjudgements, each harmless unless a "/" follows the matching "}": a block after a label or a "case" is read as an object
+ * literal, and an object type or literal after "as", "satisfies", "=>", or "export default" is read as a block.
+ */
+function opensBlock(tokens) {
+    const previous = tokens.at(-1);
+    if (previous === undefined)
+        return true;
+    if (previous.kind === 'word')
+        return BLOCK_AFTER.has(previous.value) || !REGEX_AFTER.has(previous.value);
+    if (previous.kind !== 'punct')
+        return false;
+    // "=>" opens a function body; after ")", ";", and "{" a statement can start, and after "}" when that one closed a block.
+    if (previous.value === '>')
+        return isPunct(tokens.at(-2), '=');
+    if (previous.value === '}')
+        return previous.block === true;
+    return ';{)'.includes(previous.value);
 }
 // A token that ends an operand, so that "++" or "--" after it is postfix.
 function endsOperand(token) {
@@ -115,7 +151,10 @@ function regexAllowed(tokens, before) {
     // "</" with nothing between closes a JSX element; "a < /re/" compares with a regular expression.
     if (previous.value === '<')
         return before !== '<';
-    if (']}'.includes(previous.value))
+    // A block's "}" ends a statement, so what follows starts a new one; an object literal's ends an operand, so "/" divides.
+    if (previous.value === '}')
+        return previous.block === true;
+    if (previous.value === ']')
         return false;
     // "a++ / b" divides.
     if ('+-'.includes(previous.value) && isPunct(tokens.at(-2), previous.value))
@@ -160,10 +199,10 @@ function scanLiteral(text, start, stop) {
     }
     return { next: Math.min(index, text.length), content };
 }
-// A '...' or "..." literal from its opening quote; an unterminated one ends at the line break.
+// A '...' or "..." literal from its opening quote; an unterminated one ends at a line feed or a carriage return.
 function scanQuoted(text, start) {
     const quote = text[start];
-    const literal = scanLiteral(text, start + 1, (index) => text[index] === quote || text[index] === '\n');
+    const literal = scanLiteral(text, start + 1, (index) => text[index] === quote || QUOTE_ENDS.has(text.charCodeAt(index)));
     return { next: text[literal.next] === quote ? literal.next + 1 : literal.next, content: literal.content };
 }
 // Template text from start (after "`" or a substitution's "}") up to its closing "`" or the next "${".
@@ -178,10 +217,11 @@ function scanRegex(text, start) {
     let inClass = false;
     for (let index = start + 1; index < text.length; index += 1) {
         const char = text[index];
-        if (char === '\\')
-            index += 1;
-        else if (char === '\n')
+        if (LINE_ENDS.has(text.charCodeAt(index)))
             return index;
+        // A backslash escapes the next character, except a line terminator: there the literal ends, unterminated.
+        else if (char === '\\')
+            index += LINE_ENDS.has(text.charCodeAt(index + 1)) ? 0 : 1;
         else if (inClass)
             inClass = char !== ']';
         else if (char === '[')
@@ -194,9 +234,10 @@ function scanRegex(text, start) {
 // Tokens of a script with comments dropped, so that imports are only found in code. Linear in the text length.
 function scriptTokens(text) {
     const tokens = [];
+    // blocks.length is the brace depth: for each open "{", whether it opens a block rather than an object literal.
+    const blocks = [];
     const substitutions = []; // brace depth at which each open "${" closes
     const conditions = []; // for each open "(", whether it opens a statement's condition
-    let depth = 0;
     let index = 0;
     const after = (found, length) => (found === -1 ? text.length : found + length);
     const fixed = (content) => (content === undefined ? { kind: 'other', value: '' } : { kind: 'string', value: content });
@@ -206,7 +247,7 @@ function scriptTokens(text) {
         if (/\s/.test(char))
             index += 1;
         else if (char === '/' && following === '/')
-            index = after(text.indexOf('\n', index), 0);
+            index = after(lineEnd(text, index), 0);
         else if (char === '/' && following === '*')
             index = after(text.indexOf('*/', index + 2), 2);
         else if (char === "'" || char === '"') {
@@ -214,7 +255,7 @@ function scriptTokens(text) {
             tokens.push(fixed(literal.content));
             index = literal.next;
         }
-        else if (char === '`' || (char === '}' && substitutions.at(-1) === depth)) {
+        else if (char === '`' || (char === '}' && substitutions.at(-1) === blocks.length)) {
             if (char === '}')
                 substitutions.pop();
             const template = scanTemplate(text, index + 1);
@@ -222,7 +263,7 @@ function scriptTokens(text) {
             if (char === '`')
                 tokens.push(fixed(template.substitution ? undefined : template.content));
             if (template.substitution)
-                substitutions.push(depth);
+                substitutions.push(blocks.length);
             index = template.next;
         }
         else if (char === '/' && regexAllowed(tokens, text[index - 1])) {
@@ -239,9 +280,11 @@ function scriptTokens(text) {
         else {
             const token = { kind: 'punct', value: char };
             if (char === '{')
-                depth += 1;
-            else if (char === '}')
-                depth -= 1;
+                blocks.push(opensBlock(tokens));
+            else if (char === '}') {
+                // A "}" with no "{" of its own closes a block the scanned text does not hold, so that "/" after it is not division.
+                token.block = blocks.pop() ?? true;
+            }
             else if (char === '(') {
                 // "for await (" opens a condition like "for (".
                 const at = isWord(tokens.at(-1), 'await') && isWord(tokens.at(-2), 'for') ? -2 : -1;

@@ -1,5 +1,5 @@
-次: L27 map-lexer
-前提: L26 next-log 完了（新しい書庫の前文を rotate が検証・確認と完了条件の違いを next check が警告・無効な NEXT を next show が診断・NEXT/PLAN を読めなくても他の警告が出る・#40 を SPEC に記載）
-確認: ブロックの後の正規表現、CR・U+2028・U+2029 で終わる行コメント、全角空白や NBSP の後の import を map code が正しく扱うことがテストで通る
-注意: L24 の追加レビュー18件は .soujo/REVIEW-FIX.md に未対応で残っている
+次: L28 map-jsx
+前提: L27 map-lexer 完了（ブロックの後の正規表現を字句解析が正規表現として読む・行コメントと正規表現が CR/U+2028/U+2029 でも終わる・NBSP や全角空白が語を区切る・レビュー25件のうち20件を同じ層で直した）
+確認: JSX の本文と属性の文字列を map code が import として拾わないことがテストで通る
+注意: L27 のレビュー残り5件（#11 #12 #14 #16 #25）は .soujo/REVIEW-FIX.md に未対応で残っている
 effort: high

@@ -38,6 +38,9 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - `soujo next check` warns when the `確認:` of `NEXT.md` is not the completion condition `PLAN.md` gives that layer, so a condition changed in the plan after `soujo next set` is seen before the layer is closed against the old one. Whitespace runs compare equal, and nothing is compared for a phase, a layer missing from or repeated in PLAN, a layer with no condition, or a layer already done or reached too early, whose own warning is the one to act on. The `plan` skill now runs `soujo next check` after rewriting `PLAN.md`.
 - A `NEXT.md` or `PLAN.md` that cannot be read is one warning of `soujo next check` among the others, as an unreadable `LOG.md` already was, instead of replacing every other warning with `確認できない: …`.
 - `soujo log rotate` refuses an archive new since HEAD whose text before its entries is not the `# LOG YYYY-MM` heading it writes, instead of taking a file written by hand for a stopped rotate's work and committing it as `log: rotate`.
+- `soujo map code` reads a `/` after a block (a function body, an `if` body, a class body) as a regular expression, so an `import` or `from` written inside one is no longer drawn as an edge; after an object literal it stays a division.
+- A line comment in `soujo map code` ends at a carriage return, U+2028, or U+2029 as well as a line feed, so a file whose lines end with CR no longer loses every import after its first `//`. A regular expression literal ends at all four as well, a backslash before one included, and a `'…'` or `"…"` left unterminated ends at a carriage return.
+- White space above ASCII (a no-break space, an ideographic space) separates words in `soujo map code` instead of joining what follows, so `import` and `from` are found when one stands between them. Letters above ASCII still hold a name together, so `モジュール.import('./a.js')` is still skipped as a member call.
 
 ## 0.3.1 — 2026-09-15
 
