@@ -86,7 +86,7 @@ export function mapCode(cwd, dir, limits = MAP_LIMITS) {
             unreadable += 1;
             continue;
         }
-        files.push({ path, imports: rules.imports(text) });
+        files.push({ path, imports: rules.imports(path, text) });
     }
     return importGraph(rules, files, scanNotes({ unreadable, truncated: scan.truncated }, limits), limits);
 }

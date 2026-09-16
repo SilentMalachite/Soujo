@@ -144,3 +144,17 @@
 | T2〜T6 | I1〜I8 の対になる例、CRLF・`\`＋LS・文字クラス内の行終端、非 ASCII 空白5種と `from` の両側、長文の末尾の import が未固定 | 4テストに追加（`import　{ a }　from　'./x'`、U+1680・U+2003 を含む表、30000行のコメントの後の import を assert） |
 | D1 | CHANGELOG がブロック／オブジェクトの判別範囲を広く書きすぎている | 宣言の本体に限定し、ラベル・`case` の後が今も誤判定であることを英日に明記 |
 - 残り（既存・この層の範囲外。多くは L28〜L30 か、近似字句解析の限界）: I4（ラベル・`case` の後のブロック）・I6（改行を捨てるので ASI の文境界を失う）・I9（`obj.return / 2` などキーワードと同綴りのプロパティ）・I10（`1. / 2`）・I11（TS の後置 `!`）・I12（識別子内の Unicode escape）・I13（テンプレートの生 CR を LF に正規化しない）・I14（`\u{00000061}` のような先頭ゼロ付き）・I15（`this.#import('./x')`）・I16（`` from`./x` `` のタグ付きテンプレート）・I17（JSX 本文 → L28）・I18（閉じていないリテラルを固定文字列として返す）・I19（U+200B。不正入力のみ）・I20（正規表現のフラグを独立した語として読む）・I21（`.cjs` の非 strict な legacy octal escape）
+
+## L28 追加レビュー（reviewer 20件・layer コミットの前に直した分）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| 1 | 2つ目以降の JSX の `{ }` の先頭が式の位置と判定されず、`<Box x={y} p={/from './a.js'/} />` の正規表現をコードとして読む | `{ }` を開くとき `{kind:'punct', value:'('}` を積む（`regexAllowed` は true、`opensBlock` と `endsOperand` は false になる） |
+| 4 | `export default <div/>` が要素として検出されない（`default` は REGEX_AFTER にない） | `jsxAllowed = regexAllowed(...) \|\| isWord(tokens.at(-1), 'default')` を足し、検出をこちらに切り替え |
+| 5 | タグでないと分かった要素の属性の `{ }` を二重に読み、specifier が2回返る | `JsxElement.tokens`（push 時の `tokens.length`）へ切り詰めてから読み直す |
+| 2, 3 | CHANGELOG の「TypeScript も `.tsx` ではそう読む」が事実と違う。閉じない要素が残りを飲み込む帰結が書かれていない | 例を `type X = <T>(a: T) => T` に替え、「その後の `{ }` の外の import は全部消える」を英日に明記。修正（最外要素まで巻き戻して読み直す）は `'<p>'.repeat(n)` で O(n²) になるので見送る |
+| 6, 7, 8 | 既定を `.tsx` にしたので JSX オフの `<` を固定するテストが消えた。`${` と `{` の順序テストが RED でない。本文のアポストロフィ・`return <div>`・`export default`・operand・拡張子の配線が未固定 | 152行を `.ts` でも回し、同じ深さで交互に入れ子にする1行を足し、8件を2テストに追加し、`map code` に `.tsx` と `.ts` を並べるテストを新設 |
+| 11, 12, 13 | `elements.at(-1) as JsxElement` のキャスト。戻り値の `open?: true` が `scanTemplate` の形と違い `JsxElement.open` と紛らわしい。名前の先頭文字の規則が2か所 | `tokens` を渡して `scanJsx` の中で積み、戻り値を `{next, brace}` に。`element === undefined` は早期 return。`startsJsxName` に括り出す |
+| 15 | 開始タグの中のコメントと `<br / >` が名前判定で落ちて要素が壊れる | attr モードに `/*…*/` のスキップと、`/` と `>` の間の空白を足す |
+| 17 | `NO_JSX` が拒否リストなので、未知の拡張子が「残りを飲み込む」側に倒れる | `JSX_EXTENSIONS`（`.tsx`/`.jsx`/`.js`/`.mjs`/`.cjs`）の許可リストに |
+| 9, 10, 14, 16, 19 | `regexAllowed` の `before` の説明が `/` だけ。`scriptTokens` の `jsx` が doc にない。`NO_JSX` の置き場。名前の `-`。閉じタグの名前を照合しない。壊れた波括弧で `closing()` がずれる | コメントを5か所直し、定数を字句解析の定数群へ移した |
+- 残り: #3 の本体（O(n²) を避けられないので既知の限界として文書化）・#18（SPEC は L27 と同じく CHANGELOG のみに留める）・#20（差分を取り直してから渡す運用）

@@ -33,13 +33,14 @@ function write(root: string, files: Record<string, string>): string {
   return root;
 }
 
-function imports(text: string): string[] {
-  return RULES.imports(text);
+// Read as a .tsx file, where JSX is on, unless another path is given.
+function imports(text: string, from = 'src/a.tsx'): string[] {
+  return RULES.imports(from, text);
 }
 
 // Edges of importGraph as "from --> to" paths, for files given as path → text.
 function edges(files: Record<string, string>): string[] {
-  const scanned = Object.entries(files).map(([path, text]) => ({ path, imports: imports(text) }));
+  const scanned = Object.entries(files).map(([path, text]) => ({ path, imports: imports(text, path) }));
   const lines = importGraph(RULES, scanned);
   const paths = new Map(lines.flatMap((line) => [...line.matchAll(/^ {2}(\S+)\["(.*)"\]$/g)].map((match) => [match[1], match[2]] as const)));
   return lines.flatMap((line) => {
@@ -164,7 +165,64 @@ test('TS/JS imports tell a division and a JSX closing tag from a regex, and a re
     "} else if (a) /from '.\\/fake-else-if.js'/.test(s);",
     "obj.if(a) / 2; import('./after-member.js');",
   ].join('\n');
-  assert.deepEqual(imports(text), ['./after-jsx.js', './after-self-closing.js', './after-increment.js', './after-decrement.js', './after-paren.js', './after-member.js']);
+  const found = ['./after-jsx.js', './after-self-closing.js', './after-increment.js', './after-decrement.js', './after-paren.js', './after-member.js'];
+  // The same either way: with JSX off the "</" and the "<" are read as punctuation instead of as an element's tags.
+  for (const from of ['a.tsx', 'a.ts']) assert.deepEqual(imports(text, from), found, from);
+});
+
+test('TS/JS imports skip JSX text and attribute values and read only what its braces hold', () => {
+  const text = [
+    "const page = <div>import { a } from './fake-text.js'</div>;",
+    'const tag = <Icon from=\'./fake-attr.js\' import="./fake-quoted.js" />;',
+    "const dashed = <a.b data-x='./fake-dash.js'>require('./fake-child.js')</a.b>;",
+    "const wrap = <p title='top\nfrom \"./fake-multiline.js\"'>ok</p>;",
+    "const held = <Box>{import('./held.js')}</Box>;",
+    'const spread = <Box {...props} on={() => import(\'./handler.js\')} />;',
+    "const noted = <Box>{/* import('./fake-comment.js') */}</Box>;",
+    'const list = <><li>from "./fake-fragment.js"</li>{import(`./frag.js`)}</>;',
+    "const deep = <Outer><Inner alt='./fake-inner.js'>{import('./deep.js')}</Inner>text</Outer>;",
+    "const apostrophe = <p>don't take from './fake-quote.js'</p>;",
+    "function render() { return <div>from './fake-return.js'</div>; }",
+    "export default <p>from './fake-default.js'</p>;",
+    "const spaced = <br / >; import('./after-spaced.js');",
+    'const commented = <Box /* from \'./fake-tag-comment.js\' */ x={1} />;',
+    "const second = <Box x={y} p={/from '.\\/fake-regex.js'/} />;",
+    "const nestedBrace = <Box style={{a: 1}} k={import('./in-object.js')} />;",
+    "import('./after-element.js');",
+  ].join('\n');
+  assert.deepEqual(imports(text), ['./held.js', './handler.js', './frag.js', './deep.js', './after-spaced.js', './in-object.js', './after-element.js']);
+});
+
+test('TS/JS imports leave an operand where a JSX element ends, so a "/" after it divides', () => {
+  assert.deepEqual(imports("const n = <a/> / 2; import('./after-division.js');"), ['./after-division.js']);
+  assert.deepEqual(imports("const o = <a>t</a> / 2; import('./after-children.js');"), ['./after-children.js']);
+});
+
+test('TS/JS imports read "<x>" as a type in .ts, .mts, and .cts and as a JSX element in the other extensions', () => {
+  const text = "const s = <string>text from './fake.js'; import('./after.js');";
+  for (const from of ['a.ts', 'a.mts', 'a.cts', 'types.d.ts', 'A.TS']) assert.deepEqual(imports(text, from), ['./fake.js', './after.js'], from);
+  for (const from of ['a.tsx', 'a.jsx', 'a.js', 'a.mjs', 'a.cjs', 'a.JSX']) assert.deepEqual(imports(text, from), [], from);
+});
+
+test('TS/JS imports read again from after a "<" that no tag follows, and stop at an element left open', () => {
+  assert.deepEqual(imports("const f = <T,>(x: T) => import('./generic.js');"), ['./generic.js']);
+  assert.deepEqual(imports("const g = <div; import('./after-broken.js');"), ['./after-broken.js']);
+  assert.deepEqual(imports("const h = <p title='unclosed>import('./after-unterminated.js');"), []);
+  assert.deepEqual(imports("const i = <div>text; import('./fake-unclosed.js');"), []);
+  // A generic function type where a value can start reads as an element, and nothing closes it: every import after it is lost.
+  assert.deepEqual(imports("const j = <T>(x: T) => import('./fake-generic.js');"), []);
+  assert.deepEqual(imports("type X = <T>(a: T) => T;\nimport('./fake-after-type.js');"), []);
+  // Inside another element the "<" is text, not punctuation, so what follows it is no more code than the rest.
+  assert.deepEqual(imports("const k = <p>a <b, from './fake-nested.js' {import('./nested.js')}</p>;"), ['./nested.js']);
+  // What a rejected element's braces held is read once, not twice, since the text they hold is read again as code.
+  assert.deepEqual(imports("const l = <T a={import('./once.js')},>(x: T) => x;"), ['./once.js']);
+});
+
+test('TS/JS imports keep a template substitution and a JSX brace in the order they were opened', () => {
+  assert.deepEqual(imports("const a = `${<b>{import('./in-jsx.js')}</b>}`; import('./after-template.js');"), ['./in-jsx.js', './after-template.js']);
+  assert.deepEqual(imports("const b = <p>{`${import('./in-template.js')}`}</p>; import('./after-element.js');"), ['./in-template.js', './after-element.js']);
+  // The two alternate at the same brace depth, so only the order they were opened in tells which one a "}" closes.
+  assert.deepEqual(imports("const c = `${<p a={`${import('./in.js')}`}>t</p>}`; import('./after.js');"), ['./in.js', './after.js']);
 });
 
 test('TS/JS imports read a "/" after a declaration body as a regex and after a value as a division', () => {
@@ -345,8 +403,14 @@ test('importGraph scans long and repetitive input in linear time', () => {
     `// ${'x'.repeat(100_000)}`,
     `// x${String.fromCharCode(0x0d)}`.repeat(30_000),
     'あ'.repeat(100_000),
+    // JSX: an element read again as code every time, one nested in the next, and a tag and an attribute value left open.
+    '<a,'.repeat(50_000),
+    '<a<'.repeat(50_000),
+    '<p>{'.repeat(30_000),
+    `<a ${'y '.repeat(50_000)},`,
+    "<p title='".repeat(30_000),
   ];
-  for (const text of inputs) importGraph(RULES, [{ path: 'a.ts', imports: imports(text) }]);
+  for (const text of inputs) importGraph(RULES, [{ path: 'a.tsx', imports: imports(text) }]);
   // The end of a long input is still read: a scan that swallowed a line or stopped early would drop this one.
   assert.deepEqual(imports(`// x${String.fromCharCode(0x0d)}`.repeat(30_000) + "import './end.js';"), ['./end.js']);
   assert.ok(performance.now() - started < 2000, `took ${Math.round(performance.now() - started)}ms`);
@@ -404,6 +468,16 @@ test('map code scans the project root by default, skipping output directories, d
   assert.deepEqual(mapCode(dir, 'src').slice(2, 4), ['  m_a_ts["a.ts"]', '  m_cli_ts["cli.ts"]']);
   const outside = write(temp(t), { 'sub/a.ts': '', 'b.ts': '' });
   assert.deepEqual(mapCode(join(outside, 'sub')), ['graph LR', NOTE, '  m_a_ts["a.ts"]']);
+});
+
+test('map code reads each file by its own extension, so a .tsx text is no edge and a .ts "<x>" is a type', (t) => {
+  const dir = write(project(temp(t)), {
+    'src/page.tsx': "const v = <p>from './fake.js'</p>;\nimport('./b.js');\n",
+    'src/types.ts': "const s = <string>text from './fake.js';\n",
+    'src/b.ts': '',
+    'src/fake.ts': '',
+  });
+  assert.deepEqual(mapCode(join(dir, 'src')).filter((line) => line.includes('-->')), ['  m_src_page_tsx --> m_src_b_ts', '  m_src_types_ts --> m_src_fake_ts']);
 });
 
 test('map code draws a directory tree when the main language has no import rules', (t) => {

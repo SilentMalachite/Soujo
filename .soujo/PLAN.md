@@ -27,7 +27,7 @@
 - [x] L25 plan-parse — 空の層名を行番号付きで拒否し、完了条件のない層を layer done が拒否し、コードフェンス内の項目を無視し、C1 制御文字を空白にすることがテストで通る（#25 #26 #27 #28）
 - [x] L26 next-log — 新しい書庫の前文を rotate が検証し、NEXT の確認と PLAN の完了条件の違いを next check が警告し、無効な NEXT を next show が1行で診断し、PLAN を読めなくても他の警告が出ることがテストで通り、#40 の制約が SPEC に載る（#12 #18 #37 #38 #40）
 - [x] L27 map-lexer — ブロックの後の正規表現、CR・U+2028・U+2029 で終わる行コメント、全角空白や NBSP の後の import を map code が正しく扱うことがテストで通る（#14 #15 #16）
-- [ ] L28 map-jsx — JSX の本文と属性の文字列を map code が import として拾わないことがテストで通る（#13）
+- [x] L28 map-jsx — JSX の本文と属性の文字列を map code が import として拾わないことがテストで通る（#13）
 - [ ] L29 map-resolve — query・fragment・%エンコード付きの相対 specifier を解決し、大小文字を区別する FS では補完せず、読み込むバイト数に上限と注記があり、ID と比較順のコメントが実装と合うことがテストで通る（#17 #29 #30 #43 #44）
 - [ ] L30 privacy-ci — privacy テストが Codex の URL・履歴の blob・全 ref のメッセージを検査し、自身の除外が合成 fixture に限られ、docs テストが SPEC を含み、npm test がシェルの glob に頼らないことがテストで通る（#20 #21 #33 #34 #35 #36）
 - [ ] L31 skills-docs — review と map の soujo 必須条件と layer コミットがないときの差分基準がスキルに書かれ、SKILL と CLI の境界の規約が SPEC(+ja)・CLAUDE.md・AGENTS.md で揃い、skills テストが通る（#19 #31 #32）
