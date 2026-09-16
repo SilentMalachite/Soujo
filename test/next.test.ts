@@ -178,6 +178,24 @@ test('next check and next set point at the line of an empty or control-character
   assert.equal(readFileSync(join(dir, '.soujo', 'NEXT.md'), 'utf8'), NEXT);
 });
 
+test('next check warns about a layer left without a completion condition, before layer done refuses it', (t) => {
+  const plan = '- [x] L1 scaffold — build\n- [ ] L2 state\n- [ ] L3 io —\n';
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': plan });
+  assert.deepEqual(nextCheck(dir, false), [
+    'soujo 警告: PLAN.md の2行目の層「L2 state」に完了条件がない / PLAN.md の3行目の層「L3 io」に完了条件がない',
+  ]);
+  // next set writes anyway: an unwritten condition is not a reason to lose the next step.
+  nextSet(dir, { layer: 'L2 state', premise: 'p', check: 'c' });
+  assert.match(readNext(dir), /^次: L2 state$/m);
+});
+
+test('next check keeps its one line bounded, naming the first problems and counting the rest', (t) => {
+  const dir = project(temp(t), { 'PLAN.md': '- [ ] \n- [ ] \n- [ ] \n- [ ] \n- [ ] \n' });
+  assert.deepEqual(nextCheck(dir, false), [
+    'soujo 警告: NEXT.md がない / PLAN.md の1行目の層名が空 / PLAN.md の2行目の層名が空 / PLAN.md の3行目の層名が空 / ほか2件',
+  ]);
+});
+
 test('next show --hook and next check never read a state file through a symlink leaving the project', { skip: process.platform === 'win32' }, (t) => {
   const secret = join(temp(t), 'secret');
   writeFileSync(secret, '次: token-123\n');

@@ -98,7 +98,9 @@ export function clip(text: string, max: number = CLIP): string {
 }
 
 // A layer name as one shell word: single-quoted, as the skills spell it, so that spaces and `$(…)` in it stay literal.
-// Layer names are one line without control characters (see validatePlan), which printable() would otherwise flatten.
+// `next set`, `next check`, and `layer done` hold layer names to one line without control characters (see validatePlan);
+// `resume` and `close` read PLAN without that check, so a name carrying one reaches a command they suggest, where printable()
+// flattens it and the pasted line no longer matches. `next check` warns about that name at the same time.
 function quoted(text: string): string {
   return `'${text.split("'").join(String.raw`'\''`)}'`;
 }

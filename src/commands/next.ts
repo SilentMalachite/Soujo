@@ -8,6 +8,7 @@ import {
   formatDate,
   formatNext,
   logMonths,
+  missingConditions,
   rotateLog,
   nextStatus,
   parseNext,
@@ -93,6 +94,9 @@ function problems(dir: string, now: Date): string[] {
     if (status?.state === 'skipped') found.push(`NEXT.md の次「${layer}」より前の「${status.unfinished.layer}」が PLAN で未完了`);
   }
   found.push(...validatePlan(plan ?? ''));
+  // A warning, not a refusal like layer done's: an existing PLAN written before the rule still resumes, and the layer is
+  // named now rather than after the half hour of work it takes to reach layer done.
+  found.push(...missingConditions(plan ?? ''));
   found.push(...logProblems(dir, now));
   found.push(...changeProblems(dirname(dir)));
   return found;
@@ -109,6 +113,9 @@ function changeProblems(root: string): string[] {
   }
 }
 
+// How many problems the warning names before counting the rest, so that the line stays readable where a hook shows it.
+const SHOWN_PROBLEMS = 4;
+
 /** One warning line when the project is not safely resumable; nothing otherwise or outside Soujo projects. Never throws. */
 export function nextCheck(cwd: string, hook: boolean, now: Date = new Date()): string[] {
   let found: string[];
@@ -120,6 +127,8 @@ export function nextCheck(cwd: string, hook: boolean, now: Date = new Date()): s
     found = [`確認できない: ${error instanceof Error ? error.message : String(error)}`];
   }
   if (found.length === 0) return [];
-  const line = `soujo 警告: ${found.join(' / ')}`;
+  // Problems named by line are one per broken line, so a badly broken PLAN would otherwise stretch this one line without end.
+  const shown = found.length > SHOWN_PROBLEMS ? [...found.slice(0, SHOWN_PROBLEMS), `ほか${found.length - SHOWN_PROBLEMS}件`] : found;
+  const line = `soujo 警告: ${shown.join(' / ')}`;
   return [hook ? JSON.stringify({ systemMessage: line }) : line];
 }

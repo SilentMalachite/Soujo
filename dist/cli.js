@@ -275,8 +275,9 @@ function homePath() {
 // Warnings and errors reach the same screens and get copied from them, so both hide the home directory (SPEC §6).
 function shown(lines) {
     const [home, foldCase] = homePath();
-    // Values from files can carry CR or other controls; each returned line stays one terminal line.
-    return `${lines.map((line) => hideHome(printable(line), home, foldCase)).join('\n')}\n`;
+    // Values from files can carry CR or other controls; each returned line stays one terminal line. hideHome runs first, so a
+    // control character inside the home path cannot keep the path from being recognized and hidden.
+    return `${lines.map((line) => printable(hideHome(line, home, foldCase))).join('\n')}\n`;
 }
 function main(argv) {
     try {

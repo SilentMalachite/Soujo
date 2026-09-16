@@ -50,15 +50,19 @@ const NEXT_KEYS = [
 
 const NEXT_LINE = /^(次|前提|確認|注意|effort)\s*[:：]\s*(.*)$/;
 // dotAll, so that a line separator pasted into a layer name (U+2028/2029, which "." would stop at) keeps the item readable
-// and validatePlan can report it instead of the line being dropped without a word.
+// and validatePlan can report it instead of the line being dropped without a word. An item indented by four spaces or more is
+// still an item: a code fence is the only container of examples PLAN.md has (SPEC §決定), not an indented code block.
 const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/s;
 // A code fence as CommonMark writes one: three or more backticks or tildes indented by at most three spaces, with the info
-// string after an opening fence and nothing but spaces after a closing one. dotAll as in PLAN_ITEM, so that a line ending in
-// U+2028/2029 is still read as a fence instead of matching nothing.
-const PLAN_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/s;
+// string after an opening fence and nothing but spaces after a closing one. A backtick fence's info string cannot hold a
+// backtick, so a line of inline code (`` `x` ``) is not a fence. dotAll as in PLAN_ITEM, so that a line ending in U+2028/2029
+// is still read as a fence instead of matching nothing.
+const PLAN_FENCE = /^ {0,3}(?:(`{3,})[ \t]*([^`]*)|(~{3,})[ \t]*(.*))$/s;
 // Standalone tokens between the layer name and its completion condition. "—" is canonical; the rest are common typing variants.
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
-const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
+// dotAll as in PLAN_ITEM: a layer name written by hand with a line separator in it is still read as a heading, instead of its
+// lines being taken for the entry before it.
+const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/s;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 // Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, the C1 controls
@@ -173,8 +177,17 @@ function splitItem(body: string): { layer: string; condition: string } {
 interface PlanScan {
   /** Every checklist item outside a code fence, with the 1-based line it is on, in order. */
   items: { item: PlanItem; line: number }[];
+  /** The text split at "\n", as the lines the items are numbered against, so that markDone need not split it again. */
+  lines: string[];
   /** The line of a fence never closed, which hides every item after it; undefined when every fence closed. */
   unclosed?: number;
+}
+
+/** A fence line's marker and info string, or undefined when the line is not one (see PLAN_FENCE). */
+function fenceOf(line: string): { marker: string; info: string } | undefined {
+  const match = PLAN_FENCE.exec(line);
+  if (match === null) return undefined;
+  return match[1] !== undefined ? { marker: match[1], info: match[2] ?? '' } : { marker: match[3] ?? '', info: match[4] ?? '' };
 }
 
 /**
@@ -185,24 +198,28 @@ interface PlanScan {
  */
 function planItems(text: string): PlanScan {
   const items: PlanScan['items'] = [];
-  let fence: string | undefined;
-  let opened = 0;
-  text.split('\n').forEach((raw, index) => {
-    const line = raw.replace(/\r$/, '');
-    const fenced = PLAN_FENCE.exec(line);
+  const lines = text.split('\n');
+  let open: { marker: string; line: number } | undefined;
+  lines.forEach((raw, index) => {
+    const fence = fenceOf(raw.replace(/\r$/, ''));
+    if (open !== undefined) {
+      const closes = fence !== undefined && fence.marker[0] === open.marker[0] && fence.marker.length >= open.marker.length;
+      if (closes && fence.info === '') open = undefined;
+      return;
+    }
     if (fence !== undefined) {
-      const marker = fenced?.[1] ?? '';
-      if (marker[0] === fence[0] && marker.length >= fence.length && (fenced?.[2] ?? '') === '') fence = undefined;
+      open = { marker: fence.marker, line: index + 1 };
       return;
     }
-    if (fenced) {
-      [fence, opened] = [fenced[1], index + 1];
-      return;
-    }
-    const match = matchItem(line);
+    const match = matchItem(raw.replace(/\r$/, ''));
     if (match) items.push({ item: { ...splitItem(match[2] ?? ''), done: match[1] !== ' ' }, line: index + 1 });
   });
-  return fence === undefined ? { items } : { items, unclosed: opened };
+  return open === undefined ? { items, lines } : { items, lines, unclosed: open.line };
+}
+
+/** Checklist items of PLAN.md with the 1-based line each is on; other lines and code fences are ignored (see planItems). */
+export function planLayers(text: string): { item: PlanItem; line: number }[] {
+  return planItems(text).items;
 }
 
 /** Checklist items of PLAN.md in order; other lines and code fences are ignored (see planItems). */
@@ -224,14 +241,37 @@ export function validatePlan(text: string): string[] {
   if (unclosed !== undefined) problems.add(`PLAN.md の${unclosed}行目のコードフェンスが閉じていない（以降の層が読まれない）`);
   for (const { item, line } of items) {
     const { layer } = item;
-    if (layer === '') problems.add(`PLAN.md の${line}行目の層名が空`);
-    else if (printable(layer) !== layer) problems.add(`PLAN.md の${line}行目の層名に制御文字がある`);
-    else if (PHASES.includes(layer)) problems.add(`PLAN.md の層名「${layer}」がフェーズ名と同じ`);
-    else if (layer === MILESTONE) problems.add(`PLAN.md の層名「${layer}」が LOG の節目と同じ`);
-    else if (seen.has(layer)) problems.add(`PLAN.md の層「${layer}」が重複`);
-    else seen.add(layer);
+    // Two empty names are two lines to fix, not a repeated layer name, so they are the one kind left out of the count.
+    if (layer === '') {
+      problems.add(`PLAN.md の${line}行目の層名が空`);
+      continue;
+    }
+    if (printable(layer) !== layer) {
+      problems.add(`PLAN.md の${line}行目の層名に制御文字がある`);
+    } else if (PHASES.includes(layer)) {
+      problems.add(`PLAN.md の層名「${layer}」がフェーズ名と同じ`);
+      continue;
+    } else if (layer === MILESTONE) {
+      problems.add(`PLAN.md の層名「${layer}」が LOG の節目と同じ`);
+      continue;
+    }
+    // Counted by the name as it prints, so that a repeat through control characters is reported in the same run, not the next.
+    const name = printable(layer).trim();
+    if (seen.has(name)) problems.add(`PLAN.md の層「${name}」が重複`);
+    else seen.add(name);
   }
   return [...problems];
+}
+
+/**
+ * Layers whose PLAN.md item has no completion condition, by line; empty when every layer has one. A warning rather than a
+ * refusal, so that an existing PLAN still resumes, while `layer done` (which has nothing to close the layer against) refuses.
+ * Names validatePlan reports by line are left to it: neither can be quoted back here either.
+ */
+export function missingConditions(text: string): string[] {
+  return planItems(text)
+    .items.filter(({ item }) => item.condition === '' && item.layer !== '' && printable(item.layer) === item.layer)
+    .map(({ item, line }) => `PLAN.md の${line}行目の層「${item.layer}」に完了条件がない`);
 }
 
 /** "[x] <layer>" or "[ ] <layer>", as plan list and map plan show a layer. */
@@ -269,12 +309,10 @@ export function newlyDone(before: PlanItem[], after: PlanItem[]): PlanItem[] {
 /** PLAN.md text with the layer checked. Already checked layers are left as is; unknown layers throw. */
 export function markDone(text: string, layer: string): string {
   const name = layer.trim();
-  const found = planItems(text).items.find(({ item }) => item.layer === name);
+  const { items, lines } = planItems(text);
+  const found = items.find(({ item }) => item.layer === name);
   if (found === undefined) throw new Error(`PLAN.md に層「${layer}」がない`);
-  const lines = text.split('\n');
-  const index = found.line - 1;
-  lines[index] = (lines[index] ?? '').replace(/\[[ xX]\]/, '[x]');
-  return lines.join('\n');
+  return lines.map((line, index) => (index === found.line - 1 ? line.replace(/\[[ xX]\]/, '[x]') : line)).join('\n');
 }
 
 /** text with every control character (line breaks included) turned into a space, so it prints as one terminal line. */

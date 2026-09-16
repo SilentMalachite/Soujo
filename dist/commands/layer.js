@@ -2,7 +2,7 @@
 import { dirname } from 'node:path';
 import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
 import { gitAddedFiles, gitFindCommit, gitLastCommit } from '../git.js';
-import { appendLog, formatDate, logLines, markDone, parsePlan, validatePlan } from '../state.js';
+import { appendLog, formatDate, logLines, markDone, parsePlan, planLayers, validatePlan } from '../state.js';
 import { INTERRUPTED, INTERRUPTION_NOTE, LAYER_COMMIT, commitRecords, headState, requireCommittable, requireNext, resumable, uncommittedLogs, } from './shared.js';
 const SHOWN_FILES = 5;
 function isChecked(plan, layer) {
@@ -52,9 +52,10 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     // "PLAN.md を" rather than "PLAN.md の層名を": a problem can be an unclosed code fence, which is not a name.
     if (planProblems.length > 0)
         throw new Error(`${planProblems.join('、')}（PLAN.md を直してから）`);
-    const item = parsePlan(plan).find((candidate) => candidate.layer === name);
-    if (item === undefined)
+    const found = planLayers(plan).find((candidate) => candidate.item.layer === name);
+    if (found === undefined)
         throw new Error(`PLAN.md に層「${name}」がない`);
+    const { item, line } = found;
     const subject = `${LAYER_COMMIT}${name}`;
     const committed = gitFindCommit(root, subject);
     if (committed !== undefined)
@@ -64,8 +65,9 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     }
     // After the committed checks, so that a layer already closed is still reported as closed when its condition was since removed.
     // Without a condition there is nothing to close the layer against, and the 確認: line of the next NEXT.md would be blank.
+    // By line like the other PLAN problems, since the line is what there is to fix.
     if (item.condition === '')
-        throw new Error(`PLAN.md の層「${name}」に完了条件がない（「— <完了条件>」を書いてから）`);
+        throw new Error(`PLAN.md の${line}行目の層「${name}」に完了条件がない（「— <完了条件>」を書いてから）`);
     requireNextStep(dir, name);
     if (note !== undefined && INTERRUPTION_NOTE.test(logLines([note])[0] ?? '')) {
         throw new Error('--note を「中断:」で始めない（close の中断の記録と区別できなくなる）');

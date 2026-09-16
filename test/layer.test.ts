@@ -85,6 +85,8 @@ test('layer done refuses while PLAN repeats a layer name, names a layer like a p
     [`${PLAN}\`\`\`\n`, /^Error: PLAN\.md の6行目のコードフェンスが閉じていない（以降の層が読まれない）（PLAN\.md を直してから）$/],
     [`${PLAN}- [ ] spec — SPEC\n`, /^Error: PLAN\.md の層名「spec」がフェーズ名と同じ（/],
     [`${PLAN}- [ ] 節目 — LOG\n`, /^Error: PLAN\.md の層名「節目」が LOG の節目と同じ（/],
+    [`${PLAN}- [ ] \n`, /^Error: PLAN\.md の6行目の層名が空（PLAN\.md を直してから）$/],
+    [`${PLAN}- [ ] L9\tx — a\n`, /^Error: PLAN\.md の6行目の層名に制御文字がある（PLAN\.md を直してから）$/],
   ];
   for (const [plan, error] of plans) {
     writeFileSync(join(dir, '.soujo', 'PLAN.md'), plan);
@@ -100,7 +102,7 @@ test('layer done refuses a layer without a completion condition and writes nothi
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), plan);
   assert.throws(
     () => layerDone(dir, ' L2 state ', 'note', NOW),
-    /^Error: PLAN\.md の層「L2 state」に完了条件がない（「— <完了条件>」を書いてから）$/,
+    /^Error: PLAN\.md の4行目の層「L2 state」に完了条件がない（「— <完了条件>」を書いてから）$/,
   );
   assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'LOG.md')], [plan, LOG]);
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L1 scaffold');
@@ -109,9 +111,18 @@ test('layer done refuses a layer without a completion condition and writes nothi
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), dangling);
   assert.throws(
     () => layerDone(dir, 'L2 state', 'note', NOW),
-    /^Error: PLAN\.md の層「L2 state」に完了条件がない（「— <完了条件>」を書いてから）$/,
+    /^Error: PLAN\.md の4行目の層「L2 state」に完了条件がない（「— <完了条件>」を書いてから）$/,
   );
   assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'LOG.md')], [dangling, LOG]);
+
+  // A run stopped after PLAN was checked but before the commit is refused too, so the condition cannot be dropped to get past it.
+  const checked = PLAN.replace('- [ ] L2 state — test', '- [x] L2 state');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), checked);
+  assert.throws(
+    () => layerDone(dir, 'L2 state', 'note', NOW),
+    /^Error: PLAN\.md の4行目の層「L2 state」に完了条件がない（「— <完了条件>」を書いてから）$/,
+  );
+  assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'LOG.md')], [checked, LOG]);
 });
 
 test('layer done ignores a checklist item inside a code fence', (t) => {

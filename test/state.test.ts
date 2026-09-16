@@ -15,6 +15,7 @@ import {
   logMonth,
   logMonths,
   markDone,
+  missingConditions,
   newlyDone,
   nextLayer,
   nextStatus,
@@ -119,7 +120,9 @@ test('printable turns C1 controls into spaces and leaves printable Latin-1 alone
   const [nextLine, apc] = [String.fromCharCode(0x85), String.fromCharCode(0x9f)];
   const [padding, delete_] = [String.fromCharCode(0x80), String.fromCharCode(0x7f)];
   assert.equal(printable(`a${nextLine}b${apc}c${padding}d${delete_}e`), 'a b c d e');
-  assert.equal(printable('a b­cÿd'), 'a b­cÿd');
+  // By code point: NBSP and the soft hyphen, the two printable characters just above U+009F, are invisible in a source file.
+  const latin1 = `a${String.fromCharCode(0xa0)}b${String.fromCharCode(0xad)}c${String.fromCharCode(0xff)}d`;
+  assert.equal(printable(latin1), latin1);
   assert.deepEqual(logLines([`a${nextLine}b`]), ['a b']);
   assert.throws(() => appendLog('', { date: '2026-09-13', layer: `L1${apc}`, lines: [] }), /制御文字なし/);
 });
@@ -404,6 +407,61 @@ test('a code fence line ending in a line separator is still read as a fence', ()
   const text = `- [ ] L1 — a\n\`\`\`ts${lineSeparator}\n- [ ] X — b\n`;
   assert.deepEqual(parsePlan(text).map((item) => item.layer), ['L1']);
   assert.deepEqual(validatePlan(text), ['PLAN.md の2行目のコードフェンスが閉じていない（以降の層が読まれない）']);
+});
+
+test('what opens and closes a fence: indent, info string, line break, and the backtick rule', () => {
+  // Four spaces is an indented code block, not a fence, so neither line is one and the item between them stays a layer.
+  assert.deepEqual(parsePlan('    ```\n- [ ] L1 — a\n    ```\n').map((item) => item.layer), ['L1']);
+  // A fence opened at three spaces is not closed by one indented four, so the layer after it stays hidden.
+  assert.deepEqual(validatePlan('   ~~~\n- [ ] X — b\n    ~~~\n- [ ] L1 — a\n'), [
+    'PLAN.md の1行目のコードフェンスが閉じていない（以降の層が読まれない）',
+  ]);
+  // Only an opening fence takes an info string; the same line does not close one.
+  assert.deepEqual(validatePlan('~~~\n- [ ] X — b\n~~~ x\n- [ ] L1 — a\n'), [
+    'PLAN.md の1行目のコードフェンスが閉じていない（以降の層が読まれない）',
+  ]);
+  // CRLF: the carriage return is not what follows a closing fence.
+  assert.deepEqual(parsePlan('```\r\n- [ ] X — b\r\n```\r\n- [ ] L1 — a\r\n').map((item) => item.layer), ['L1']);
+  // A backtick fence's info string cannot hold a backtick (CommonMark), so an inline-code line does not open one.
+  assert.deepEqual(parsePlan('``` `code` ```\n- [ ] L1 — a\n').map((item) => item.layer), ['L1']);
+  assert.deepEqual(parsePlan('~~~ `code` ~~~\n- [ ] L1 — a\n').map((item) => item.layer), []);
+});
+
+test('markDone checks the layer outside a fence, not a line of the same name inside one', () => {
+  const text = ['```', '- [ ] L1 — example', '```', '- [ ] L1 — a', ''].join('\n');
+  assert.equal(markDone(text, 'L1'), text.replace('- [ ] L1 — a', '- [x] L1 — a'));
+});
+
+test('validatePlan reports a layer name repeated through control characters, without a second run', () => {
+  const tab = '\t';
+  assert.deepEqual(validatePlan(`- [ ] L1${tab}x — a\n- [ ] L1${tab}x — b\n`), [
+    'PLAN.md の1行目の層名に制御文字がある',
+    'PLAN.md の2行目の層名に制御文字がある',
+    'PLAN.md の層「L1 x」が重複',
+  ]);
+  assert.deepEqual(validatePlan(`- [ ] L1 x — a\n- [ ] L1${tab}x — b\n`), [
+    'PLAN.md の2行目の層名に制御文字がある',
+    'PLAN.md の層「L1 x」が重複',
+  ]);
+});
+
+test('missingConditions names the line of every layer left without a completion condition', () => {
+  assert.deepEqual(missingConditions('- [x] L1 — a\n- [ ] L2 state\n- [ ] L3 io —\n'), [
+    'PLAN.md の2行目の層「L2 state」に完了条件がない',
+    'PLAN.md の3行目の層「L3 io」に完了条件がない',
+  ]);
+  // Names validatePlan already reports by line are left to it: neither could be quoted back here.
+  assert.deepEqual(missingConditions(`- [ ] \n- [ ] L2\tstate\n`), []);
+  assert.deepEqual(missingConditions('```\n- [ ] X\n```\n'), []);
+});
+
+test('parseLog reads a heading whose layer name carries a line separator', () => {
+  const lineSeparator = String.fromCharCode(0x2028);
+  const log = `# LOG\n\n## 2026-09-13 L1\na\n\n## 2026-09-14 L2${lineSeparator}x\nb\n`;
+  assert.deepEqual(parseLog(log).map((entry) => [entry.layer, entry.lines]), [
+    ['L1', ['a']],
+    [`L2${lineSeparator}x`, ['b']],
+  ]);
 });
 
 test('parsePlan reads a layer whose separator has no completion condition after it', () => {

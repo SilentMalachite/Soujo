@@ -2,7 +2,7 @@
 import { dirname } from 'node:path';
 import { findStateDir, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitStatus, gitToplevel } from '../git.js';
-import { PHASES, formatDate, formatNext, logMonths, rotateLog, nextStatus, parseNext, parsePlan, validateNext, validatePlan, } from '../state.js';
+import { PHASES, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, validateNext, validatePlan, } from '../state.js';
 /** NEXT.md as lines. With hook, silent when there is nothing to show (no project, no file, unreadable). */
 export function nextShow(cwd, hook) {
     try {
@@ -82,6 +82,9 @@ function problems(dir, now) {
             found.push(`NEXT.md の次「${layer}」より前の「${status.unfinished.layer}」が PLAN で未完了`);
     }
     found.push(...validatePlan(plan ?? ''));
+    // A warning, not a refusal like layer done's: an existing PLAN written before the rule still resumes, and the layer is
+    // named now rather than after the half hour of work it takes to reach layer done.
+    found.push(...missingConditions(plan ?? ''));
     found.push(...logProblems(dir, now));
     found.push(...changeProblems(dirname(dir)));
     return found;
@@ -98,6 +101,8 @@ function changeProblems(root) {
         return [`未コミットの変更を確認できない: ${error.message}`];
     }
 }
+// How many problems the warning names before counting the rest, so that the line stays readable where a hook shows it.
+const SHOWN_PROBLEMS = 4;
 /** One warning line when the project is not safely resumable; nothing otherwise or outside Soujo projects. Never throws. */
 export function nextCheck(cwd, hook, now = new Date()) {
     let found;
@@ -112,6 +117,8 @@ export function nextCheck(cwd, hook, now = new Date()) {
     }
     if (found.length === 0)
         return [];
-    const line = `soujo 警告: ${found.join(' / ')}`;
+    // Problems named by line are one per broken line, so a badly broken PLAN would otherwise stretch this one line without end.
+    const shown = found.length > SHOWN_PROBLEMS ? [...found.slice(0, SHOWN_PROBLEMS), `ほか${found.length - SHOWN_PROBLEMS}件`] : found;
+    const line = `soujo 警告: ${shown.join(' / ')}`;
     return [hook ? JSON.stringify({ systemMessage: line }) : line];
 }
