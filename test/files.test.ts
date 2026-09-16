@@ -23,6 +23,7 @@ import {
   createFile,
   ensureStateDir,
   findStateDir,
+  foldsCase,
   hideHome,
   isDotGit,
   isRunning,
@@ -285,6 +286,31 @@ test('hideHome shows a path under the home directory as ~, leaving every other p
   }
   // Regular expression characters in the path are not patterns.
   assert.equal(hideHome('/p/a.b/p', '/p/axb', false), '/p/a.b/p');
+  // A path ends at the punctuation a message puts after it, not only at a separator.
+  for (const after of [':', '；', ';', '>', '：', '、', ')', '」', ' ']) {
+    assert.equal(hideHome(`/p/aya${after}x`, '/p/aya', false), `~${after}x`, after);
+  }
+  // Windows spells the same directory with either separator.
+  assert.equal(hideHome('C:/p/aya/x', 'C:\\p\\aya', false), '~/x');
+  assert.equal(hideHome('C:\\p\\aya\\x', 'C:/p/aya', false), '~\\x');
+  // A UNC root is a root as well.
+  for (const home of ['\\\\server\\share', '//server/share', '\\\\server']) {
+    assert.equal(hideHome(`${home}\\p\\aya`, home, false), `${home}\\p\\aya`, home);
+  }
+});
+
+test('foldsCase measures the file system, and falls back to what the platform usually does', (t) => {
+  const dir = temp(t);
+  const likely = process.platform === 'darwin' || process.platform === 'win32';
+  // Nothing to measure: gone, or a name that is the same in another letter case.
+  assert.equal(foldsCase(join(dir, 'missing')), likely);
+  const digits = join(dir, '1');
+  mkdirSync(digits);
+  assert.equal(foldsCase(digits), likely);
+  // Measured: the same directory under an upper-cased name is one file system that ignores case.
+  const cased = join(dir, 'aya');
+  mkdirSync(cased);
+  assert.equal(foldsCase(cased), existsSync(join(dir, 'AYA')));
 });
 
 test('sameFile takes one inode for one file only when the path, or the size and creation time, agree as well', () => {

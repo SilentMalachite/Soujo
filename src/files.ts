@@ -155,7 +155,7 @@ export function pluginDir(dir: string): string | undefined {
  * whose copy of Soujo carries this repository's .soujo/.
  * The search stops at the git top level (a directory with .git), so a nested repository never uses an outer project.
  */
-export function findStateDir(start: string = process.cwd()): string | undefined {
+export function findStateDir(start: string): string | undefined {
   if (pluginDir(start) !== undefined) return undefined;
   let dir = resolve(start);
   for (;;) {
@@ -168,7 +168,9 @@ export function findStateDir(start: string = process.cwd()): string | undefined 
   }
 }
 
-export function requireStateDir(start: string = process.cwd()): string {
+/** The state directory of the project above start; throws outside Soujo projects. start is always given: cli.ts reports a
+ * current directory it cannot read itself, instead of letting process.cwd() throw here. */
+export function requireStateDir(start: string): string {
   const dir = findStateDir(start);
   if (dir === undefined) throw new Error(`${STATE_DIR}/ が見つからない（soujo init で作る）`);
   return dir;
@@ -257,7 +259,13 @@ export function isDotGit(part: string): boolean {
 }
 
 // The characters a path in a message ends at; a name may hold anything else, so "/p/aya" is not the start of "/p/ayaka".
-const PATH_END = String.raw`[/\\\s'"\`)\]}）」、。,]|$`;
+const PATH_END = String.raw`[/\\\s'"\`)\]}）」、。,:;<>：；]|$`;
+
+// A directory no path can be shown under: a file system root, a drive, or a UNC share, which would turn every path into "~".
+const ROOT = /^$|^[A-Za-z]:$|^[\\/]{2}[^\\/]*([\\/]+[^\\/]*)?$/;
+
+// The separators of an escaped path, so that the same directory matches however the spelling of a message separates it.
+const SEPARATOR = /\\\\|\//g;
 
 function escaped(text: string): string {
   return text.replace(/[\\^$.*+?()[\]{}|]/g, String.raw`\$&`);
@@ -265,15 +273,27 @@ function escaped(text: string): string {
 
 /**
  * text with home shown as "~" (SPEC §6), so that a line copied out of a terminal carries no user name. Only a whole path
- * matches, in either normalization, since a file system may store either, and in either letter case only where it ignores
- * case. A root, or no home directory, leaves text as it is: every absolute path would otherwise become "~".
+ * matches, in either normalization, since a file system may store either, with either separator, since Node and git print
+ * both on Windows, and in either letter case only where the file system ignores case. A root, or no home directory, leaves
+ * text as it is.
  */
 export function hideHome(text: string, home: string | undefined, foldCase: boolean): string {
   const root = (home ?? '').replace(/[\\/]+$/, '');
-  if (root === '' || /^[A-Za-z]:$/.test(root)) return text;
+  if (ROOT.test(root)) return text;
   const spellings = [...new Set([root.normalize('NFC'), root.normalize('NFD')])];
-  const pattern = new RegExp(`(?:${spellings.map(escaped).join('|')})(?=${PATH_END})`, foldCase ? 'gi' : 'g');
-  return text.replace(pattern, '~');
+  const paths = spellings.map((spelling) => escaped(spelling).replace(SEPARATOR, String.raw`[\\/]`));
+  return text.replace(new RegExp(`(?:${paths.join('|')})(?=${PATH_END})`, foldCase ? 'gi' : 'g'), '~');
+}
+
+// What the current platform usually does, for a directory whose file system cannot be asked.
+const LIKELY_FOLDS_CASE = process.platform === 'darwin' || process.platform === 'win32';
+
+/**
+ * Whether the file system compares paths at dir ignoring letter case. Measured where it can be: the platform decides when
+ * dir is gone or unreadable, or its name reads the same in another letter case.
+ */
+export function foldsCase(dir: string): boolean {
+  return ignoresCase(dir) ?? LIKELY_FOLDS_CASE;
 }
 
 /** How paths are compared: in NFC, since a file system may store either form, and in one letter case only where it ignores case. */
@@ -336,13 +356,15 @@ function pathLeadsTo(root: string, path: string): string[] {
   return visited;
 }
 
-// Whether the file system of dir ignores letter case, told by looking for .soujo/ itself under an upper-cased name.
-function ignoresCase(dir: string): boolean {
+// Whether the file system of dir ignores letter case, told by looking for dir itself under an upper-cased name.
+// undefined when that cannot be told: the name is the same upper-cased, or dir itself cannot be read.
+function ignoresCase(dir: string): boolean | undefined {
   const upper = join(dirname(dir), basename(dir).toUpperCase());
-  if (upper === dir) return false;
+  if (upper === dir) return undefined;
   const own = attempt(() => statSync(dir, { bigint: true }));
+  if (own === undefined) return undefined;
   const other = attempt(() => statSync(upper, { bigint: true }));
-  return own !== undefined && other !== undefined && own.dev === other.dev && own.ino === other.ino;
+  return other !== undefined && own.dev === other.dev && own.ino === other.ino;
 }
 
 function identityOf(dir: string, file: StateFile, foldCase: boolean): FileIdentity {
@@ -360,7 +382,8 @@ function identityOf(dir: string, file: StateFile, foldCase: boolean): FileIdenti
 
 /** The identities of the state files, the archives in .soujo/, and extra, so that stateTarget can check them all at once. */
 export function stateIdentities(dir: string, extra: readonly StateFile[] = []): StateIdentities {
-  const foldCase = ignoresCase(dir);
+  // Where it cannot be told, paths are compared as they are spelled, as a file system that keeps case does.
+  const foldCase = ignoresCase(dir) ?? false;
   const of = new Map<StateFile, FileIdentity>();
   for (const file of new Set([...STATE_FILES, ...archiveFiles(dir), ...extra])) {
     // A file that cannot be resolved is left out; reading or writing it fails by itself.

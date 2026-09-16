@@ -10,6 +10,7 @@ import {
   describeInvalidNext,
   headState,
   missingEntries,
+  optionArg,
   requireCommittable,
   requireCommittableFiles,
   requireNext,
@@ -30,6 +31,12 @@ test('commandArg quotes a layer name for the shell, and keeps one starting with 
   assert.equal(commandArg(''), `''`);
   assert.equal(commandArg('-L3 io'), `-- '-L3 io'`);
   assert.equal(commandArg('--note'), `-- '--note'`);
+});
+
+test('optionArg attaches the layer name to the option, so that one starting with "-" is still its value', () => {
+  assert.equal(optionArg('--layer', 'L3 io'), `--layer='L3 io'`);
+  assert.equal(optionArg('--layer', '-L3 io'), `--layer='-L3 io'`);
+  assert.equal(optionArg('--layer', `L3 it's`), `--layer='L3 it'\\''s'`);
 });
 
 test('skill names both hosts, and clip shortens long text by characters', () => {

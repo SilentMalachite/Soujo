@@ -253,6 +253,22 @@ test('after layer done stops before its commit, close refuses and re-running lay
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L7 resume-close');
 });
 
+test('close quotes the layer name of the command it names, and keeps one starting with "-" out of the options', (t) => {
+  const cases: [string, string][] = [['-L7 resume-close', `-- '-L7 resume-close'`], [`L7 it's`, `'L7 it'\\''s'`]];
+  for (const [layer, quoted] of cases) {
+    const dir = project(repo(t), { ...STATE, 'PLAN.md': PLAN.replace('L7 resume-close', layer) });
+    commitAll(dir, 'layer: L6 layer-done');
+    // A PLAN check that HEAD does not have yet: a layer done that stopped before its commit.
+    writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN.replace('L7 resume-close', layer).replace(`- [ ] ${layer}`, `- [x] ${layer}`));
+    writeNext(dir, 'L8 map');
+    assert.throws(
+      () => close(dir, 'note', NOW),
+      new RegExp(`。先に soujo layer done ${quoted.replace(/[\\'$]/g, String.raw`\$&`)} を再実行する$`),
+      layer,
+    );
+  }
+});
+
 test('closed between next set and layer done, the wip commit and 中断 entry name the unclosed layer', (t) => {
   const dir = workingProject(t);
   writeNext(dir, 'L8 map');

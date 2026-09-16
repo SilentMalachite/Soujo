@@ -59,13 +59,21 @@ export function clip(text, max = CLIP) {
     const chars = Array.from(text);
     return chars.length <= max ? text : `${chars.slice(0, max - 1).join('')}…`;
 }
+// A layer name as one shell word: single-quoted, as the skills spell it, so that spaces and `$(…)` in it stay literal.
+// Layer names are one line without control characters (see validatePlan), which printable() would otherwise flatten.
+function quoted(text) {
+    return `'${text.split("'").join(String.raw `'\''`)}'`;
+}
 /**
- * A layer name as one argument of a command a message suggests: single-quoted, as the skills spell it, so that a shell takes
- * spaces and `$(…)` in it literally, with "--" before a name starting with "-", which the CLI would read as an option.
+ * A layer name as the positional argument of a command a message suggests, with "--" before a name starting with "-",
+ * which the CLI would read as an option. Options a caller adds go before the "--" (`soujo layer done --note x -- '-L1'`).
  */
 export function commandArg(text) {
-    const quoted = `'${text.split("'").join(String.raw `'\''`)}'`;
-    return text.startsWith('-') ? `-- ${quoted}` : quoted;
+    return text.startsWith('-') ? `-- ${quoted(text)}` : quoted(text);
+}
+/** A layer name as the value of an option, attached with "=", so that a name starting with "-" is still read as the value. */
+export function optionArg(option, text) {
+    return `${option}=${quoted(text)}`;
 }
 /** "NEXT.md が無効: A、B" without repeating "NEXT.md" inside each problem. */
 export function describeInvalidNext(problems) {

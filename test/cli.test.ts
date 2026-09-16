@@ -3,8 +3,21 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, sep } from 'node:path';
 import { commitAll, repo, temp } from './helpers.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
@@ -54,9 +67,9 @@ const USAGES = {
   nextCheck: 'soujo next check [--hook]',
   planList: 'soujo plan list',
   planNext: 'soujo plan next',
-  logAdd: 'soujo log add "<層名>" --line <行> [--line <行>]',
+  logAdd: `soujo log add '<層名>' --line <行> [--line <行>]`,
   logRotate: 'soujo log rotate [--before YYYY-MM]',
-  layerDone: 'soujo layer done "<層名>" [--note <1〜3行>]',
+  layerDone: `soujo layer done '<層名>' [--note <1〜3行>]`,
   resume: 'soujo resume',
   brief: 'soujo brief',
   close: 'soujo close [--note <1〜3行>]',
@@ -376,63 +389,147 @@ test('inside a host plugin directory only --help, next check, and next show --ho
   }
 });
 
-test('next check exits 0 when the working directory is gone, and the other commands say so in one line', { skip: process.platform === 'win32' }, (t) => {
+test('the commands say so in one line when the current directory cannot be read, and the hooks keep exiting 0', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
   const dir = temp(t);
-  const work = join(dir, 'work');
-  mkdirSync(work);
-  // The helper removes its own working directory, so that the soujo runs it starts inherit one that no longer exists.
+  // The helper loses its own working directory, so that the soujo runs it starts inherit one that cannot be read.
   const script = join(dir, 'gone.cjs');
   writeFileSync(
     script,
-    `const { rmSync } = require('node:fs');
+    `const { chmodSync, rmSync } = require('node:fs');
 const { spawnSync } = require('node:child_process');
-rmSync(${JSON.stringify(work)}, { recursive: true, force: true });
-let gone = false;
-try { process.cwd(); } catch { gone = true; }
+const [target, how] = process.argv.slice(2);
+if (how === 'remove') rmSync(target, { recursive: true, force: true });
+else chmodSync(target, 0o000);
+let code = '';
+try { process.cwd(); } catch (error) { code = error.code; }
 const run = (...args) => {
   const result = spawnSync(process.execPath, [${JSON.stringify(CLI)}, ...args], { encoding: 'utf8' });
   return [result.status, result.stdout, result.stderr];
 };
-process.stdout.write(JSON.stringify({ gone, check: run('next', 'check'), hook: run('next', 'check', '--hook'), resume: run('resume') }));
+process.stdout.write(JSON.stringify({
+  code,
+  check: run('next', 'check'),
+  hook: run('next', 'check', '--hook'),
+  show: run('next', 'show', '--hook'),
+  help: run('--help'),
+  resume: run('resume'),
+}));
 `,
   );
-  const helper = spawnSync(process.execPath, [script], { cwd: work, encoding: 'utf8' });
-  assert.equal(helper.status, 0, helper.stderr);
   type Run = [number, string, string];
-  const { gone, check, hook, resume } = JSON.parse(helper.stdout) as { gone: boolean; check: Run; hook: Run; resume: Run };
-  assert.equal(gone, true, 'the working directory is still readable');
-  assert.deepEqual(check, [0, '', '']);
-  assert.deepEqual(hook, [0, '', '']);
-  assert.deepEqual([resume[0], resume[1]], [1, '']);
-  assert.match(resume[2], /^soujo: 作業ディレクトリを読めない[^\n]*\n$/);
+  type Result = { code: string; check: Run; hook: Run; show: Run; help: Run; resume: Run };
+  // Removed is the usual case; made unreadable, the code names the reason instead of pointing at a removal.
+  const cases: [string, string, string][] = [
+    ['remove', 'ENOENT', 'soujo: 現在のディレクトリを読めない（消えていないか確かめ、別のディレクトリで実行する）\n'],
+    ['lock', 'EACCES', 'soujo: 現在のディレクトリを読めない（EACCES。別のディレクトリで実行する）\n'],
+  ];
+  for (const [how, expected, stderr] of cases) {
+    const outer = join(dir, how);
+    const work = join(outer, 'work');
+    mkdirSync(work, { recursive: true });
+    let helper;
+    try {
+      helper = spawnSync(process.execPath, [script, how === 'remove' ? work : outer, how], { cwd: work, encoding: 'utf8' });
+    } finally {
+      if (how !== 'remove') chmodSync(outer, 0o755);
+    }
+    assert.equal(helper.status, 0, helper.stderr);
+    const { code, check, hook, show, help, resume } = JSON.parse(helper.stdout) as Result;
+    assert.equal(code, expected, `${how}: the current directory is still readable`);
+    for (const [label, silent] of [['check', check], ['hook', hook], ['show', show]] as [string, Run][]) {
+      assert.deepEqual(silent, [0, '', ''], `${how}: ${label}`);
+    }
+    assert.deepEqual(help, [0, lines(...Object.values(USAGES)), ''], how);
+    assert.deepEqual(resume, [1, '', stderr], how);
+  }
 });
 
-test('a closed stdout ends the run without an EPIPE crash', async (t) => {
+test('a stream closed before the write ends the run quietly', { skip: process.platform === 'win32' }, async (t) => {
   const dir = repo(t);
   soujoIn(dir, 'init');
   for (const args of [['--help'], ['resume']]) {
-    const child = spawn(process.execPath, [CLI, ...args], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
-    // Closed while the child is still starting, so that its first write goes to a pipe no one reads.
-    child.stdout.destroy();
+    // The reader closes the read end and stays alive, so that the write end soujo inherits is certain to answer EPIPE.
+    const reader = spawn(process.execPath, ['-e', "require('node:fs').closeSync(0); process.stdout.write('x'); setTimeout(() => {}, 60_000);"], {
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    t.after(() => reader.kill());
+    assert.ok(reader.stdout);
+    assert.ok(reader.stdin);
+    await once(reader.stdout, 'data');
+    const child = spawn(process.execPath, [CLI, ...args], { cwd: dir, stdio: ['ignore', reader.stdin, 'pipe'] });
     let stderr = '';
+    assert.ok(child.stderr);
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
       stderr += chunk;
     });
     const [code] = (await once(child, 'close')) as [number | null];
     assert.deepEqual([code, stderr], [0, ''], args.join(' '));
+    reader.kill();
   }
 });
 
-test('an error shows a path under the home directory as ~', (t) => {
+test('a write that fails for another reason is reported on stderr and fails the run', { skip: !existsSync('/dev/full') }, (t) => {
+  const dir = repo(t);
+  soujoIn(dir, 'init');
+  const full = openSync('/dev/full', 'w');
+  try {
+    const result = spawnSync(process.execPath, [CLI, '--help'], { cwd: dir, stdio: ['ignore', full, 'pipe'], encoding: 'utf8' });
+    assert.deepEqual([result.status, result.stderr], [1, 'soujo: 出力を書けない（ENOSPC）\n']);
+  } finally {
+    closeSync(full);
+  }
+});
+
+test('output and errors show a path under the home directory as ~', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
   // The real path, since the temporary directory of macOS is reached through a symlink.
   const home = realpathSync(temp(t));
+  const dir = join(home, 'p');
+  mkdirSync(dir);
+  const at = (where: string) => ({ cwd: where, encoding: 'utf8' as const, env: { ...process.env, HOME: home, USERPROFILE: home } });
+
+  const missing = spawnSync(process.execPath, [CLI, 'map', 'code', join(home, 'nope')], at(home));
+  assert.deepEqual([missing.status, missing.stderr], [1, `soujo: ディレクトリがない: ${join('~', 'nope')}\n`]);
+
+  // A warning of next check reaches the same screens as an error, so it hides the home directory too.
+  soujoIn(dir, 'init');
+  const log = join(dir, '.soujo', 'LOG.md');
+  chmodSync(log, 0o000);
+  try {
+    const warned = spawnSync(process.execPath, [CLI, 'next', 'check'], at(dir));
+    assert.equal(warned.status, 0, warned.stderr);
+    assert.ok(warned.stdout.includes(`~${sep}p${sep}.soujo${sep}LOG.md`), warned.stdout);
+    assert.ok(!warned.stdout.includes(home), warned.stdout);
+  } finally {
+    chmodSync(log, 0o644);
+  }
+});
+
+test('the home directory is hidden under another letter case where the file system ignores case', { skip: process.platform !== 'darwin' }, (t) => {
+  const home = realpathSync(temp(t));
+  const cased = home.toUpperCase();
+  // A case-sensitive volume has no such directory, and nothing to fold.
+  if (!existsSync(cased)) return;
   const result = spawnSync(process.execPath, [CLI, 'map', 'code', join(home, 'nope')], {
     cwd: home,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home, USERPROFILE: home },
+    env: { ...process.env, HOME: cased, USERPROFILE: cased },
   });
   assert.deepEqual([result.status, result.stderr], [1, `soujo: ディレクトリがない: ${join('~', 'nope')}\n`]);
+});
+
+test('a layer name starting with "-" goes through the CLI as the messages spell it', (t) => {
+  const dir = repo(t);
+  soujoIn(dir, 'init');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [ ] -L1 scaffold — build\n');
+  // As resume spells them: the option value attached with "=", the positional after "--".
+  const set = soujoIn(dir, 'next', 'set', '--layer=-L1 scaffold', '--premise=p', '--check=c', '--effort', 'low');
+  assert.deepEqual([set.status, set.stdout], [0, 'NEXT.md を更新: 次: -L1 scaffold\n'], set.stderr);
+  // layer done refuses while NEXT.md still points at the layer, as it does for any other name.
+  soujoIn(dir, 'next', 'set', '--layer', 'plan', '--premise=p', '--check=c');
+  const done = soujoIn(dir, 'layer', 'done', '--', '-L1 scaffold');
+  assert.equal(done.status, 0, done.stderr);
+  assert.match(done.stdout, /^層「-L1 scaffold」を完了: /);
 });
 
 test('argument errors are one Japanese line with exit 1', () => {

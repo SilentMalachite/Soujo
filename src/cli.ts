@@ -12,7 +12,7 @@ import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
-import { hideHome, pluginDir } from './files.js';
+import { foldsCase, hideHome, pluginDir } from './files.js';
 import { printable } from './state.js';
 
 // usage is what follows "soujo " in the --help line and in the usage error; run gets it too, so each entry spells it once.
@@ -90,7 +90,7 @@ const COMMANDS: Record<string, Command> = {
   'plan list': noArguments('plan list', planList),
   'plan next': noArguments('plan next', planNext),
   'log add': {
-    usage: 'log add "<層名>" --line <行> [--line <行>]',
+    usage: `log add '<層名>' --line <行> [--line <行>]`,
     run: (args, cwd, usage) => {
       const { positionals, values } = parseArgs({
         args,
@@ -110,7 +110,7 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   'layer done': {
-    usage: 'layer done "<層名>" [--note <1〜3行>]',
+    usage: `layer done '<層名>' [--note <1〜3行>]`,
     run: (args, cwd, usage) => {
       const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
       expectPositionals(positionals, 1, usage);
@@ -226,15 +226,19 @@ function run(found: NonNullable<ReturnType<typeof resolve>>, cwd: string): strin
   return found.command.run(found.args, cwd, found.command.usage);
 }
 
-const NO_CWD = '作業ディレクトリを読めない（消えていないか確かめ、別のディレクトリで実行する）';
-
-// The current directory is gone or unreadable when this fails; every command needs it, since .soujo/ is searched from there.
-function currentDir(): string | undefined {
+// process.cwd() fails when the current directory has been removed or cannot be read; every command needs it (SPEC §6).
+function currentDir(): string | NodeJS.ErrnoException {
   try {
     return process.cwd();
-  } catch {
-    return undefined;
+  } catch (error) {
+    return error as NodeJS.ErrnoException;
   }
+}
+
+// ENOENT is the usual reason — the directory was removed while the shell stayed in it; another one is named as it came.
+function noCurrentDir(error: NodeJS.ErrnoException): string {
+  const reason = error.code === undefined || error.code === 'ENOENT' ? '消えていないか確かめ、' : `${error.code}。`;
+  return `現在のディレクトリを読めない（${reason}別のディレクトリで実行する）`;
 }
 
 // Runs the command, or says why there is none to run. Without a current directory the hooks' calls print nothing, as they
@@ -242,48 +246,61 @@ function currentDir(): string | undefined {
 function execute(argv: string[], found: ReturnType<typeof resolve>): string[] {
   if (found === undefined) throw new Error(argv.length === 0 ? `コマンドがありません${HELP_HINT}` : unknownCommand(argv));
   const cwd = currentDir();
-  if (cwd === undefined) {
+  if (typeof cwd !== 'string') {
     if (found.command.hook?.(found.args) === true) return [];
-    throw new Error(NO_CWD);
+    throw new Error(noCurrentDir(cwd));
   }
   return run(found, cwd);
 }
 
+// A stream that is already closed, which is not a failure of this run: SPEC §6 ends it quietly.
+const CLOSED = new Set(['EPIPE', 'ERR_STREAM_DESTROYED', 'EBADF']);
+
 /**
  * Writes one finished output. An error event of a stream with no listener would be an uncaught exception with a stack
- * trace: a closed pipe (`soujo resume | head -1`) has to end the run quietly, and a failed write cannot be reported
- * through the stream that failed anyway.
+ * trace: a closed stream (`soujo resume` piped into `head -1`) ends the run quietly, while any other failure (a full disk)
+ * fails it and is reported on stderr, which is another stream and usually still open. A failure of stderr itself is lost.
  */
 function write(stream: NodeJS.WriteStream, text: string): void {
-  stream.on('error', () => {});
+  const failed = (error: NodeJS.ErrnoException) => {
+    if (CLOSED.has(error.code ?? '')) return;
+    process.exitCode = 1;
+    if (stream !== process.stderr) write(process.stderr, `soujo: 出力を書けない（${error.code ?? oneLine(error.message)}）\n`);
+  };
+  stream.on('error', failed);
   try {
     stream.write(text);
-  } catch {
-    // Lost with the stream.
+  } catch (error) {
+    failed(error as NodeJS.ErrnoException);
   }
 }
 
-// Where the file system ignores letter case, the home directory can be spelled in either case in the same message.
-const FOLD_CASE = process.platform === 'darwin' || process.platform === 'win32';
-
-// The home directory as an error shows it; unknown when the environment has none, which leaves the error as it is.
-function home(): string | undefined {
+// The home directory as a path in a message spells it, and how this file system compares it; unknown when the environment
+// has none, which leaves the message as it is. Measured here rather than guessed, as .soujo/ paths are (see foldsCase).
+function homePath(): [string | undefined, boolean] {
   try {
-    return homedir();
+    const home = homedir();
+    return [home, foldsCase(home)];
   } catch {
-    return undefined;
+    return [undefined, false];
   }
+}
+
+// Warnings and errors reach the same screens and get copied from them, so both hide the home directory (SPEC §6).
+function shown(lines: string[]): string {
+  const [home, foldCase] = homePath();
+  // Values from files can carry CR or other controls; each returned line stays one terminal line.
+  return `${lines.map((line) => hideHome(printable(line), home, foldCase)).join('\n')}\n`;
 }
 
 function main(argv: string[]): number {
   try {
     const found = resolve(argv);
     const lines = help(argv, found) ?? execute(argv, found);
-    // Values from files can carry CR or other controls; each returned line stays one terminal line.
-    if (lines.length > 0) write(process.stdout, `${lines.map(printable).join('\n')}\n`);
+    if (lines.length > 0) write(process.stdout, shown(lines));
     return 0;
   } catch (error) {
-    write(process.stderr, `soujo: ${hideHome(oneLine(describe(error)), home(), FOLD_CASE)}\n`);
+    write(process.stderr, `soujo: ${shown([describe(error)].map(oneLine))}`);
     return 1;
   }
 }

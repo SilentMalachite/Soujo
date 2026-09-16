@@ -67,7 +67,7 @@ test('resume clips long layer names too, but keeps them whole inside commands', 
   const skipped = project(temp(t), { 'NEXT.md': NEXT.replace('L3 io', 'L4 cli'), 'PLAN.md': plan });
   assert.deepEqual([resume(skipped)[0], resume(skipped)[3]], [
     `次: ${clipped}（PLAN で未完了。NEXT.md は「L4 cli」）確認: io`,
-    `再開: 「${clipped}」を締めていない → 完了なら soujo layer done '${long}'、途中なら soujo next set で次を戻す`,
+    `再開: 「${clipped}」を締めていない → 完了なら soujo layer done '${long}'、途中なら soujo next set --layer='${long}' で次を戻す`,
   ]);
 
   const missing = project(temp(t), { 'PLAN.md': plan });
@@ -83,17 +83,17 @@ test('resume clips long layer names too, but keeps them whole inside commands', 
 });
 
 test('resume quotes a layer name inside a command, so that a shell takes it as one argument', (t) => {
-  const cases: [string, string][] = [
-    ['L3 $(touch x)', `'L3 $(touch x)'`],
-    [`L3 it's`, `'L3 it'\\''s'`],
-    ['-L3 io', `-- '-L3 io'`],
+  const cases: [string, string, string][] = [
+    ['L3 $(touch x)', `'L3 $(touch x)'`, `--layer='L3 $(touch x)'`],
+    [`L3 it's`, `'L3 it'\\''s'`, `--layer='L3 it'\\''s'`],
+    ['-L3 io', `-- '-L3 io'`, `--layer='-L3 io'`],
   ];
-  for (const [layer, quoted] of cases) {
+  for (const [layer, positional, option] of cases) {
     const plan = `- [ ] ${layer} — io\n- [ ] L4 cli — cli\n`;
     const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L3 io', 'L4 cli'), 'PLAN.md': plan });
     assert.equal(
       resume(dir)[3],
-      `再開: 「${layer}」を締めていない → 完了なら soujo layer done ${quoted}、途中なら soujo next set で次を戻す`,
+      `再開: 「${layer}」を締めていない → 完了なら soujo layer done ${positional}、途中なら soujo next set ${option} で次を戻す`,
       layer,
     );
   }
@@ -166,7 +166,7 @@ test('resume names the unclosed layer when NEXT.md was moved on before layer don
     '次: L3 io（PLAN で未完了。NEXT.md は「L4 cli」）確認: io',
     '前回: LOG.md に記録なし',
     `コミット: ${gitLastCommit(dir)?.hash} test commit`,
-    `再開: 「L3 io」を締めていない → 完了なら soujo layer done 'L3 io'、途中なら soujo next set で次を戻す`,
+    `再開: 「L3 io」を締めていない → 完了なら soujo layer done 'L3 io'、途中なら soujo next set --layer='L3 io' で次を戻す`,
   ]);
 
   writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', 'plan'));

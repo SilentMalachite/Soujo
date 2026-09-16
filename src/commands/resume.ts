@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { readState, readTemplate, requireStateDir } from '../files.js';
 import { gitStatus, type Commit } from '../git.js';
 import { daysBetween, lastLog, newlyDone, nextLayer, nextStatus, parseNext, parsePlan, validateNext, type PlanItem } from '../state.js';
-import { attempt, clip, commandArg, describeInvalidNext, headState, readHead, skill, type NoCommit } from './shared.js';
+import { attempt, clip, commandArg, describeInvalidNext, headState, optionArg, readHead, skill, type NoCommit } from './shared.js';
 
 // From this many days since the last commit, 再開 points to soujo brief first.
 const AWAY_DAYS = 3;
@@ -41,7 +41,7 @@ export function nextAndCommand(dir: string, plan: string | undefined | Error): [
     const layer = status.unfinished.layer;
     return [
       `次: ${clip(layer)}（PLAN で未完了。NEXT.md は「${clip(next.layer)}」）確認: ${checkOf(status.unfinished)}`,
-      `再開: 「${clip(layer)}」を締めていない → 完了なら soujo layer done ${commandArg(layer)}、途中なら soujo next set で次を戻す`,
+      `再開: 「${clip(layer)}」を締めていない → 完了なら soujo layer done ${commandArg(layer)}、途中なら soujo next set ${optionArg('--layer', layer)} で次を戻す`,
     ];
   }
 

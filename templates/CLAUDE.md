@@ -37,7 +37,7 @@ Codex 用の `AGENTS.md` は**写しではない**（GPT-6 Astra 向けに文面
 - 層を終える手順は固定（途中で失敗したら、失敗したコマンドから再実行する）：
   1. 最後の層だけ、先に節目を残す：`soujo log add '節目' --line '<何が終わったか>' --line '<何が未決か>'`
   2. 次の層の `NEXT.md` を書く：`soujo next set --layer ... --premise ... --check ... [--caution ...] [--effort ...]`（`--effort` は PLAN の層にだけ付ける。`spec` / `plan` は CLI が high にする）
-  3. 締める：`soujo layer done "<層名>" --note "<1〜3行>"`（PLAN チェック → LOG 追記 → コミットまで一括）
+  3. 締める：`soujo layer done '<層名>' --note '<1〜3行>'`（PLAN チェック → LOG 追記 → コミットまで一括）
 - 中断の恐れが出たら、止まる前に `soujo close --note "<一言>"`。
 - 節目は、SPEC を書き終えたとき・PLAN に層を足したときにも手順 1 と同じコマンドで残す。PLAN の層名を `節目` にしない（LOG の節目と衝突するので CLI が拒否する）。
 - 次の一手の根拠は `soujo resume` の4行だけ。会話履歴に依存しない。
