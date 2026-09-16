@@ -1,6 +1,6 @@
 // soujo map plan / map code: PLAN.md as a vertical diagram, and a directory's imports as Mermaid (or its tree).
 import { closeSync, fstatSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { findStateDir, foldsCase, pathKey } from '../files.js';
 import { MAP_LIMITS, directoryTree, importGraph, mainLanguage, planDiagram, scanNotes, skipEntry, } from '../map.js';
 import { NO_LAYERS, readPlan } from './shared.js';
@@ -109,14 +109,20 @@ function headReader(limit) {
  */
 export function mapCode(cwd, dir, limits = MAP_LIMITS) {
     const stateDir = findStateDir(cwd);
-    const root = dir !== undefined ? resolve(cwd, dir) : stateDir !== undefined ? dirname(stateDir) : resolve(cwd);
+    const project = stateDir !== undefined ? dirname(stateDir) : resolve(cwd);
+    const root = dir !== undefined ? resolve(cwd, dir) : project;
     const shown = dir ?? root;
     requireDirectory(root, shown);
+    // A dir outside the project is read as asked, and said so first: what it holds is not the project's, and it may be as
+    // large as the limits allow.
+    const away = relative(project, root);
+    const outside = away === '..' || away.startsWith(`..${sep}`) || isAbsolute(away) ? [`プロジェクトの外を読んだ: ${shown}`] : [];
     const scan = scanDirectory(root, shown, limits.entries);
     const main = mainLanguage(scan.files);
     const rules = main?.language.graph;
     if (main === undefined || rules === undefined) {
-        return directoryTree(basename(root) || '.', [...scan.dirs, ...scan.files], scanNotes({ ...scan, partial: 0 }, limits), limits);
+        const notes = [...outside, ...scanNotes({ ...scan, partial: 0 }, limits)];
+        return directoryTree(basename(root) || '.', [...scan.dirs, ...scan.files], notes, limits);
     }
     const files = [];
     let unreadable = scan.unreadable;
@@ -139,7 +145,7 @@ export function mapCode(cwd, dir, limits = MAP_LIMITS) {
             partial += 1;
         files.push({ path, imports: rules.imports(path, head.text) });
     }
-    const notes = scanNotes({ unreadable, truncated: scan.truncated, partial }, { ...limits, fileBytes: bytes });
+    const notes = [...outside, ...scanNotes({ unreadable, truncated: scan.truncated, partial }, { ...limits, fileBytes: bytes })];
     // Paths are compared the way the file system holding the scanned files compares them, asked once per run of a file that
     // was scanned rather than of root, whose own name a mount boundary can have another file system answer for. Always in
     // NFC, since a file system may hand back either normal form for one name, and in one letter case only where it folds it.

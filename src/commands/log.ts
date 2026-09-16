@@ -15,7 +15,7 @@ import {
   type ArchiveFile,
   type StateFile,
 } from '../files.js';
-import { gitChangedPaths, gitLastCommit, gitStatusExcluding, gitToplevel } from '../git.js';
+import { gitChangedPaths, gitStatusExcluding, gitToplevel } from '../git.js';
 import {
   appendLog,
   appendedEntries,
@@ -33,6 +33,7 @@ import {
 import {
   attempt,
   commitRecords,
+  committedHash,
   headState,
   missingEntries,
   requireCommittable,
@@ -51,7 +52,9 @@ export function logAdd(cwd: string, layer: string, lines: string[], now: Date = 
   const date = formatDate(now);
   const log = readState(dir, 'LOG.md') ?? '';
   const text = appendLog(log, { date, layer, lines });
-  const added = lastLog(text) as LogEntry;
+  const added = lastLog(text);
+  // appendLog ends the text with the entry, in the form parseLog reads; without it nothing below would be what was asked for.
+  if (added === undefined) throw new Error('LOG.md に足したエントリを読み返せない');
   removeLeftoverTemps(dir);
   if (repeated(dirname(dir), log, added)) return [`LOG.md に同じエントリが未コミットであるので追記しない: ${date} ${added.layer}`];
   writeState(dir, 'LOG.md', text);
@@ -188,6 +191,6 @@ export function logRotate(cwd: string, before?: string, now: Date = new Date()):
   if (!committed) throw new Error('コミットする変更がない（LOG.md と書庫の変更を git が拾っていない。skip-worktree などを確認）');
   return [
     `LOG.md から${removed.length}件を${months.length}書庫へ移動（${span(months, '〜')}）`,
-    `コミット: ${gitLastCommit(root)?.hash ?? '?'} ${subject}`,
+    `コミット: ${committedHash(root)} ${subject}`,
   ];
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { CREDENTIAL_FILE } from '../src/commands/shared.js';
 import { packageDir } from '../src/files.js';
 import { commitAll, repo } from './helpers.js';
 
@@ -51,9 +52,8 @@ const SYNTHETIC = new Set([
   'Claude-Session:',
   ...CODEX_URLS,
 ]);
-// File names that hold credentials; .gitignore keeps them out of `git add -A`. .env.example is a template without values.
-const CREDENTIAL_FILE =
-  /^(?:\.env(?:\.(?!example$).+)?|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|auth\.json|id_(?:rsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.+\.(?:pem|key))$/;
+// File names that hold credentials (CREDENTIAL_FILE, which layer done and close also refuse to take in untracked); .gitignore
+// keeps them out of `git add -A`.
 const CREDENTIAL_EXAMPLES = [
   '.env',
   '.env.local',

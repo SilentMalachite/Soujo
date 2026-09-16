@@ -26,6 +26,35 @@ test('resume prints the next step, the last LOG entry, the last commit, and the 
   ]);
 });
 
+test('resume shows the last commit changing the project, not a later one elsewhere in the repository', (t) => {
+  const top = repo(t);
+  const dir = project(join(top, 'app'), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  commitAll(top, 'layer: L2 state');
+  mkdirSync(join(top, 'other'));
+  writeFileSync(join(top, 'other', 'f.txt'), '');
+  commitAll(top, 'feat: other', new Date(2030, 0, 1));
+  commitAll(top, 'chore: empty', new Date(2030, 0, 1));
+  const [, , commit, command] = resume(dir, new Date(2030, 0, 1));
+  assert.match(commit ?? '', /^コミット: [0-9a-f]+ layer: L2 state$/);
+  assert.match(command ?? '', /・\d+日ぶり: 先に soujo brief$/);
+  const fresh = project(join(top, 'fresh'), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  assert.equal(resume(fresh)[2], 'コミット: まだない（未コミット 1件）');
+});
+
+test('resume names no layer while PLAN repeats a layer name or leaves a fence open', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  commitAll(dir, 'wip: L3 io');
+  const fix = '再開: PLAN.md を直してから soujo resume（問題は soujo next check が示す）';
+  // A check left uncommitted would otherwise send the user to a layer done that refuses this PLAN.
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), `${PLAN.replace('- [ ] L3 io', '- [x] L3 io')}- [ ] L3 io — again\n`);
+  const repeated = resume(dir);
+  assert.deepEqual([repeated[0], repeated[3]], ['次: 不明（PLAN.md が無効: 層「L3 io」が重複）', fix]);
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN.replace('- [ ] L3 io', '```\n- [ ] L3 io'));
+  const fenced = resume(dir);
+  assert.deepEqual([fenced[0], fenced[3]], ['次: 不明（PLAN.md が無効: 3行目のコードフェンスが閉じていない（以降の層が読まれない））', fix]);
+  assert.equal(brief(dir)[4], fenced[0]);
+});
+
 test('resume degrades the lines of state files that are one file instead of failing', { skip: process.platform === 'win32' }, (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT, 'LOG.md': LOG });
   symlinkSync('LOG.md', join(dir, '.soujo', 'PLAN.md'));
@@ -227,18 +256,19 @@ test('resume shows a git failure instead of claiming there is no commit', { skip
   assert.equal(resume(dir)[2], 'コミット: git の状態を読めない');
 });
 
-test('resume points to soujo brief from three days after the last commit, whatever 再開 says', (t) => {
+test('resume points to soujo brief from three calendar days after the last commit, whatever 再開 says', (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
   const last = new Date(2026, 8, 12, 18, 0);
   commitAll(dir, 'layer: L2 state', last);
-  assert.equal(resume(dir, new Date(2026, 8, 15, 17, 59))[3], GO);
-  assert.equal(resume(dir, new Date(2026, 8, 15, 18, 0))[3], `${GO}・3日ぶり: 先に soujo brief`);
-  assert.equal(resume(dir, new Date(2026, 9, 1))[3], `${GO}・18日ぶり: 先に soujo brief`);
+  assert.equal(resume(dir, new Date(2026, 8, 14, 23, 59))[3], GO);
+  // Counted on the dates: 18:00 three days before is three days, however few hours ago.
+  assert.equal(resume(dir, new Date(2026, 8, 15, 0, 0))[3], `${GO}・3日ぶり: 先に soujo brief`);
+  assert.equal(resume(dir, new Date(2026, 9, 1))[3], `${GO}・19日ぶり: 先に soujo brief`);
 
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN.replace('- [ ] L3 io', '- [x] L3 io'));
   assert.equal(
     resume(dir, new Date(2026, 8, 20))[3],
-    `再開: 「L3 io」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done 'L3 io' を再実行・7日ぶり: 先に soujo brief`,
+    `再開: 「L3 io」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done 'L3 io' を再実行・8日ぶり: 先に soujo brief`,
   );
   assert.equal(resume(project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN }), new Date(2030, 0, 1))[3], GO);
 });

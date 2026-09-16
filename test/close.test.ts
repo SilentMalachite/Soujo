@@ -116,6 +116,19 @@ test('close refuses a missing, invalid, or finished NEXT.md and writes nothing',
   unchanged();
 });
 
+test('close refuses a PLAN that layer done refuses, and a NEXT.md value with a control character, and writes nothing', (t) => {
+  const dir = workingProject(t);
+  for (const plan of [`${PLAN}- [ ] L7 resume-close — again\n`, `${PLAN}- [ ] a\tb — x\n`, `\`\`\`\n${PLAN}`, `${PLAN}- [ ] plan — p\n`]) {
+    writeFileSync(join(dir, '.soujo', 'PLAN.md'), plan);
+    for (const note of [undefined, 'x']) assert.throws(() => close(dir, note, NOW), /^Error: PLAN\.md の.+（PLAN\.md を直してから）$/, JSON.stringify(plan));
+    assert.equal(read(dir, 'LOG.md'), LOG);
+  }
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN);
+  writeNext(dir, 'L7\tresume-close');
+  assert.throws(() => close(dir, undefined, NOW), /^Error: NEXT\.md が無効: 「次」に制御文字がある（soujo next set で書き直してから再実行）$/);
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L6 layer-done');
+});
+
 test('close refuses an invalid note before writing', (t) => {
   const dir = workingProject(t);
   const hash = gitLastCommit(dir)?.hash;

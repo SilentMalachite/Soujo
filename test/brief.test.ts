@@ -31,7 +31,7 @@ test('brief prints progress, commits after the last layer, the last milestone, t
     `進捗: PLAN 2/4 層完了・最終 layer: ${formatDate(LAYER_DAY)} L2 state`,
     '以後: layer 後のコミット 2件: fix: resolve L2 review findings / docs: explain state',
     '節目: 2026-09-11 — 4層に分けた',
-    `空白: 最終コミットから 2日（${formatDate(LAST_DAY)}）`,
+    `空白: 最終コミットから 3日（${formatDate(LAST_DAY)}）`,
     resume(dir, NOW)[0],
   ]);
   assert.equal(brief(dir, NOW)[4], '次: L3 io（effort: high）確認: io のテストが通る');

@@ -48,8 +48,21 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - The `review` skill hands `soujo:reviewer` the range to review instead of a copy of its diff, and the reviewer takes the diff itself when it starts, since the working tree moves on after the hand-over and a copy made then can be older than the files it reads.
 - The `review` skill no longer stops when `soujo` is missing, since it runs none, and the `map` skill stops only for `plan` and `code`.
 - The `review` and `map` skills say which diff they take when given no range and no `layer:` commit exists: from the parent of the oldest `wip:` commit, or from HEAD when there is none, so a repository that adopted Soujo is not reviewed from its first commit. With a `layer:` commit, the diff now starts before the oldest `wip:` commit of that layer, so the part of a layer that `soujo close` committed is reviewed with the rest. Only commits changing the project count.
+- The `コミット:` line of `soujo resume` shows the last commit changing the project, as `brief` counts it, instead of HEAD, which could be another project's commit or an empty one; `まだない` before the project's first. `layer done` lists only the project's added files.
+- `soujo close` refuses a `PLAN.md` that `layer done` refuses (a code fence left open, an empty, repeated, or control-character layer name, a layer named like a phase or `節目`), and `soujo resume` shows `次: 不明（PLAN.md が無効: …）` for it, instead of naming a layer picked by position or a stopped `layer done` that would be refused. Before, `close --note` failed on a layer name with control characters while `close` without a note committed it as the `wip:` subject.
+- A `NEXT.md` value with a tab or another control character inside is invalid, and `soujo next set` refuses one, even while `PLAN.md` has no layers: `次:` becomes the subject of a `wip:` commit.
+- `soujo map code` writes `]` and the backtick in a file name as entity codes, so a file named `a].ts` no longer closes its Mermaid node early.
+- `layer done`, `close`, and `log rotate` commit nothing while a changed `SPEC.md` is not staged as written (skip-worktree), as for PLAN, LOG, and NEXT, instead of leaving the change out of the commit without a word.
+- An unresolved conflict elsewhere in the repository (after a conflicting `git stash pop` in another project, say) no longer refuses `layer done`, `close`, and `log rotate`, which git itself would commit; conflicts in the project still refuse.
+- `N日ぶり` of `resume` and `空白` of `brief` count calendar days in local time, the dates they print, instead of whole 24-hour periods: a commit at 23:00 is 2 days before 01:00 the day after next.
 
 ### Changed
+
+- `layer done`, `close`, and `log rotate` refuse, before writing anything, an untracked file that git does not ignore and whose name is a credential file's (`.env` and `.env.*` other than `.env.example`, `.npmrc`, `.netrc`, `.git-credentials`, `auth.json`, SSH keys, `*.pem`, `*.key`, …), since they stage the whole project. Add it to `.gitignore`, or `git add` it first to commit it.
+- Outside a git repository `.soujo/` is looked for in the current directory only, where `soujo init` creates it, so a `.soujo/` made in the home directory is no longer the project of every directory below it.
+- The uncommitted count of `resume` and `next check` reads at most 16 MiB of `git status` output and then says `N件以上`.
+- `soujo map code` says in its first note when it read a directory outside the project, and the `map` skill passes one only when the user names it.
+- Commits keep running the repository's git hooks; SPEC §14 now records why.
 
 - `test/privacy.test.ts` checks every version of a file and every commit and tag message that a ref reaches (a branch, a tag, a remote-tracking branch, the stash), not only the tracked files and the commit messages on HEAD, and catches links to Codex cloud tasks and to ChatGPT conversations and shared chats. It scans itself too: instead of the whole file, only the made-up values of its own fixtures are let through.
 - `test/docs.test.ts` compares `SPEC.md` with `SPEC.ja.md` as well.

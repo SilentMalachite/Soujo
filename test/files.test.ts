@@ -66,6 +66,7 @@ test('symlinkTargetParts splits a relative link at "\\" only where that is a sep
 test('findStateDir walks up to the nearest .soujo directory and skips .soujo files', (t) => {
   const root = temp(t);
   mkdirSync(join(root, '.soujo'));
+  mkdirSync(join(root, '.git'));
   mkdirSync(join(root, 'a', 'b'), { recursive: true });
   writeFileSync(join(root, 'a', '.soujo'), 'not a directory');
   assert.equal(findStateDir(join(root, 'a', 'b')), join(root, '.soujo'));
@@ -85,6 +86,19 @@ test('findStateDir stops at the git top level instead of using an outer project'
 
   mkdirSync(join(root, 'repo', '.soujo'));
   assert.equal(findStateDir(join(root, 'repo', 'src')), join(root, 'repo', '.soujo'));
+});
+
+test('findStateDir outside a repository takes only the .soujo of the start directory', (t) => {
+  // A home directory where soujo init ran without git: the directories below it are not its project.
+  const home = temp(t);
+  mkdirSync(join(home, '.soujo'));
+  mkdirSync(join(home, 'notes', 'x'), { recursive: true });
+  assert.equal(findStateDir(home), join(home, '.soujo'));
+  assert.equal(findStateDir(join(home, 'notes')), undefined);
+  assert.equal(findStateDir(join(home, 'notes', 'x')), undefined);
+  mkdirSync(join(home, 'notes', '.soujo'));
+  assert.equal(findStateDir(join(home, 'notes')), join(home, 'notes', '.soujo'));
+  assert.equal(findStateDir(join(home, 'notes', 'x')), undefined);
 });
 
 test('findStateDir returns undefined and requireStateDir throws outside Soujo projects', (t) => {
@@ -124,6 +138,7 @@ test('pluginDir finds .claude/plugins or .codex/plugins in any letter case, wher
 test('findStateDir never reaches a .soujo above an install cache without .git', (t) => {
   const root = temp(t);
   mkdirSync(join(root, '.soujo'));
+  mkdirSync(join(root, '.git'));
   mkdirSync(join(root, 'plain', 'x'), { recursive: true });
   assert.equal(findStateDir(join(root, 'plain', 'x')), join(root, '.soujo'));
   for (const host of ['.claude', '.codex']) {

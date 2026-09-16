@@ -2,7 +2,7 @@
 
 import { dirname } from 'node:path';
 import { findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { gitStatus, gitToplevel } from '../git.js';
+import { gitChangeCount, gitToplevel } from '../git.js';
 import {
   PHASES,
   checkMismatch,
@@ -152,8 +152,8 @@ function problems(dir: string, now: Date): string[] {
 function changeProblems(root: string): string[] {
   try {
     if (gitToplevel(root) === undefined) return [];
-    const changes = gitStatus(root).length;
-    return changes > 0 ? [`未コミットの変更 ${changes}件`] : [];
+    const { count, truncated } = gitChangeCount(root);
+    return count > 0 || truncated ? [`未コミットの変更 ${count}件${truncated ? '以上' : ''}`] : [];
   } catch (error) {
     return [`未コミットの変更を確認できない: ${reason(error)}`];
   }

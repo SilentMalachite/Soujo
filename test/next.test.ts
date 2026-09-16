@@ -15,10 +15,17 @@ function readNext(dir: string): string {
 }
 
 test('next show prints NEXT.md lines from a subdirectory', (t) => {
-  const dir = project(temp(t), { 'NEXT.md': NEXT });
+  const dir = project(repo(t), { 'NEXT.md': NEXT });
   mkdirSync(join(dir, 'src'));
   assert.deepEqual(nextShow(join(dir, 'src'), false), NEXT.trimEnd().split('\n'));
   assert.deepEqual(nextShow(dir, true), NEXT.trimEnd().split('\n'));
+});
+
+test('next set refuses a control character inside a value, also while PLAN has no layers, and writes nothing', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': NEXT });
+  assert.throws(() => nextSet(dir, { layer: 'a\tb', premise: 'p', check: 'c' }), /^Error: 「次」に制御文字がある$/);
+  assert.throws(() => nextSet(dir, { layer: 'a', premise: 'p\u0085q', check: 'c' }), /^Error: 「前提」に制御文字がある$/);
+  assert.equal(readNext(dir), NEXT);
 });
 
 test('next show reports a missing NEXT.md, and --hook stays silent', (t) => {

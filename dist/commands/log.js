@@ -1,9 +1,9 @@
 // soujo log add: appends one dated entry to LOG.md. soujo log rotate: moves past months of LOG.md into LOG-YYYY-MM.md and commits.
 import { dirname } from 'node:path';
 import { archiveFile, archiveFiles, archiveMonth, readState, removeLeftoverTemps, requireStateDir, statePath, stateTemps, trackedStatePath, writeState, } from '../files.js';
-import { gitChangedPaths, gitLastCommit, gitStatusExcluding, gitToplevel } from '../git.js';
+import { gitChangedPaths, gitStatusExcluding, gitToplevel } from '../git.js';
 import { appendLog, appendedEntries, archiveLog, formatDate, isMonth, lastLog, logMonth, logMonths, removedEntries, parseLog, rotateLog, } from '../state.js';
-import { attempt, commitRecords, headState, missingEntries, requireCommittable, requireCommittableFiles, resumable, uncommittedLogs, } from './shared.js';
+import { attempt, commitRecords, committedHash, headState, missingEntries, requireCommittable, requireCommittableFiles, resumable, uncommittedLogs, } from './shared.js';
 /**
  * Appends the entry, unless LOG.md already ends with the same entry (date, layer, and lines) and HEAD does not have that copy:
  * a re-run of a line like "log add 節目 → next set" after its later command failed must not write the entry twice.
@@ -16,6 +16,9 @@ export function logAdd(cwd, layer, lines, now = new Date()) {
     const log = readState(dir, 'LOG.md') ?? '';
     const text = appendLog(log, { date, layer, lines });
     const added = lastLog(text);
+    // appendLog ends the text with the entry, in the form parseLog reads; without it nothing below would be what was asked for.
+    if (added === undefined)
+        throw new Error('LOG.md に足したエントリを読み返せない');
     removeLeftoverTemps(dir);
     if (repeated(dirname(dir), log, added))
         return [`LOG.md に同じエントリが未コミットであるので追記しない: ${date} ${added.layer}`];
@@ -149,6 +152,6 @@ export function logRotate(cwd, before, now = new Date()) {
         throw new Error('コミットする変更がない（LOG.md と書庫の変更を git が拾っていない。skip-worktree などを確認）');
     return [
         `LOG.md から${removed.length}件を${months.length}書庫へ移動（${span(months, '〜')}）`,
-        `コミット: ${gitLastCommit(root)?.hash ?? '?'} ${subject}`,
+        `コミット: ${committedHash(root)} ${subject}`,
     ];
 }

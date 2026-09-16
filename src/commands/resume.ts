@@ -2,8 +2,19 @@
 
 import { dirname } from 'node:path';
 import { readState, readTemplate, requireStateDir } from '../files.js';
-import { gitStatus, type Commit } from '../git.js';
-import { daysBetween, lastLog, newlyDone, nextLayer, nextStatus, parseNext, parsePlan, validateNext, type PlanItem } from '../state.js';
+import { gitChangeCount, type Commit } from '../git.js';
+import {
+  daysBetween,
+  lastLog,
+  newlyDone,
+  nextLayer,
+  nextStatus,
+  parseNext,
+  parsePlan,
+  validateNext,
+  validatePlan,
+  type PlanItem,
+} from '../state.js';
 import { attempt, clip, commandArg, describeInvalidNext, headState, optionArg, readHead, skill, type NoCommit } from './shared.js';
 
 // From this many days since the last commit, 再開 points to soujo brief first.
@@ -25,11 +36,22 @@ function checkOf(item: PlanItem): string {
   return clip(item.condition || '未記入');
 }
 
+// The problems validatePlan finds in PLAN, none when it is missing or unreadable.
+function planProblems(plan: string | undefined | Error): string[] {
+  return typeof plan === 'string' ? validatePlan(plan) : [];
+}
+
 /**
  * 次 and 再開 from NEXT.md; PLAN's next layer when NEXT.md is missing, unreadable, invalid, or points to a finished layer.
- * Layer names are clipped like other values, except inside a command, which must stay runnable.
+ * Layer names are clipped like other values, except inside a command, which must stay runnable. A PLAN that validatePlan
+ * refuses gives no layer at all: with a name repeated or layers swallowed by an open fence, any layer named would be a guess.
  */
 export function nextAndCommand(dir: string, plan: string | undefined | Error): [string, string] {
+  const problems = planProblems(plan);
+  if (problems.length > 0) {
+    const invalid = `PLAN.md が無効: ${problems.map((problem) => problem.replace(/^PLAN\.md の/, '')).join('、')}`;
+    return [`次: 不明（${clip(invalid)}）`, '再開: PLAN.md を直してから soujo resume（問題は soujo next check が示す）'];
+  }
   const items = typeof plan === 'string' ? parsePlan(plan) : [];
   const text = attempt(() => readState(dir, 'NEXT.md'));
   const next = typeof text === 'string' ? parseNext(text) : undefined;
@@ -82,9 +104,10 @@ function logLine(dir: string): string {
 function commitLine(root: string, head: Commit | NoCommit): string {
   if (head === 'git リポジトリではない' || head === 'git の状態を読めない') return `コミット: ${head}`;
   const shown = typeof head === 'string' ? head : `${head.hash} ${clip(head.subject)}`;
-  const changes = attempt(() => gitStatus(root).length);
+  const changes = attempt(() => gitChangeCount(root));
   if (changes instanceof Error) return `コミット: ${shown}（未コミットの変更を数えられない）`;
-  return `コミット: ${shown}${changes > 0 ? `（未コミット ${changes}件）` : ''}`;
+  const { count, truncated } = changes;
+  return `コミット: ${shown}${count > 0 || truncated ? `（未コミット ${count}件${truncated ? '以上' : ''}）` : ''}`;
 }
 
 // The hint appended to 再開 when the last commit is AWAY_DAYS or more days old.
@@ -102,5 +125,7 @@ export function resume(cwd: string, now: Date = new Date()): string[] {
   const [next, command] = nextAndCommand(dir, plan);
   const items = typeof plan === 'string' ? parsePlan(plan) : [];
   const head = readHead(root);
-  return [next, logLine(dir), commitLine(root, head), `${unfinishedLayerDone(root, items) ?? command}${awayHint(head, now)}`];
+  // layer done refuses the PLAN nextAndCommand refuses, so re-running it is no way on.
+  const unfinished = planProblems(plan).length > 0 ? undefined : unfinishedLayerDone(root, items);
+  return [next, logLine(dir), commitLine(root, head), `${unfinished ?? command}${awayHint(head, now)}`];
 }

@@ -669,9 +669,10 @@ function nodeIds(paths) {
     }
     return ids;
 }
-// A quoted label: control characters become spaces, and characters that end the label or read as markup become entity codes.
+// A quoted label: control characters become spaces, and characters that end the label or the node ("]"), or read as markup
+// (a backtick opens a Markdown string), become entity codes.
 function label(path) {
-    return `"${printable(path).replace(/["#&<>]/g, (char) => `#${char.charCodeAt(0)};`)}"`;
+    return `"${printable(path).replace(/["#&<>\]`]/g, (char) => `#${char.charCodeAt(0)};`)}"`;
 }
 /**
  * Mermaid `graph LR` of files (the first of duplicate paths counts): one node per file, one edge per import resolved by rules

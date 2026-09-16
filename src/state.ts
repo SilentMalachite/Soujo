@@ -127,6 +127,9 @@ function readNext(text: string): { values: Map<string, string>; problems: string
     const value = values.get(key);
     if (value === undefined) problems.push(`「${key}」がない`);
     else if (value === '') problems.push(`「${key}」が空`);
+    // A tab or a C1 control passes the line split; like a layer name in PLAN, a value must print as the text it is, since 次
+    // becomes a commit subject and every value a line of resume. effort names its own problem below.
+    else if (key !== 'effort' && printable(value) !== value) problems.push(`「${key}」に制御文字がある`);
   }
   const effort = values.get('effort');
   if (effort && !isEffort(effort)) problems.push(`effort は ${EFFORTS.join('|')} のどれか: ${effort}`);
@@ -152,13 +155,15 @@ export function parseNext(text: string): Next | undefined {
   };
 }
 
-/** NEXT.md text with defaults applied (caution なし, effort medium). Throws on multi-line values. */
+/** NEXT.md text with defaults applied (caution なし, effort medium). Throws on multi-line values and other control characters. */
 export function formatNext(input: NextInput): string {
   const next = { ...input, caution: input.caution ?? 'なし', effort: input.effort ?? 'medium' };
   const lines = NEXT_KEYS.map(([field, key]) => {
     const value = next[field];
     if (/[\r\n]/.test(value)) throw new Error(`「${key}」は1行で書く`);
-    return `${key}: ${value.trim()}`;
+    const trimmed = value.trim();
+    if (printable(trimmed) !== trimmed) throw new Error(`「${key}」に制御文字がある`);
+    return `${key}: ${trimmed}`;
   });
   return `${lines.join('\n')}\n`;
 }
@@ -546,9 +551,14 @@ export function removedEntries(before: string, after: string): LogEntry[] | unde
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The whole days from from to to, rounded down; 0 when to is not after from. */
+/**
+ * The calendar days in local time from from's date to to's date, the dates formatDate prints; 0 when to's date is not later.
+ * Counted on the dates rather than the hours, so that a commit at 23:00 is 2 days before 01:00 the day after next.
+ */
 export function daysBetween(from: Date, to: Date): number {
-  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / DAY_MS));
+  // Each local date as a UTC midnight, so that a daylight saving change between them adds no hour to the difference.
+  const day = (date: Date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.max(0, Math.round((day(to) - day(from)) / DAY_MS));
 }
 
 /** YYYY-MM-DD in local time. */

@@ -1,7 +1,7 @@
 // soujo next show / set / check: the one file needed to resume.
 import { dirname } from 'node:path';
 import { findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { gitStatus, gitToplevel } from '../git.js';
+import { gitChangeCount, gitToplevel } from '../git.js';
 import { PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, } from '../state.js';
 // How many problems a warning names before counting the rest, so that the line stays readable where a hook shows it.
 const SHOWN_PROBLEMS = 4;
@@ -133,8 +133,8 @@ function changeProblems(root) {
     try {
         if (gitToplevel(root) === undefined)
             return [];
-        const changes = gitStatus(root).length;
-        return changes > 0 ? [`未コミットの変更 ${changes}件`] : [];
+        const { count, truncated } = gitChangeCount(root);
+        return count > 0 || truncated ? [`未コミットの変更 ${count}件${truncated ? '以上' : ''}`] : [];
     }
     catch (error) {
         return [`未コミットの変更を確認できない: ${reason(error)}`];

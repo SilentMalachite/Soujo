@@ -2,13 +2,14 @@
 
 import { dirname } from 'node:path';
 import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
-import { gitAddedFiles, gitFindCommit, gitLastCommit } from '../git.js';
+import { gitAddedFiles, gitFindCommit } from '../git.js';
 import { appendLog, formatDate, logLines, markDone, parsePlan, planLayers, validatePlan } from '../state.js';
 import {
   INTERRUPTED,
   INTERRUPTION_NOTE,
   LAYER_COMMIT,
   commitRecords,
+  committedHash,
   headState,
   requireCommittable,
   requireNext,
@@ -53,7 +54,7 @@ function describeAdded(root: string): string {
  * - checked only in the working tree (interrupted run)        → append LOG unless LOG has this layer's completion entry not in
  *                                                                HEAD yet (a 中断 entry of close does not count), then commit
  * After the first write, every failure says what is recorded, so that fixing the cause and re-running resumes. Nothing is
- * committed while PLAN, LOG, or NEXT is not staged as written (skip-worktree), since a re-run could not add them afterwards.
+ * committed while SPEC, PLAN, LOG, or NEXT is not staged as written (skip-worktree), since a re-run could not add them afterwards.
  */
 export function layerDone(cwd: string, layer: string, note?: string, now: Date = new Date()): string[] {
   const dir = requireStateDir(cwd);
@@ -100,7 +101,7 @@ export function layerDone(cwd: string, layer: string, note?: string, now: Date =
   const done = resumable(() => commitRecords(root, subject), 'PLAN と LOG は記録済み。原因を直して再実行すればコミットだけやり直す');
   if (!done) throw new Error('コミットする変更がない（PLAN と LOG の変更を git が拾っていない。skip-worktree などを確認）');
 
-  const hash = gitLastCommit(root)?.hash ?? '?';
+  const hash = committedHash(root);
   const result = item.done ? `層「${name}」のコミットをやり直した` : `層「${name}」を完了`;
   return [`${result}: ${hash} ${subject}${describeAdded(root)}`];
 }

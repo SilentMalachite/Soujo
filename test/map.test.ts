@@ -18,7 +18,7 @@ import {
 } from '../src/map.js';
 import { pathKey } from '../src/files.js';
 import { parsePlan } from '../src/state.js';
-import { project, temp } from './helpers.js';
+import { project, repo, temp } from './helpers.js';
 
 const PLAN = '# PLAN\n\n- [x] L1 scaffold — build が通る\n- [ ] L2 state — テストが通る\n- [ ] L3 io\n';
 const RULES = LANGUAGES[0]?.graph as ImportRules;
@@ -259,6 +259,18 @@ test('TS/JS imports read again from after a "<" that no tag follows, and from an
   assert.deepEqual(imports("const o = <3>v; import('./after-digit.js');"), ['./after-digit.js']);
 });
 
+test('TS/JS imports keep their known misjudgements as documented, and only those', () => {
+  // In .ts "<T>" is a type, so a generic function type opens no element there.
+  assert.deepEqual(imports("type X = <T>(a: T) => T;\nimport('./after-type.js');", 'src/a.ts'), ['./after-type.js']);
+  // A block after a label or a "case" is read as an object literal (see opensBlock): a "/" after its "}" divides, so a quote
+  // in the regex that follows opens a string, and the import after it is lost.
+  assert.deepEqual(imports("L: {}\n/'/.test(s); import('./lost.js');", 'src/a.ts'), []);
+  assert.deepEqual(imports("switch (x) { case 1: {} /'/.test(s); import('./lost-case.js'); }", 'src/a.ts'), []);
+  // Harmless without such a quote, and a block where a statement starts is read as one.
+  assert.deepEqual(imports("L: {}\n/x/.test(s); import('./harmless.js');", 'src/a.ts'), ['./harmless.js']);
+  assert.deepEqual(imports("{}\n/'/.test(s); import('./kept.js');", 'src/a.ts'), ['./kept.js']);
+});
+
 test('TS/JS imports keep a template substitution and a JSX brace in the order they were opened', () => {
   assert.deepEqual(imports("const a = `${<b>{import('./in-jsx.js')}</b>}`; import('./after-template.js');"), ['./in-jsx.js', './after-template.js']);
   assert.deepEqual(imports("const b = <p>{`${import('./in-template.js')}`}</p>; import('./after-element.js');"), ['./in-template.js', './after-element.js']);
@@ -457,11 +469,16 @@ test('importGraph uses path-based ids, escapes labels, and counts the first of d
     { path: 'a_b.ts', imports: [] },
     { path: 'a-b.ts', imports: [] },
     { path: 'q"#&<>\n.ts', imports: [] },
+    // "]" would close the node and a backtick after the quote opens a Markdown string.
+    { path: 'a].ts', imports: [] },
+    { path: '`b`.ts', imports: [] },
   ]);
   assert.deepEqual(graph, [
     'graph LR',
     NOTE,
+    '  m__b__ts["#96;b#96;.ts"]',
     '  m_a_b_ts["a-b.ts"]',
+    '  m_a__ts["a#93;.ts"]',
     '  m_a_b_ts_2["a_b.ts"]',
     '  m_q_______ts["q#34;#35;#38;#60;#62; .ts"]',
     '  m_a_b_ts --> m_a_b_ts_2',
@@ -557,7 +574,7 @@ test('directoryTree draws an ASCII tree with folders first, empty folders, and a
 });
 
 test('map plan draws PLAN.md from a subdirectory and reports an empty plan in one line', (t) => {
-  const dir = project(temp(t), { 'PLAN.md': PLAN });
+  const dir = project(repo(t), { 'PLAN.md': PLAN });
   mkdirSync(join(dir, 'src'));
   assert.deepEqual(mapPlan(join(dir, 'src')), planDiagram(parsePlan(PLAN)));
   assert.deepEqual(mapPlan(project(temp(t), { 'PLAN.md': '# PLAN\n' })), ['PLAN.md に層がない']);
@@ -566,7 +583,7 @@ test('map plan draws PLAN.md from a subdirectory and reports an empty plan in on
 });
 
 test('map code scans the project root by default, skipping output directories, dot-entries, and symlinks', (t) => {
-  const dir = write(project(temp(t)), {
+  const dir = write(project(repo(t)), {
     'src/cli.ts': "import { a } from './a.js';\nimport { d } from '../dist/d.js';\nimport { l } from './linked.js';\n",
     'src/a.ts': "import 'pkg';\n",
     'src/real.ts': '',
@@ -585,10 +602,15 @@ test('map code scans the project root by default, skipping output directories, d
   assert.deepEqual(mapCode(dir, 'src').slice(2, 4), ['  m_a_ts["a.ts"]', '  m_cli_ts["cli.ts"]']);
   const outside = write(temp(t), { 'sub/a.ts': '', 'b.ts': '' });
   assert.deepEqual(mapCode(join(outside, 'sub')), ['graph LR', NOTE, '  m_a_ts["a.ts"]']);
+  // A dir outside the project, or outside cwd where there is none, is read as asked and said so first.
+  assert.deepEqual(mapCode(dir, join(outside, 'sub')), ['graph LR', NOTE, `  %% プロジェクトの外を読んだ: ${join(outside, 'sub')}`, '  m_a_ts["a.ts"]']);
+  assert.deepEqual(mapCode(join(outside, 'sub'), '..').slice(1, 3), [NOTE, '  %% プロジェクトの外を読んだ: ..']);
+  const elixir = write(temp(t), { 'mix.exs': '', 'lib/x.ex': '' });
+  assert.deepEqual(mapCode(join(dir, 'src'), elixir).slice(-1), [`注: プロジェクトの外を読んだ: ${elixir}`]);
 });
 
 test('map code reads each file by its own extension, so a .tsx text is no edge and a .ts "<x>" is a type', (t) => {
-  const dir = write(project(temp(t)), {
+  const dir = write(project(repo(t)), {
     'src/page.tsx': "const v = <p>from './fake.js'</p>;\nimport('./b.js');\n",
     'src/types.ts': "const s = <string>text from './fake.js';\n",
     'src/b.ts': '',

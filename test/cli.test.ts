@@ -304,7 +304,7 @@ test('close exits 1 on an invalid NEXT.md without writing, then commits through 
 });
 
 test('map plan and map code print their diagrams through the CLI', (t) => {
-  const dir = temp(t);
+  const dir = repo(t);
   soujoIn(dir, 'init');
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [x] L1 scaffold — build\n- [ ] L2 map — 図\n');
   const plan = soujoIn(dir, 'map', 'plan');

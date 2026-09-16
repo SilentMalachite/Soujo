@@ -372,6 +372,49 @@ test('layer done refuses during an unfinished merge and with unmerged files', (t
   assert.equal(read(stashed, 'PLAN.md'), PLAN);
 });
 
+test('layer done is not refused by unmerged files outside the project', (t) => {
+  const top = repo(t);
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: top, stdio: 'ignore' });
+  writeFileSync(join(top, 'f.txt'), 'base\n');
+  const dir = project(join(top, 'app'), STATE);
+  commitAll(top, 'base');
+  writeFileSync(join(top, 'f.txt'), 'stash\n');
+  git('stash', '-q');
+  writeFileSync(join(top, 'f.txt'), 'main\n');
+  commitAll(top, 'main');
+  assert.throws(() => git('stash', 'pop', '-q'));
+  writeFileSync(join(dir, 'state.ts'), '');
+  layerDone(dir, 'L2 state', undefined, NOW);
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
+  assert.deepEqual(gitStatus(top), ['UU f.txt']);
+});
+
+test('layer done commits nothing while a changed SPEC.md is not staged as written', (t) => {
+  const dir = project(repo(t), { ...STATE, 'SPEC.md': '# SPEC\n' });
+  commitAll(dir, 'layer: L1 scaffold');
+  execFileSync('git', ['update-index', '--skip-worktree', '.soujo/SPEC.md'], { cwd: dir });
+  writeFileSync(join(dir, '.soujo', 'SPEC.md'), '# SPEC\n\n決めた\n');
+  const before = gitLastCommit(dir)?.hash;
+  assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: \.soujo\/SPEC\.md の変更を git が拾っていない（skip-worktree などを確認）/);
+  assert.equal(gitLastCommit(dir)?.hash, before);
+});
+
+test('layer done refuses an untracked credential file before writing, and commits one added by hand', (t) => {
+  const dir = workingProject(t);
+  mkdirSync(join(dir, 'config'));
+  for (const name of ['.env', 'config/id_rsa', '.env.example', 'a.pem', 'b.key']) writeFileSync(join(dir, name), 'x\n');
+  assert.throws(
+    () => layerDone(dir, 'L2 state', undefined, NOW),
+    /^Error: \.env, a\.pem, b\.key ほか1件 は認証情報のファイル名なのでコミットしない（\.gitignore に足すか、コミットするなら先に git add する）$/,
+  );
+  assert.equal(read(dir, 'PLAN.md'), PLAN);
+  writeFileSync(join(dir, '.gitignore'), '.env\n*.pem\n*.key\n');
+  execFileSync('git', ['add', 'config/id_rsa'], { cwd: dir });
+  layerDone(dir, 'L2 state', undefined, NOW);
+  assert.deepEqual(gitStatus(dir), []);
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
+});
+
 test('layer done lists at most five added files', (t) => {
   const dir = workingProject(t);
   for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) writeFileSync(join(dir, `${name}.ts`), '');

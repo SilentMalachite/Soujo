@@ -155,16 +155,19 @@ export function pluginDir(dir: string): string | undefined {
  * The nearest .soujo/ directory from start upward, or undefined outside Soujo projects and inside a host plugin directory,
  * whose copy of Soujo carries this repository's .soujo/.
  * The search stops at the git top level (a directory with .git), so a nested repository never uses an outer project.
+ * Outside a repository only start itself counts, as `soujo init` creates .soujo/ there, so that a .soujo/ made in the home
+ * directory is not the project of every directory below it.
  */
 export function findStateDir(start: string): string | undefined {
   if (pluginDir(start) !== undefined) return undefined;
-  let dir = resolve(start);
-  for (;;) {
+  const first = resolve(start);
+  let found: string | undefined;
+  for (let dir = first; ; ) {
     const candidate = join(dir, STATE_DIR);
-    if (isDirectory(candidate)) return candidate;
-    if (existsSync(join(dir, '.git'))) return undefined;
+    if (found === undefined && isDirectory(candidate)) found = candidate;
+    if (existsSync(join(dir, '.git'))) return found;
     const parent = dirname(dir);
-    if (parent === dir) return undefined;
+    if (parent === dir) return found !== undefined && dirname(found) === first ? found : undefined;
     dir = parent;
   }
 }

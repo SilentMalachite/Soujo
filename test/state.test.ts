@@ -508,7 +508,7 @@ test('checkMismatch names a 確認 that is not the completion condition PLAN giv
   // Whitespace runs compare equal, control characters among them, so a condition re-spaced by hand is not a difference.
   assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state —  npm\ttest  が通る \n')), undefined);
   assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state — npm test が通る\r\n')), undefined);
-  assert.equal(checkMismatch(parseNext(NEXT.replace('npm test', 'npm\ttest')) as Next, parsePlan('- [ ] L2 state — npm test が通る\n')), undefined);
+  assert.equal(checkMismatch({ ...next, check: next.check.replace('npm test', 'npm\ttest') }, parsePlan('- [ ] L2 state — npm test が通る\n')), undefined);
   // Nothing to compare against: either phase, a layer PLAN does not have, and a layer left without a condition.
   for (const layer of ['spec', 'plan', 'L9']) assert.equal(checkMismatch({ ...next, layer }, items), undefined, layer);
   assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state\n')), undefined);
@@ -576,12 +576,33 @@ test('lastMilestone returns the last 節目 entry wherever it is, or undefined',
   assert.equal(lastMilestone(''), undefined);
 });
 
-test('daysBetween counts whole days rounded down, and 0 when the end is not later', () => {
+test('daysBetween counts local calendar days, and 0 when the end is not on a later date', () => {
   const from = new Date(2026, 8, 12, 18, 0);
-  assert.equal(daysBetween(from, new Date(2026, 8, 15, 17, 59)), 2);
-  assert.equal(daysBetween(from, new Date(2026, 8, 15, 18, 0)), 3);
+  assert.equal(daysBetween(from, new Date(2026, 8, 15, 0, 0)), 3);
+  assert.equal(daysBetween(from, new Date(2026, 8, 15, 23, 59)), 3);
+  assert.equal(daysBetween(new Date(2026, 8, 12, 23, 0), new Date(2026, 8, 14, 1, 0)), 2);
+  assert.equal(daysBetween(from, new Date(2026, 8, 12, 23, 59)), 0);
   assert.equal(daysBetween(from, from), 0);
   assert.equal(daysBetween(from, new Date(2026, 8, 1)), 0);
+  // A daylight saving change in between, where the zone has one, is no fraction of a day.
+  assert.equal(daysBetween(new Date(2026, 2, 1, 12), new Date(2026, 3, 1, 12)), 31);
+  assert.equal(daysBetween(new Date(2026, 9, 1, 0, 30), new Date(2026, 10, 30, 23, 30)), 60);
+});
+
+test('validateNext and formatNext refuse a control character inside a value', () => {
+  for (const char of ['\t', '\u0085', '\u0000', '\u007f']) {
+    const text = NEXT.replace('L2 state', `L2${char}state`);
+    assert.deepEqual(validateNext(text), ['「次」に制御文字がある'], JSON.stringify(char));
+    assert.equal(parseNext(text), undefined);
+    assert.throws(() => formatNext({ layer: `L2${char}state`, premise: 'p', check: 'c' }), /^Error: 「次」に制御文字がある$/);
+  }
+  assert.deepEqual(validateNext(NEXT.replace('L1 完了', 'L1\t完了').replace('なし', 'な\u009fし')), ['「前提」に制御文字がある', '「注意」に制御文字がある']);
+  assert.throws(() => formatNext({ layer: 'L2', premise: 'p', check: 'c', caution: 'a\tb' }), /^Error: 「注意」に制御文字がある$/);
+  // effort names its own problem, once.
+  assert.deepEqual(validateNext(NEXT.replace('effort: medium', 'effort: med\tium')), ['effort は low|medium|high|xhigh のどれか: med\tium']);
+  // At either end a tab is trimmed away, as spaces are.
+  assert.deepEqual(validateNext(NEXT.replace('確認: ', '確認:\t')), []);
+  assert.equal(formatNext({ layer: '\tL2\t', premise: 'p', check: 'c' }).split('\n')[0], '次: L2');
 });
 
 test('formatDate pads month and day in local time', () => {

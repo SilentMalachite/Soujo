@@ -8,6 +8,7 @@ import {
   REPOSITORY_ENV,
   gitAddAll,
   gitAddedFiles,
+  gitChangeCount,
   gitChangedPaths,
   gitCommit,
   gitCommitsAfter,
@@ -24,6 +25,7 @@ import {
   gitStatusExcluding,
   gitToplevel,
   gitUnmergedCount,
+  gitUntracked,
 } from '../src/git.js';
 import { commitAll, repo, temp } from './helpers.js';
 
@@ -229,21 +231,25 @@ test('gitStatusExcluding leaves out the given paths literally, and gitChangedPat
   assert.deepEqual(gitChangedPaths(app, []), []);
 });
 
-test('gitUnmergedCount counts conflicts in the whole repository', (t) => {
+test('gitUnmergedCount counts conflicts in cwd and below', (t) => {
   const dir = repo(t);
   const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
-  writeFileSync(join(dir, 'f.txt'), 'base\n');
+  const app = join(dir, 'app');
+  const other = join(dir, 'other');
+  mkdirSync(app);
+  mkdirSync(other);
+  writeFileSync(join(app, 'f.txt'), 'base\n');
+  writeFileSync(join(other, 'g.txt'), 'base\n');
   commitAll(dir, 'base');
   assert.equal(gitUnmergedCount(dir), 0);
   git('checkout', '-q', '-b', 'side');
-  writeFileSync(join(dir, 'f.txt'), 'side\n');
+  writeFileSync(join(app, 'f.txt'), 'side\n');
   commitAll(dir, 'side');
   git('checkout', '-q', '-');
-  writeFileSync(join(dir, 'f.txt'), 'main\n');
+  writeFileSync(join(app, 'f.txt'), 'main\n');
   commitAll(dir, 'main');
   assert.throws(() => git('merge', '-q', 'side'));
-  mkdirSync(join(dir, 'sub'));
-  assert.equal(gitUnmergedCount(join(dir, 'sub')), 1);
+  assert.deepEqual([gitUnmergedCount(dir), gitUnmergedCount(app), gitUnmergedCount(other)], [1, 1, 0]);
 });
 
 test('gitIgnored reports ignored paths but not tracked files', (t) => {
@@ -289,6 +295,38 @@ test('gitHeadEntry reads a file or symlink at HEAD relative to cwd, literally, o
   }
 });
 
+test('gitAddedFiles lists only the files added in cwd and below', (t) => {
+  const top = repo(t);
+  mkdirSync(join(top, 'app'));
+  writeFileSync(join(top, 'app', 'a.txt'), '');
+  writeFileSync(join(top, 'b.txt'), '');
+  commitAll(top, 'both');
+  assert.deepEqual(gitAddedFiles(join(top, 'app')), ['app/a.txt']);
+  assert.deepEqual(gitAddedFiles(top), ['app/a.txt', 'b.txt']);
+});
+
+test('gitChangeCount counts status lines, and reads no further than its limit', (t) => {
+  const dir = repo(t);
+  assert.deepEqual(gitChangeCount(dir), { count: 0, truncated: false });
+  for (let index = 0; index < 100; index++) writeFileSync(join(dir, `f${String(index).padStart(3, '0')}`), '');
+  assert.deepEqual(gitChangeCount(dir), { count: 100, truncated: false });
+  // "?? f000" is 8 bytes a line, so 100 bytes hold 12 whole lines; git may have written more before it was stopped.
+  const cut = gitChangeCount(dir, 100);
+  assert.equal(cut.truncated, true);
+  assert.ok(cut.count >= 12 && cut.count <= 100, String(cut.count));
+  assert.throws(() => gitChangeCount(temp(t)), /^Error: git status に失敗: [^\n]+$/);
+});
+
+test('gitUntracked lists each untracked file in cwd and below that git does not ignore, relative to cwd', (t) => {
+  const top = repo(t);
+  mkdirSync(join(top, 'app', 'new'), { recursive: true });
+  writeFileSync(join(top, 'app', 'new', '.env'), '');
+  writeFileSync(join(top, 'app', 'ignored.key'), '');
+  writeFileSync(join(top, 'app', '.gitignore'), '*.key\n');
+  writeFileSync(join(top, 'outside.env'), '');
+  assert.deepEqual(gitUntracked(join(top, 'app')), ['.gitignore', 'new/.env']);
+});
+
 test('gitAddedFiles lists files added by HEAD, including the root commit', (t) => {
   const dir = repo(t);
   writeFileSync(join(dir, 'a.txt'), 'a\n');
@@ -331,7 +369,7 @@ test('gitFindCommitStarting finds the latest subject with the prefix, and gitCom
   assert.equal(gitLastCommit(dir)?.subject, 'docs: b');
 });
 
-test('gitFindCommit, gitFindCommitStarting, and gitCommitsAfter see only the commits that change cwd and below', (t) => {
+test('gitLastCommit, gitFindCommit, gitFindCommitStarting, and gitCommitsAfter see only the commits that change cwd and below', (t) => {
   const top = repo(t);
   const app = join(top, 'app');
   const other = join(top, 'other');
@@ -353,6 +391,8 @@ test('gitFindCommit, gitFindCommitStarting, and gitCommitsAfter see only the com
   assert.deepEqual(gitCommitsAfter(app, layer?.hash).map((commit) => commit.subject), ['fix: app']);
   assert.deepEqual(gitCommitsAfter(app).map((commit) => commit.subject), ['layer: L1 app', 'fix: app']);
   assert.equal(gitCommitsAfter(top).length, 4);
+  assert.equal(gitLastCommit(app)?.subject, 'fix: app');
+  assert.equal(gitLastCommit(top)?.subject, 'layer: L3 other');
 });
 
 test('gitCommit with nothing to commit throws a one-line error', (t) => {

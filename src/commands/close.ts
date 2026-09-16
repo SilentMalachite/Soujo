@@ -3,13 +3,13 @@
 import { dirname } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { gitLastCommit } from '../git.js';
-import { appendLog, formatDate, logLines, newlyDone, nextStatus, parsePlan, type LogEntry } from '../state.js';
+import { appendLog, formatDate, logLines, newlyDone, nextStatus, parsePlan, validatePlan, type LogEntry } from '../state.js';
 import {
   INTERRUPTED,
   INTERRUPTION_NOTE,
   commandArg,
   commitRecords,
+  committedHash,
   headState,
   requireCommittable,
   requireNext,
@@ -37,10 +37,11 @@ function uncommittedInterruption(log: string, head: string | undefined, layer: s
 /**
  * Decided before anything is written, in the order layer done uses:
  * - not committable (see requireCommittable)                                  → refuse
+ * - PLAN refused by validatePlan (a layer to commit could be the wrong one)    → refuse
  * - NEXT.md missing, invalid, or pointing to a layer already checked in PLAN   → refuse
  * - a layer checked in PLAN but not at HEAD (layer done stopped before commit) → refuse; re-running layer done finishes it
  * - --note blank or breaking LOG limits                                        → refuse
- * After the 中断 entry is written, nothing is committed while PLAN, LOG, or NEXT is not staged as written (see commitRecords).
+ * After the 中断 entry is written, nothing is committed while SPEC, PLAN, LOG, or NEXT is not staged as written (see commitRecords).
  * The layer is NEXT.md's, or PLAN's first unfinished layer when NEXT.md already points past it (stopped between next set and layer done).
  * With --note, a 中断 entry of the same layer not in HEAD's LOG is kept instead of adding another,
  * so re-running after a failed commit retries only the commit, even with different wording.
@@ -50,8 +51,12 @@ export function close(cwd: string, note?: string, now: Date = new Date()): strin
   const root = dirname(dir);
   requireCommittable(root);
 
+  const plan = readState(dir, 'PLAN.md') ?? '';
+  const planProblems = validatePlan(plan);
+  // Refused as layer done refuses it: a repeated name or a fence swallowing layers makes the layer found below a guess.
+  if (planProblems.length > 0) throw new Error(`${planProblems.join('、')}（PLAN.md を直してから）`);
   const next = requireNext(dir, HINT);
-  const items = parsePlan(readState(dir, 'PLAN.md') ?? '');
+  const items = parsePlan(plan);
   const status = nextStatus(next.layer, items);
   if (status.state === 'done') throw new Error(`NEXT.md の次「${next.layer}」は PLAN で完了済み${HINT}`);
   const [pending] = newlyDone(parsePlan(headState(root, 'PLAN.md') ?? ''), items);
@@ -87,6 +92,6 @@ export function close(cwd: string, note?: string, now: Date = new Date()): strin
       : '中断は LOG に記録済み。原因を直して同じコマンドを再実行すればコミットだけやり直す',
   );
 
-  const result = committed ? `コミット: ${gitLastCommit(root)?.hash ?? '?'} ${subject}` : '未コミットの変更なし';
+  const result = committed ? `コミット: ${committedHash(root)} ${subject}` : '未コミットの変更なし';
   return [[...(logged === undefined ? [] : [logged]), result].join('・'), `再開: ${skill('resume')}`];
 }

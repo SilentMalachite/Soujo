@@ -28,14 +28,25 @@ import {
   gitOperationInProgress,
   gitToplevel,
   gitUnmergedCount,
+  gitUntracked,
   type Commit,
   type HeadEntry,
 } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext, type LogEntry, type Next, type PlanItem } from '../state.js';
 
 const CLIP = 60;
-// The records a layer or wip commit must carry as written.
-const RECORDS = ['PLAN.md', 'LOG.md', 'NEXT.md'] as const;
+// The records a layer or wip commit must carry as written. SPEC.md is one too: the skills write it, and a layer's commit
+// would otherwise leave its change behind without a word.
+const RECORDS = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'] as const;
+// How many paths an error names before counting the rest.
+const SHOWN_PATHS = 3;
+
+/**
+ * The name of a file that holds credentials (by its base name). .env.example is a template without values. A commit that
+ * stages everything must not take one in only because the project's .gitignore forgot it.
+ */
+export const CREDENTIAL_FILE =
+  /^(?:\.env(?:\.(?!example$).+)?|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|auth\.json|id_(?:rsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.+\.(?:pem|key))$/;
 
 export const NO_LAYERS = 'PLAN.md に層がない';
 
@@ -72,13 +83,15 @@ export function readGit<T>(root: string, read: () => T): T | NoCommit {
   return result instanceof Error ? 'git の状態を読めない' : result;
 }
 
-/** The last commit, or why there is none to show. */
+/** The last commit changing the project, or why there is none to show. */
 export function readHead(root: string): Commit | NoCommit {
-  return readGit(root, () => {
-    const commit = gitLastCommit(root);
-    if (commit === undefined) throw new Error('git log');
-    return commit;
-  });
+  return readGit(root, (): Commit | NoCommit => gitLastCommit(root) ?? 'まだない');
+}
+
+/** The hash of the last commit changing the project, for a message after committing: "?" when git cannot say, never a throw. */
+export function committedHash(root: string): string {
+  const commit = attempt(() => gitLastCommit(root));
+  return commit instanceof Error ? '?' : (commit?.hash ?? '?');
 }
 
 /** The layers of PLAN.md in the project above cwd; throws outside Soujo projects or without PLAN.md. */
@@ -98,9 +111,9 @@ export function clip(text: string, max: number = CLIP): string {
 }
 
 // A layer name as one shell word: single-quoted, as the skills spell it, so that spaces and `$(…)` in it stay literal.
-// `next set`, `next check`, and `layer done` hold layer names to one line without control characters (see validatePlan);
-// `resume` and `close` read PLAN without that check, so a name carrying one reaches a command they suggest, where printable()
-// flattens it and the pasted line no longer matches. `next check` warns about that name at the same time.
+// No name suggested here carries a control character, which printable() would flatten so that the pasted line no longer
+// matches: `close` refuses a PLAN that validatePlan refuses and `resume` names no layer of one, and validateNext refuses
+// NEXT.md values carrying one.
 function quoted(text: string): string {
   return `'${text.split("'").join(String.raw`'\''`)}'`;
 }
@@ -132,10 +145,18 @@ export function requireNext(dir: string, hint: string): Next {
   return next;
 }
 
+/** paths joined for a message: the first SHOWN_PATHS of them, then how many are left. */
+function listPaths(paths: readonly string[]): string {
+  const rest = paths.length > SHOWN_PATHS ? ` ほか${paths.length - SHOWN_PATHS}件` : '';
+  return `${paths.slice(0, SHOWN_PATHS).join(', ')}${rest}`;
+}
+
 /**
  * Throws unless committing the project at root is safe: a repository, .soujo/ not a symlink, every state file (a symlink's
  * target included) inside the project, outside .git, and not another state file or archive, no unfinished
- * merge/rebase/cherry-pick/revert, no unmerged files, and no state file or symlink target ignored by git.
+ * merge/rebase/cherry-pick/revert anywhere in the repository, no unmerged files in the project, no state file or symlink
+ * target ignored by git, and no untracked credential file (see CREDENTIAL_FILE) that staging everything would take in. One
+ * added with `git add` first is tracked, and is committed as the user chose.
  */
 export function requireCommittable(root: string): void {
   const toplevel = gitToplevel(root);
@@ -146,9 +167,13 @@ export function requireCommittable(root: string): void {
   requireSafeTargets(root, STATE_FILES);
   const operation = gitOperationInProgress(root);
   if (operation !== undefined) throw new Error(`git の ${operation} が途中なのでコミットしない（終えるか中止してから）`);
-  const unmerged = gitUnmergedCount(toplevel);
+  const unmerged = gitUnmergedCount(root);
   if (unmerged > 0) throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
   requireNotIgnored(root, STATE_FILES);
+  const credentials = gitUntracked(root).filter((path) => CREDENTIAL_FILE.test(posix.basename(path)));
+  if (credentials.length > 0) {
+    throw new Error(`${listPaths(credentials)} は認証情報のファイル名なのでコミットしない（.gitignore に足すか、コミットするなら先に git add する）`);
+  }
 }
 
 /**
@@ -239,8 +264,8 @@ export function headState(root: string, file: StateFile): string | undefined {
 
 /**
  * Stages everything in the project and commits it as subject. Returns false, without committing, when nothing ends up staged.
- * Nothing is committed while PLAN, LOG, NEXT, or an extra file, or the symlink standing for one, is not staged as written
- * (skip-worktree): the commit would lack its records, and a re-run of layer done could not add them afterwards.
+ * Nothing is committed while SPEC, PLAN, LOG, NEXT, or an extra file, or the symlink standing for one, is not staged as
+ * written (skip-worktree): the commit would lack its records, and a re-run of layer done could not add them afterwards.
  */
 export function commitRecords(root: string, subject: string, extra: readonly StateFile[] = []): boolean {
   gitAddAll(root);

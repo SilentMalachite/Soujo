@@ -4,8 +4,11 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { existsSync, lstatSync, readlinkSync, type Stats } from 'node:fs';
 import { join, posix } from 'node:path';
 
-// spawnSync fails beyond 1 MB by default; `git status` in a large working tree can exceed that.
+// spawnSync fails beyond 1 MB by default; `git log` in a long history can exceed that.
 const MAX_OUTPUT = 256 * 1024 * 1024;
+// Counting changes stops reading here, so that a huge working tree's listing is not held in memory: past it the count is a
+// lower bound.
+const COUNT_OUTPUT = 16 * 1024 * 1024;
 const COMMIT_FORMAT = '--format=%h%x09%ct%x09%s';
 
 export interface Commit {
@@ -50,9 +53,15 @@ function environment(extra: Record<string, string>): NodeJS.ProcessEnv {
   return env;
 }
 
-function run(cwd: string, args: string[], extra: Record<string, string> = {}, input?: string): SpawnSyncReturns<string> {
+function run(
+  cwd: string,
+  args: string[],
+  extra: Record<string, string> = {},
+  input?: string,
+  maxBuffer: number = MAX_OUTPUT,
+): SpawnSyncReturns<string> {
   const stdin = input === undefined ? 'ignore' : 'pipe';
-  return spawnSync('git', args, { cwd, encoding: 'utf8', input, stdio: [stdin, 'pipe', 'pipe'], maxBuffer: MAX_OUTPUT, env: environment(extra) });
+  return spawnSync('git', args, { cwd, encoding: 'utf8', input, stdio: [stdin, 'pipe', 'pipe'], maxBuffer, env: environment(extra) });
 }
 
 // A path printed by git on one line: only the line break is dropped, since a directory name may start or end with a space.
@@ -114,6 +123,25 @@ export function gitStatus(cwd: string): string[] {
   return git(cwd, ['status', '--porcelain', '--untracked-files=normal', ...HERE]).split('\n').filter((line) => line !== '');
 }
 
+export interface ChangeCount {
+  /** The number of gitStatus lines, or of those read before the output limit. */
+  count: number;
+  /** Whether git printed more than was read, so that count is a lower bound. */
+  truncated: boolean;
+}
+
+/** The number of gitStatus lines, reading at most maxBytes of git's output (see COUNT_OUTPUT). */
+export function gitChangeCount(cwd: string, maxBytes: number = COUNT_OUTPUT): ChangeCount {
+  const args = ['status', '--porcelain', '--untracked-files=normal', ...HERE];
+  const result = run(cwd, args, {}, undefined, maxBytes);
+  const truncated = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS';
+  if (!truncated && (result.error !== undefined || result.status !== 0)) throw failure(args, result);
+  const lines = result.stdout.split('\n');
+  // The last line is complete only when the output ended with its line break; cut short, it may be half a line.
+  lines.pop();
+  return { count: lines.filter((line) => line !== '').length, truncated };
+}
+
 /**
  * `git status --porcelain` lines for cwd and below, leaving out the given paths (relative to cwd, taken literally). An untracked
  * directory counts once, as in gitStatus.
@@ -155,7 +183,15 @@ export function gitAddAll(cwd: string): void {
   git(cwd, ['add', '-A', ...HERE]);
 }
 
-/** Commits the changes in cwd and below; changes staged elsewhere stay staged. */
+/** The untracked files in cwd and below that git does not ignore, each one listed, relative to cwd. */
+export function gitUntracked(cwd: string): string[] {
+  return git(cwd, ['ls-files', '-z', '--others', '--exclude-standard', ...HERE]).split('\0').filter((path) => path !== '');
+}
+
+/**
+ * Commits the changes in cwd and below; changes staged elsewhere stay staged. The repository's hooks run: a hook guarding
+ * what is committed (a secret scanner) guards these commits too, and one that refuses fails the commit like any git failure.
+ */
 export function gitCommit(cwd: string, message: string): void {
   git(cwd, ['commit', '-q', '-m', message, ...HERE]);
 }
@@ -199,9 +235,12 @@ export function gitIgnored(cwd: string, paths: readonly string[]): string[] {
 
 const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
 
-/** The number of files with unresolved conflicts anywhere in the repository. */
+/**
+ * The number of files with unresolved conflicts in cwd and below. Git commits cwd with `-- .` while a file elsewhere is
+ * unmerged (after a conflicting `git stash pop`, say), so only the project's own conflicts stand in its way.
+ */
 export function gitUnmergedCount(cwd: string): number {
-  return git(cwd, ['status', '--porcelain']).split('\n').filter((line) => UNMERGED.test(line)).length;
+  return git(cwd, ['status', '--porcelain', ...HERE]).split('\n').filter((line) => UNMERGED.test(line)).length;
 }
 
 function parseCommit(line: string): Commit | undefined {
@@ -214,17 +253,14 @@ function parseCommits(output: string): Commit[] {
   return output.split('\n').flatMap((line) => parseCommit(line) ?? []);
 }
 
-/** The latest commit for display, or undefined when there is none (or git fails). */
-export function gitLastCommit(cwd: string): Commit | undefined {
-  try {
-    return parseCommit(git(cwd, ['log', '-1', COMMIT_FORMAT]).trim());
-  } catch {
-    return undefined;
-  }
-}
-
 // The history functions below read, like staging and committing, only the commits that change cwd and below (history
 // simplified as `git log -- .` does), so another project in the same repository and empty commits are not seen.
+
+/** The latest commit changing cwd, or undefined (also when there are no commits). Git failures throw. */
+export function gitLastCommit(cwd: string): Commit | undefined {
+  if (!gitHasCommits(cwd)) return undefined;
+  return parseCommit(git(cwd, ['log', '-1', COMMIT_FORMAT, ...HERE]).trim());
+}
 
 /** The latest commit changing cwd whose subject is exactly subject, or undefined (also when there are no commits). Git failures throw. */
 export function gitFindCommit(cwd: string, subject: string): Commit | undefined {
@@ -270,8 +306,8 @@ export function gitHeadEntry(cwd: string, path: string): HeadEntry | undefined {
   return { symlink: match[1] === '120000', content: git(cwd, ['cat-file', 'blob', match[2] ?? '']) };
 }
 
-/** Paths added by the HEAD commit, the root commit included. */
+/** Paths (relative to the top level) in cwd and below added by the HEAD commit, the root commit included. */
 export function gitAddedFiles(cwd: string): string[] {
-  const output = git(cwd, ['diff-tree', '-r', '--root', '--no-commit-id', '--name-only', '--diff-filter=A', '-z', 'HEAD']);
+  const output = git(cwd, ['diff-tree', '-r', '--root', '--no-commit-id', '--name-only', '--diff-filter=A', '-z', 'HEAD', ...HERE]);
   return output.split('\0').filter((path) => path !== '');
 }
