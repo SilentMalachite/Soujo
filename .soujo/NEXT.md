@@ -1,5 +1,5 @@
-次: L29 map-resolve
-前提: L28 map-jsx 完了（JSX の本文と属性の文字列を import にしない・拡張子で JSX の可否を決める・レビュー20件のうち17件を同じ層で直した）
-確認: query・fragment・%エンコード付きの相対 specifier を解決し、大小文字を区別する FS では補完せず、読み込むバイト数に上限と注記があり、ID と比較順のコメントが実装と合うことがテストで通る（#17 #29 #30 #43 #44）
-注意: L28 のレビュー残り3件（#3 の本体・#18 SPEC・#20 運用）は .soujo/REVIEW-FIX.md に未対応で残っている
+次: L30 privacy-ci
+前提: L29 map-resolve 完了（reviewer 19件・Codex 12件を同じ層で直した。判断 D9 常に NFC・D10 拡張子は書かれた綴りだけ）
+確認: privacy テストが Codex の URL・履歴の blob・全 ref のメッセージを検査し、自身の除外が合成 fixture に限られ、docs テストが SPEC を含み、npm test がシェルの glob に頼らないことがテストで通る（#20 #21 #33 #34 #35 #36）
+注意: L28 のレビュー残り3件（#3 の本体・#18 SPEC・#20 運用）は .soujo/REVIEW-FIX.md に未対応で残っている。SPEC の docs 同期は L29 #17 の宿題でもある
 effort: high

@@ -1,7 +1,7 @@
 // soujo map plan / map code: PLAN.md as a vertical diagram, and a directory's imports as Mermaid (or its tree).
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { findStateDir } from '../files.js';
+import { findStateDir, foldsCase, pathKey } from '../files.js';
 import { MAP_LIMITS, directoryTree, importGraph, mainLanguage, planDiagram, scanNotes, skipEntry, } from '../map.js';
 import { NO_LAYERS, readPlan } from './shared.js';
 export function mapPlan(cwd) {
@@ -60,9 +60,52 @@ function scanDirectory(root, shown, limit) {
     }
     return scan;
 }
+// Where a text's last line ends, so that what follows a cut — an unfinished line — is left out. A byte count cuts where it
+// falls, and half of an `import './dependency.js';` reads as a whole `'./dep` that would be drawn as an edge of its own.
+const LINE_ENDS = [0x0a, 0x0d, 0x2028, 0x2029].map((code) => String.fromCharCode(code));
+function completeLines(text) {
+    const last = Math.max(...LINE_ENDS.map((end) => text.lastIndexOf(end)));
+    return last === -1 ? '' : text.slice(0, last + 1);
+}
+/**
+ * Reads the whole of a file that fits within limit bytes, or its first limit bytes when it does not, saying which of the
+ * two it was. What a cut file gives back ends at its last complete line: the cut lands where the byte count falls, inside
+ * a character (which then reads as U+FFFD) or inside a token, and a file whose first limit bytes hold no line break at all
+ * gives back nothing.
+ *
+ * One buffer serves every file, grown to what the largest so far needs and never beyond limit + 1, so a limit far above
+ * any file costs only what the files themselves do. limit is a non-negative integer. A file that grows between its size
+ * being read and its bytes being read is taken as the size said, and is not counted as cut by the limit.
+ */
+function headReader(limit) {
+    let buffer = Buffer.alloc(0);
+    return (path) => {
+        const file = openSync(path, 'r');
+        try {
+            // One byte past what is kept, so that reading it is what tells a file at the limit from one beyond it.
+            const want = Math.min(fstatSync(file).size, limit) + 1;
+            if (buffer.length < want)
+                buffer = Buffer.allocUnsafe(want);
+            let read = 0;
+            while (read < want) {
+                const got = readSync(file, buffer, read, want - read, null);
+                if (got === 0)
+                    break;
+                read += got;
+            }
+            const partial = read === want && want === limit + 1;
+            const text = buffer.toString('utf8', 0, partial ? read - 1 : read);
+            return { text: partial ? completeLines(text) : text, partial };
+        }
+        finally {
+            closeSync(file);
+        }
+    };
+}
 /**
  * Mermaid of the imports in the main language under dir (default: the project root, or cwd outside Soujo projects);
- * a directory tree when that language has no import rules or no file is recognized. Unreadable files are counted and skipped.
+ * a directory tree when that language has no import rules or no file is recognized. Unreadable files are counted and skipped,
+ * and a file longer than the byte limit is read only to it and counted.
  */
 export function mapCode(cwd, dir, limits = MAP_LIMITS) {
     const stateDir = findStateDir(cwd);
@@ -73,20 +116,33 @@ export function mapCode(cwd, dir, limits = MAP_LIMITS) {
     const main = mainLanguage(scan.files);
     const rules = main?.language.graph;
     if (main === undefined || rules === undefined) {
-        return directoryTree(basename(root) || '.', [...scan.dirs, ...scan.files], scanNotes(scan, limits), limits);
+        return directoryTree(basename(root) || '.', [...scan.dirs, ...scan.files], scanNotes({ ...scan, partial: 0 }, limits), limits);
     }
     const files = [];
     let unreadable = scan.unreadable;
+    let partial = 0;
+    // Rounded to a whole count of bytes, so a limit given as a fraction or a negative number reads what it can rather than
+    // failing the command; one that is not a finite number names no amount to read, so the default stands. The note names
+    // the limit that was applied.
+    const bytes = Number.isFinite(limits.fileBytes) ? Math.max(Math.floor(limits.fileBytes), 0) : MAP_LIMITS.fileBytes;
+    const readHead = headReader(bytes);
     for (const path of main.paths) {
-        let text;
+        let head;
         try {
-            text = readFileSync(join(root, path), 'utf8');
+            head = readHead(join(root, path));
         }
         catch {
             unreadable += 1;
             continue;
         }
-        files.push({ path, imports: rules.imports(path, text) });
+        if (head.partial)
+            partial += 1;
+        files.push({ path, imports: rules.imports(path, head.text) });
     }
-    return importGraph(rules, files, scanNotes({ unreadable, truncated: scan.truncated }, limits), limits);
+    const notes = scanNotes({ unreadable, truncated: scan.truncated, partial }, { ...limits, fileBytes: bytes });
+    // Paths are compared the way the file system holding the scanned files compares them, asked once per run of a file that
+    // was scanned rather than of root, whose own name a mount boundary can have another file system answer for. Always in
+    // NFC, since a file system may hand back either normal form for one name, and in one letter case only where it folds it.
+    const folds = foldsCase(join(root, main.paths[0] ?? ''));
+    return importGraph(rules, files, notes, limits, (path) => pathKey(path, folds));
 }

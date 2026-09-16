@@ -3,7 +3,7 @@
 import { posix } from 'node:path';
 import { formatItem, nextLayer, printable, type PlanItem } from './state.js';
 
-/** Scanned files by path: an exact match first, then one ignoring case (for case-insensitive file systems). */
+/** Scanned files by path: an exact match first, then one spelled differently that the file system would take for it. */
 export interface FileIndex {
   find(path: string): string | undefined;
 }
@@ -31,13 +31,15 @@ export interface ScannedFile {
 export interface MapLimits {
   /** Files and directories scanned before stopping. */
   entries: number;
+  /** Bytes read from one file; what follows the cut is not read, so its imports are not drawn. */
+  fileBytes: number;
   nodes: number;
   /** Below Mermaid's default maxEdges (500). */
   edges: number;
   treeLines: number;
 }
 
-export const MAP_LIMITS: MapLimits = { entries: 5000, nodes: 100, edges: 300, treeLines: 200 };
+export const MAP_LIMITS: MapLimits = { entries: 5000, fileBytes: 512 * 1024, nodes: 100, edges: 300, treeLines: 200 };
 
 // One row per language; extensions are lower case and belong to one row. Earlier rows win ties for the main language.
 export const LANGUAGES: readonly Language[] = [
@@ -72,7 +74,8 @@ const RAIL = ' |  ';
 const NO_RAIL = '    ';
 const NARROW = 'ディレクトリを指定して絞る';
 
-// Code point order, so output does not depend on the locale.
+// UTF-16 code unit order, so output does not depend on the locale; a surrogate pair sorts by its first unit, which puts
+// it before the last characters of the basic plane rather than after them.
 function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -119,10 +122,11 @@ export function planDiagram(items: PlanItem[]): string[] {
 }
 
 /** Notes about an incomplete scan, shared by the graph and the tree. */
-export function scanNotes(scan: { unreadable: number; truncated: boolean }, limits: MapLimits = MAP_LIMITS): string[] {
+export function scanNotes(scan: { unreadable: number; truncated: boolean; partial: number }, limits: MapLimits = MAP_LIMITS): string[] {
   return [
     ...(scan.truncated ? [`走査を ${limits.entries}件で打ち切った（${NARROW}）`] : []),
     ...(scan.unreadable > 0 ? [`読めずに飛ばした: ${scan.unreadable}件`] : []),
+    ...(scan.partial > 0 ? [`先頭 ${limits.fileBytes} バイトだけ読んだ: ${scan.partial}件`] : []),
   ];
 }
 
@@ -552,7 +556,9 @@ function scriptImports(from: string, text: string): string[] {
   return specifiers;
 }
 
-// Extensions tried for a specifier written with an extension, the way TypeScript maps output extensions to sources.
+// Extensions tried for a specifier written with an extension, the way TypeScript maps output extensions to sources. Looked
+// up as written, so ".TS" is not one of these: swapping it for ".ts" would name a file whose spelling the specifier does
+// not have, which a case sensitive file system does not answer. It falls to the branch below, where the index decides.
 const SCRIPT_SWAPS = new Map<string, readonly string[]>([
   ['.js', ['.ts', '.tsx', '.d.ts', '.js']],
   ['.jsx', ['.tsx', '.jsx']],
@@ -566,15 +572,15 @@ const SCRIPT_SWAPS = new Map<string, readonly string[]>([
 // Extensions tried for a specifier written without one, and for its index file.
 const SCRIPT_BARE = ['.ts', '.tsx', '.d.ts', '.js', '.jsx', '.mts', '.mjs', '.cts', '.cjs'];
 
-// Only relative specifiers ("./", "../") resolve; packages and path aliases such as "@/x" do not.
-function scriptResolve(from: string, specifier: string, files: FileIndex): string | undefined {
-  if (!/^\.\.?(?:\/|$)/.test(specifier)) return undefined;
-  const target = posix.join(posix.dirname(from), specifier);
+// The file a path relative to from names, with the extensions TypeScript would try; undefined for a path leading out of
+// the scanned directory or naming nothing scanned.
+function resolveRelative(from: string, path: string, files: FileIndex): string | undefined {
+  const target = posix.join(posix.dirname(from), path);
   if (target === '..' || target.startsWith('../')) return undefined;
   const index = SCRIPT_BARE.map((extension) => posix.join(target, `index${extension}`));
   // ".", "..", and a trailing "/" name a directory, never a sibling file of the same name.
-  const directory = specifier.endsWith('/') || /(?:^|\/)\.\.?$/.test(specifier);
-  const extension = posix.extname(target).toLowerCase();
+  const directory = path.endsWith('/') || /(?:^|\/)\.\.?$/.test(path);
+  const extension = posix.extname(target);
   const swaps = SCRIPT_SWAPS.get(extension);
   let candidates: string[];
   if (directory) candidates = index;
@@ -587,16 +593,49 @@ function scriptResolve(from: string, specifier: string, files: FileIndex): strin
   return undefined;
 }
 
-// --- Mermaid ---
-
-function fileIndex(paths: string[]): FileIndex {
-  const exact = new Set(paths);
-  const folded = new Map<string, string>();
-  for (const path of paths) if (!folded.has(path.toLowerCase())) folded.set(path.toLowerCase(), path);
-  return { find: (path) => (exact.has(path) ? path : folded.get(path.toLowerCase())) };
+/**
+ * Only relative specifiers ("./", "../") resolve; packages and path aliases such as "@/x" do not. A specifier is cut at its
+ * first "?" or "#", whichever comes first, since the query and the fragment of a URL-like specifier name no file, and the
+ * percent escapes of what is left are decoded, a decoded "/" separating like any other. The text as written is tried after
+ * the decoded one, so a file really named "d%2Ee.js" is found as well as one named "d.e.js"; an invalid escape ("%zz")
+ * decodes to itself, leaving one candidate.
+ */
+function scriptResolve(from: string, specifier: string, files: FileIndex): string | undefined {
+  if (!/^\.\.?(?:[/?#]|$)/.test(specifier)) return undefined;
+  const cut = specifier.split(/[?#]/, 1)[0] ?? '';
+  let decoded;
+  try {
+    decoded = decodeURIComponent(cut);
+  } catch {
+    decoded = cut;
+  }
+  for (const path of decoded === cut ? [cut] : [decoded, cut]) {
+    const found = resolveRelative(from, path, files);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
-// Ids made from paths, so adding a file does not rename the others; a collision gets "_2", "_3", ...
+// --- Mermaid ---
+
+/**
+ * Scanned files found by the key their file system compares paths by, the first of the paths sharing a key in the order
+ * they are given (importGraph sorts them first, so there it is path order). The default key is the path itself, so only
+ * what is spelled the same is found: an index completes a spelling only where the file system would complete it too.
+ */
+export function fileIndex(paths: string[], key: (path: string) => string = (path) => path): FileIndex {
+  const exact = new Set(paths);
+  const byKey = new Map<string, string>();
+  for (const path of paths) {
+    const folded = key(path);
+    if (!byKey.has(folded)) byKey.set(folded, path);
+  }
+  return { find: (path) => (exact.has(path) ? path : byKey.get(key(path))) };
+}
+
+// Ids made from the path, with every character outside A-Z a-z 0-9 as "_". Paths that then share an id take "_2", "_3",
+// ... in path order, so a file added before them shifts the numbers. A numbered id can collide in its turn with a path
+// whose own id ends that way ("a_b_2"), which then takes the next number, so no id is fixed by its path alone.
 function nodeIds(paths: string[]): Map<string, string> {
   const ids = new Map<string, string>();
   const used = new Set<string>();
@@ -618,12 +657,19 @@ function label(path: string): string {
 /**
  * Mermaid `graph LR` of files (the first of duplicate paths counts): one node per file, one edge per import resolved by rules
  * to another file. Over the limits, the most connected files and the first edges in path order are kept, with a note.
+ * key is how the file system the paths came from compares them, as fileIndex takes it; by default only an exact match counts.
  */
-export function importGraph(rules: ImportRules, files: ScannedFile[], notes: string[] = [], limits: MapLimits = MAP_LIMITS): string[] {
+export function importGraph(
+  rules: ImportRules,
+  files: ScannedFile[],
+  notes: string[] = [],
+  limits: MapLimits = MAP_LIMITS,
+  key?: (path: string) => string,
+): string[] {
   const byPath = new Map<string, ScannedFile>();
   for (const file of files) if (!byPath.has(file.path)) byPath.set(file.path, file);
   const paths = [...byPath.keys()].sort(compare);
-  const index = fileIndex(paths);
+  const index = fileIndex(paths, key);
   const edges = paths.flatMap((from) => {
     const targets = new Set<string>();
     for (const specifier of byPath.get(from)?.imports ?? []) {
@@ -674,7 +720,7 @@ function renderFolder(folder: Folder, prefix: string): string[] {
 
 /**
  * An ASCII directory tree under "<name>/" of paths (directories end with "/", so empty ones show too), folders first, each
- * level in code point order. Lines past the limit are cut with a note; notes follow as "注: ..." lines.
+ * level in the UTF-16 code unit order compare gives. Lines past the limit are cut with a note; notes follow as "注: ..." lines.
  */
 export function directoryTree(name: string, paths: string[], notes: string[] = [], limits: MapLimits = MAP_LIMITS): string[] {
   const root: Folder = { folders: new Map(), files: [] };

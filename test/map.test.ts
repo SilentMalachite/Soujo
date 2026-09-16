@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { mapCode, mapPlan } from '../src/commands/map.js';
 import {
@@ -16,6 +16,7 @@ import {
   type ImportRules,
   type ScannedFile,
 } from '../src/map.js';
+import { pathKey } from '../src/files.js';
 import { parsePlan } from '../src/state.js';
 import { project, temp } from './helpers.js';
 
@@ -38,10 +39,11 @@ function imports(text: string, from = 'src/a.tsx'): string[] {
   return RULES.imports(from, text);
 }
 
-// Edges of importGraph as "from --> to" paths, for files given as path → text.
-function edges(files: Record<string, string>): string[] {
+// Edges of importGraph as "from --> to" paths, for files given as path → text; compared as a case sensitive file system
+// does unless told otherwise, the way map code compares them.
+function edges(files: Record<string, string>, foldCase = false): string[] {
   const scanned = Object.entries(files).map(([path, text]) => ({ path, imports: imports(text, path) }));
-  const lines = importGraph(RULES, scanned);
+  const lines = importGraph(RULES, scanned, [], MAP_LIMITS, (path) => pathKey(path, foldCase));
   const paths = new Map(lines.flatMap((line) => [...line.matchAll(/^ {2}(\S+)\["(.*)"\]$/g)].map((match) => [match[1], match[2]] as const)));
   return lines.flatMap((line) => {
     const match = /^ {2}(\S+) --> (\S+)$/.exec(line);
@@ -91,11 +93,12 @@ test('mainLanguage picks the language with the most files, earlier rows winning 
   assert.equal(mainLanguage(['README.md']), undefined);
 });
 
-test('scanNotes reports a cut scan and unreadable entries', () => {
-  assert.deepEqual(scanNotes({ unreadable: 0, truncated: false }), []);
-  assert.deepEqual(scanNotes({ unreadable: 2, truncated: true }), [
+test('scanNotes reports a cut scan, unreadable entries, and files read only in part', () => {
+  assert.deepEqual(scanNotes({ unreadable: 0, truncated: false, partial: 0 }), []);
+  assert.deepEqual(scanNotes({ unreadable: 2, truncated: true, partial: 3 }), [
     `走査を ${MAP_LIMITS.entries}件で打ち切った（ディレクトリを指定して絞る）`,
     '読めずに飛ばした: 2件',
+    `先頭 ${MAP_LIMITS.fileBytes} バイトだけ読んだ: 3件`,
   ]);
 });
 
@@ -342,10 +345,18 @@ test('TS/JS imports decode escapes and skip specifiers without a whole fixed val
   assert.deepEqual(imports(text), ['./a.js', './b.js', './c.js', './d.js', './e.js', './quote".js', './with-options.js']);
 });
 
-test('TS/JS resolution swaps extensions the TypeScript way, finds index files, and ignores case', () => {
+test('TS/JS resolution swaps only an extension written as TypeScript writes it, so a case is not swapped away', () => {
+  // ".TS" is no swap of its own, so the file spelled that way is found and "dep.ts" is not reached from it.
+  assert.deepEqual(edges({ 'src/cli.ts': "import './dep.TS';", 'src/dep.TS': '', 'src/dep.ts': '' }), ['src/cli.ts --> src/dep.TS']);
+  assert.deepEqual(edges({ 'src/cli.ts': "import './dep.TS';", 'src/dep.ts': '' }), []);
+  // Where the file system folds case, the index reaches the file of the other spelling, as that file system would.
+  assert.deepEqual(edges({ 'src/cli.ts': "import './dep.TS';", 'src/dep.ts': '' }, true), ['src/cli.ts --> src/dep.ts']);
+});
+
+test('TS/JS resolution swaps extensions the TypeScript way and finds index files', () => {
   assert.deepEqual(
     edges({
-      'src/cli.ts': "import './a.js'; import './b.mjs'; import './c.js'; import './types'; import './lib'; import './State.js';",
+      'src/cli.ts': "import './a.js'; import './b.mjs'; import './c.js'; import './types'; import './lib';",
       'src/a.ts': '',
       'src/a.js': '',
       'src/b.ts': '',
@@ -353,9 +364,61 @@ test('TS/JS resolution swaps extensions the TypeScript way, finds index files, a
       'src/c.cts': '',
       'src/types.d.ts': '',
       'src/lib/index.ts': '',
-      'src/state.ts': '',
     }),
-    ['src/cli.ts --> src/a.ts', 'src/cli.ts --> src/b.mts', 'src/cli.ts --> src/lib/index.ts', 'src/cli.ts --> src/state.ts', 'src/cli.ts --> src/types.d.ts'],
+    ['src/cli.ts --> src/a.ts', 'src/cli.ts --> src/b.mts', 'src/cli.ts --> src/lib/index.ts', 'src/cli.ts --> src/types.d.ts'],
+  );
+});
+
+test('TS/JS resolution completes a name of another case only where the file system folds case', () => {
+  const files = { 'src/cli.ts': "import './State.js'; import './Lib';", 'src/state.ts': '', 'src/lib/index.ts': '' };
+  assert.deepEqual(edges(files, true), ['src/cli.ts --> src/lib/index.ts', 'src/cli.ts --> src/state.ts']);
+  assert.deepEqual(edges(files), []);
+});
+
+test('TS/JS resolution matches a path the file system hands back in the other normal form', () => {
+  // "café.ts" as the file system stores it decomposed (e + U+0301) against the composed specifier, and the other way round.
+  const decomposed = 'src/café.ts';
+  assert.deepEqual(edges({ 'src/cli.ts': "import './café.js';", [decomposed]: '' }), [`src/cli.ts --> ${decomposed}`]);
+  assert.deepEqual(edges({ 'src/cli.ts': "import './café.js';", 'src/café.ts': '' }), ['src/cli.ts --> src/café.ts']);
+});
+
+test('TS/JS resolution cuts a query and a fragment off a specifier and decodes its percent escapes', () => {
+  assert.deepEqual(
+    edges({
+      'src/cli.ts': [
+        "import './b.js?raw'; import './c.js#frag'; import './f.js?a#b';",
+        "import './d%2Ee.js'; import './caf%C3%A9.ts'; import './h%2Fi.ts'; import './q%3Fr.ts';",
+        "import './g/?x'; import '.?x'; import '..#y';",
+        "import './%zz.ts'; import './raw%2Dname.js';",
+      ].join('\n'),
+      'src/b.ts': '',
+      'src/c.ts': '',
+      'src/f.ts': '',
+      'src/d.e.ts': '',
+      'src/café.ts': '',
+      'src/h/i.ts': '',
+      'src/q?r.ts': '',
+      'src/g/index.ts': '',
+      'src/index.ts': '',
+      'index.ts': '',
+      'src/%zz.ts': '',
+      // Only the text as written names this one: "%2D" decodes to "-", and no "raw-name" file is scanned.
+      'src/raw%2Dname.ts': '',
+    }),
+    [
+      'src/cli.ts --> index.ts',
+      'src/cli.ts --> src/%zz.ts',
+      'src/cli.ts --> src/b.ts',
+      'src/cli.ts --> src/c.ts',
+      'src/cli.ts --> src/café.ts',
+      'src/cli.ts --> src/d.e.ts',
+      'src/cli.ts --> src/f.ts',
+      'src/cli.ts --> src/g/index.ts',
+      'src/cli.ts --> src/h/i.ts',
+      'src/cli.ts --> src/index.ts',
+      'src/cli.ts --> src/q?r.ts',
+      'src/cli.ts --> src/raw%2Dname.ts',
+    ],
   );
 });
 
@@ -389,6 +452,15 @@ test('importGraph uses path-based ids, escapes labels, and counts the first of d
     '  m_q_______ts["q#34;#35;#38;#60;#62; .ts"]',
     '  m_a_b_ts --> m_a_b_ts_2',
   ]);
+});
+
+test('importGraph numbers colliding ids in path order, so a file added before them shifts the numbers, and sorts by UTF-16 code unit', () => {
+  const nodes = (paths: string[]): string[] => importGraph(RULES, paths.map((path) => ({ path, imports: [] }))).filter((line) => line.endsWith(']'));
+  assert.deepEqual(nodes(['a-b.ts', 'a_b.ts']), ['  m_a_b_ts["a-b.ts"]', '  m_a_b_ts_2["a_b.ts"]']);
+  // "a.b.ts" sorts between the two, takes "_2", and pushes "a_b.ts" up to "_3".
+  assert.deepEqual(nodes(['a-b.ts', 'a_b.ts', 'a.b.ts']), ['  m_a_b_ts["a-b.ts"]', '  m_a_b_ts_2["a.b.ts"]', '  m_a_b_ts_3["a_b.ts"]']);
+  // A surrogate pair (U+1F600 as D83D DE00) sorts before U+FFFD by code unit, and after it by code point.
+  assert.deepEqual(nodes(['\u{1F600}.ts', '�.ts']), ['  m____ts["\u{1F600}.ts"]', '  m___ts["�.ts"]']);
 });
 
 test('importGraph keeps the most connected files and the first edges within the limits, with a note', () => {
@@ -534,6 +606,76 @@ test('map code draws a directory tree when the main language has no import rules
   assert.deepEqual(mapCode(dir, 'assets').slice(2), ['  m_js_app_js["js/app.js"]', '  m_js_socket_js["js/socket.js"]', '  m_js_app_js --> m_js_socket_js']);
 });
 
+test('map code completes a name of another case only where the file system ignores it', (t) => {
+  const dir = write(temp(t), { 'src/a.ts': "import './Dep.js';", 'src/b.ts': "import './dep.js';", 'src/dep.ts': '' });
+  // Asked of the file system itself, so the expectation does not come from the check map code makes. Only the branch this
+  // host takes runs here; both are covered above by the importGraph tests, which do not touch a file system.
+  const folds = existsSync(join(dir, 'SRC', 'DEP.TS'));
+  assert.deepEqual(mapCode(dir, 'src').filter((line) => line.includes('-->')), [
+    ...(folds ? ['  m_a_ts --> m_dep_ts'] : []),
+    '  m_b_ts --> m_dep_ts',
+  ]);
+});
+
+test('map code reads a file to the byte limit and no further, counting the files it cut', (t) => {
+  // "exact.ts" is the limit itself and is read whole; "over.ts" is one byte longer and is cut.
+  const dir = write(temp(t), { 'exact.ts': 'x'.repeat(32), 'over.ts': 'x'.repeat(33) });
+  const limits = { ...MAP_LIMITS, fileBytes: 32 };
+  assert.deepEqual(mapCode(dir, '.', limits), ['graph LR', NOTE, '  %% 先頭 32 バイトだけ読んだ: 1件', '  m_exact_ts["exact.ts"]', '  m_over_ts["over.ts"]']);
+  assert.deepEqual(mapCode(dir, '.', { ...limits, fileBytes: 33 }), ['graph LR', NOTE, '  m_exact_ts["exact.ts"]', '  m_over_ts["over.ts"]']);
+
+  const cut = write(temp(t), { 'a.ts': `// ${'x'.repeat(57)}\nimport './b.js';\n`, 'b.ts': '' });
+  assert.ok(mapCode(cut, '.').includes('  m_a_ts --> m_b_ts'));
+  assert.deepEqual(mapCode(cut, '.', { ...MAP_LIMITS, fileBytes: 40 }), [
+    'graph LR',
+    NOTE,
+    '  %% 先頭 40 バイトだけ読んだ: 1件',
+    '  m_a_ts["a.ts"]',
+    '  m_b_ts["b.ts"]',
+  ]);
+});
+
+test('map code ends a cut file at its last complete line, so half an import is no edge', (t) => {
+  const dir = write(temp(t), { 'a.ts': "import './b.js';\nimport './dependency.js';\n", 'b.ts': '', 'dep.ts': '', 'dependency.ts': '' });
+  // Line 1 is 17 bytes; 30 stops inside "'./dependency.js'", where "'./dep" would read as a whole specifier of its own.
+  assert.deepEqual(mapCode(dir, '.', { ...MAP_LIMITS, fileBytes: 30 }).filter((line) => line.includes('-->')), ['  m_a_ts --> m_b_ts']);
+  assert.deepEqual(mapCode(dir, '.').filter((line) => line.includes('-->')), ['  m_a_ts --> m_b_ts', '  m_a_ts --> m_dependency_ts']);
+  // Nothing at all when the first bytes hold no line break: the one line there is was cut.
+  assert.deepEqual(mapCode(dir, '.', { ...MAP_LIMITS, fileBytes: 10 }).filter((line) => line.includes('-->')), []);
+});
+
+test('map code cuts a file inside a character without failing', (t) => {
+  // "const s = '" is 11 bytes and "あ" is 3 in UTF-8, so 32 - 17 - 11 = 4 bytes of them lands inside the second one.
+  const dir = write(temp(t), { 'a.ts': `import './b.js';\nconst s = '${'あ'.repeat(4)}';\n`, 'b.ts': '' });
+  assert.deepEqual(mapCode(dir, '.', { ...MAP_LIMITS, fileBytes: 32 }), [
+    'graph LR',
+    NOTE,
+    '  %% 先頭 32 バイトだけ読んだ: 1件',
+    '  m_a_ts["a.ts"]',
+    '  m_b_ts["b.ts"]',
+    '  m_a_ts --> m_b_ts',
+  ]);
+});
+
+test('map code reads what a byte limit that names no amount asks for, without failing', (t) => {
+  const dir = write(temp(t), { 'a.ts': "import './b.js';\n", 'b.ts': '' });
+  const whole = ['graph LR', NOTE, '  m_a_ts["a.ts"]', '  m_b_ts["b.ts"]', '  m_a_ts --> m_b_ts'];
+  // Not a finite count of bytes: the default stands, and no buffer is asked for the size of the largest file on the disk.
+  for (const fileBytes of [Number.POSITIVE_INFINITY, Number.NaN]) {
+    assert.deepEqual(mapCode(dir, '.', { ...MAP_LIMITS, fileBytes }), whole, `fileBytes: ${fileBytes}`);
+  }
+  // Below one byte: every file is cut, and a cut file ends at a line break it does not reach.
+  for (const fileBytes of [-1, 0, 1.5]) {
+    assert.deepEqual(mapCode(dir, '.', { ...MAP_LIMITS, fileBytes }), [
+      'graph LR',
+      NOTE,
+      `  %% 先頭 ${Math.max(Math.floor(fileBytes), 0)} バイトだけ読んだ: 1件`,
+      '  m_a_ts["a.ts"]',
+      '  m_b_ts["b.ts"]',
+    ], `fileBytes: ${fileBytes}`);
+  }
+});
+
 test('map code cuts a large scan with a note', (t) => {
   const dir = write(temp(t), { 'a.py': '', 'b.py': '', 'sub/c.py': '' });
   assert.deepEqual(mapCode(dir, '.', { ...MAP_LIMITS, entries: 2 }), [
@@ -550,6 +692,14 @@ test('map code skips unreadable directories and files with a note', { skip: asRo
   chmodSync(join(dir, 'b.ts'), 0o000);
   try {
     assert.deepEqual(mapCode(dir), ['graph LR', NOTE, '  %% 読めずに飛ばした: 2件', '  m_a_ts["a.ts"]']);
+    // What was skipped and what was cut are counted apart, and both notes are shown.
+    assert.deepEqual(mapCode(dir, '.', { ...MAP_LIMITS, fileBytes: 4 }), [
+      'graph LR',
+      NOTE,
+      '  %% 読めずに飛ばした: 2件',
+      '  %% 先頭 4 バイトだけ読んだ: 1件',
+      '  m_a_ts["a.ts"]',
+    ]);
     chmodSync(dir, 0o000);
     assert.throws(() => mapCode(dir, '.'), /^Error: ディレクトリを読めない: \.（EACCES）$/);
   } finally {
