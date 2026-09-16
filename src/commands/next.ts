@@ -1,7 +1,7 @@
 // soujo next show / set / check: the one file needed to resume.
 
 import { dirname } from 'node:path';
-import { findStateDir, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
+import { findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitStatus, gitToplevel } from '../git.js';
 import {
   PHASES,
@@ -13,6 +13,7 @@ import {
   nextStatus,
   parseNext,
   parsePlan,
+  printable,
   validateNext,
   validatePlan,
   type Effort,
@@ -130,5 +131,9 @@ export function nextCheck(cwd: string, hook: boolean, now: Date = new Date()): s
   // Problems named by line are one per broken line, so a badly broken PLAN would otherwise stretch this one line without end.
   const shown = found.length > SHOWN_PROBLEMS ? [...found.slice(0, SHOWN_PROBLEMS), `ほか${found.length - SHOWN_PROBLEMS}件`] : found;
   const line = `soujo 警告: ${shown.join(' / ')}`;
-  return [hook ? JSON.stringify({ systemMessage: line }) : line];
+  if (!hook) return [line];
+  // Hidden and flattened before the line is encoded: cli.ts does both to what a command returns, and JSON escaping would have
+  // turned a control character in the home path into "\t" or "" by then, which the path it compares against has not.
+  const [home, foldCase] = homePath();
+  return [JSON.stringify({ systemMessage: printable(hideHome(line, home, foldCase)) })];
 }

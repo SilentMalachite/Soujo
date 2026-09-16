@@ -2,6 +2,7 @@
 // checked is where a name and a symlink lead (months through state.ts), so that no read or write leaves the project, enters
 // .git, or lands on another state file.
 import { closeSync, existsSync, fchmodSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMonth, requireMonth } from './state.js';
@@ -197,7 +198,8 @@ export function isDotGit(part) {
     return name === '.git' || /^git~\d+$/.test(name);
 }
 // The characters a path in a message ends at; a name may hold anything else, so "/p/aya" is not the start of "/p/ayaka".
-const PATH_END = String.raw `[/\\\s'"\`)\]}）」、。,:;<>：；]|$`;
+// Control characters end a path too, since hideHome runs before printable flattens them into a space that \s would match.
+const PATH_END = String.raw `[/\\\s'"\`)\]}）」、。,:;<>：； --]|$`;
 // A directory no path can be shown under: a file system root, a drive, or a UNC share, which would turn every path into "~".
 const ROOT = /^$|^[A-Za-z]:$|^[\\/]{2}[^\\/]*([\\/]+[^\\/]*)?$/;
 // The separators of an escaped path, so that the same directory matches however the spelling of a message separates it.
@@ -218,6 +220,19 @@ export function hideHome(text, home, foldCase) {
     const spellings = [...new Set([root.normalize('NFC'), root.normalize('NFD')])];
     const paths = spellings.map((spelling) => escaped(spelling).replace(SEPARATOR, String.raw `[\\/]`));
     return text.replace(new RegExp(`(?:${paths.join('|')})(?=${PATH_END})`, foldCase ? 'gi' : 'g'), '~');
+}
+/**
+ * The home directory as a path in a message spells it, and how this file system compares it; undefined when the environment
+ * has none, which leaves a message as it is. Measured rather than guessed, as .soujo/ paths are (see foldsCase).
+ */
+export function homePath() {
+    try {
+        const home = homedir();
+        return [home, foldsCase(home)];
+    }
+    catch {
+        return [undefined, false];
+    }
 }
 // What the current platform usually does, for a directory whose file system cannot be asked.
 const LIKELY_FOLDS_CASE = process.platform === 'darwin' || process.platform === 'win32';

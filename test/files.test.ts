@@ -286,10 +286,15 @@ test('hideHome shows a path under the home directory as ~, leaving every other p
   }
   // Regular expression characters in the path are not patterns.
   assert.equal(hideHome('/p/a.b/p', '/p/axb', false), '/p/a.b/p');
-  // A path ends at the punctuation a message puts after it, not only at a separator.
-  for (const after of [':', '；', ';', '>', '：', '、', ')', '」', ' ']) {
-    assert.equal(hideHome(`/p/aya${after}x`, '/p/aya', false), `~${after}x`, after);
+  // A path ends at the punctuation a message puts after it, not only at a separator, and at a control character, which
+  // hideHome now sees before printable turns it into a space.
+  const controls = [0x01, 0x1f, 0x7f, 0x85, 0x9f].map((code) => String.fromCharCode(code));
+  for (const after of [':', '；', ';', '>', '：', '、', ')', '」', ' ', ...controls]) {
+    assert.equal(hideHome(`/p/aya${after}x`, '/p/aya', false), `~${after}x`, JSON.stringify(after));
   }
+  // A control character inside the home directory is matched as it is, which is why hideHome runs first.
+  const odd = `/p/a${String.fromCharCode(0x85)}ya`;
+  assert.equal(hideHome(`${odd}/x`, odd, false), '~/x');
   // Windows spells the same directory with either separator.
   assert.equal(hideHome('C:/p/aya/x', 'C:\\p\\aya', false), '~/x');
   assert.equal(hideHome('C:\\p\\aya\\x', 'C:/p/aya', false), '~\\x');

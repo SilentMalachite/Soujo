@@ -425,6 +425,29 @@ test('what opens and closes a fence: indent, info string, line break, and the ba
   // A backtick fence's info string cannot hold a backtick (CommonMark), so an inline-code line does not open one.
   assert.deepEqual(parsePlan('``` `code` ```\n- [ ] L1 — a\n').map((item) => item.layer), ['L1']);
   assert.deepEqual(parsePlan('~~~ `code` ~~~\n- [ ] L1 — a\n').map((item) => item.layer), []);
+  // A closing fence may still have spaces or tabs after its marker.
+  assert.deepEqual(parsePlan('```\n- [ ] X — b\n``` \t \n- [ ] L1 — a\n').map((item) => item.layer), ['L1']);
+});
+
+test('a long line that is not a backtick fence is refused without rescanning it', () => {
+  // The info string and a `[ \t]*` before it would share the spaces, taking seconds over a line this long.
+  const line = `\`\`\`${' '.repeat(40_000)}\``;
+  const start = process.hrtime.bigint();
+  assert.deepEqual(parsePlan(`${line}\n- [ ] L1 — a\n`).map((item) => item.layer), ['L1']);
+  const ms = Number(process.hrtime.bigint() - start) / 1e6;
+  assert.ok(ms < 1000, `${ms}ms`);
+});
+
+test('an item indented like a code block, or inside an HTML comment, is still a layer', () => {
+  // A fence is the only container of examples PLAN.md has (SPEC §決定): neither form hides an item from the commands.
+  const indented = '- [ ] L1 — a\n\n        - [ ] 例 — b\n';
+  assert.deepEqual(parsePlan(indented).map((item) => item.layer), ['L1', '例']);
+  assert.deepEqual(validatePlan(`${indented}- [ ] 例 — c\n`), ['PLAN.md の層「例」が重複']);
+  assert.equal(markDone(indented, '例'), indented.replace('- [ ] 例', '- [x] 例'));
+
+  const commented = '- [ ] L1 — a\n<!--\n- [ ] 例 — b\n-->\n';
+  assert.deepEqual(parsePlan(commented).map((item) => item.layer), ['L1', '例']);
+  assert.equal(markDone(commented, '例'), commented.replace('- [ ] 例', '- [x] 例'));
 });
 
 test('markDone checks the layer outside a fence, not a line of the same name inside one', () => {
@@ -442,6 +465,12 @@ test('validatePlan reports a layer name repeated through control characters, wit
   assert.deepEqual(validatePlan(`- [ ] L1 x — a\n- [ ] L1${tab}x — b\n`), [
     'PLAN.md の2行目の層名に制御文字がある',
     'PLAN.md の層「L1 x」が重複',
+  ]);
+  // Names that print as nothing are each their own line to fix, like empty ones, not a repeat of 「」.
+  const [nul, soh] = [String.fromCharCode(0), String.fromCharCode(1)];
+  assert.deepEqual(validatePlan(`- [ ] ${nul}\n- [ ] ${soh}\n`), [
+    'PLAN.md の1行目の層名に制御文字がある',
+    'PLAN.md の2行目の層名に制御文字がある',
   ]);
 });
 
@@ -462,6 +491,24 @@ test('parseLog reads a heading whose layer name carries a line separator', () =>
     ['L1', ['a']],
     [`L2${lineSeparator}x`, ['b']],
   ]);
+});
+
+test('a heading with a line separator in its layer name bounds an entry everywhere the boundary is used', () => {
+  for (const odd of [0x2028, 0x2029].map((code) => `L2${String.fromCharCode(code)}x`)) {
+    const log = `# LOG\n\n## 2026-07-01 ${odd}\nold\n\n## 2026-09-13 L3\nnew\n`;
+    // rotateLog moves the old entry whole, leaving the last one, rather than taking "old" for part of the preamble.
+    const { kept, moved } = rotateLog(log, '2026-09');
+    assert.deepEqual(moved.map(({ entry, lines }) => [entry.layer, lines]), [[odd, [`## 2026-07-01 ${odd}`, 'old']]], odd);
+    assert.equal(kept, '# LOG\n\n## 2026-09-13 L3\nnew\n');
+    // The archive it writes reads back as that one entry, appended and removed as a whole.
+    const archive = archiveLog(undefined, '2026-07', moved);
+    assert.deepEqual(appendedEntries(undefined, archive)?.map((entry) => entry.layer), [odd], odd);
+    assert.deepEqual(removedEntries(log, kept)?.map((entry) => entry.layer), [odd], odd);
+    // And appendLog still refuses a body line of that shape, so no entry can be written that splits another.
+    assert.throws(() => appendLog('', { date: '2026-09-13', layer: 'L1', lines: [`## 2026-09-14 ${odd}`] }), /見出しの形/);
+  }
+  // A CR before the layer name is part of the whitespace after the date, as it was.
+  assert.deepEqual(parseLog('## 2026-09-13 \rL1\nx\n').map((entry) => entry.layer), ['L1']);
 });
 
 test('parsePlan reads a layer whose separator has no completion condition after it', () => {

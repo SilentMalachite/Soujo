@@ -105,3 +105,15 @@
 | 24, 25 | フェンスと `layer done` のテストの抜け | 字下げ・閉じフェンスの情報文字列・CRLF・バックティック規則・フェンス内の同名層の `markDone`・空名/制御文字名の `layer done`・`[x]` 済みで完了条件なしの再実行を追加 |
 | 27 | 完了条件なしのメッセージだけ行番号がない | `planLayers` で行を取り、`PLAN.md の<N>行目の層「X」に完了条件がない` に揃える |
 - 対応しないもの: #22（`.gitignore` の `.serena/`・`graphify-out/` が L25 のコミットに同梱）はコミット済みの履歴なので分けない（D8 と同じく履歴は書き換えない）。#5 の4スペース字下げと #6 の HTML コメントは、挙動を変えず文書で保証する範囲を明示する方を採った（フェンス以外を飛ばすと入れ子のリスト項目まで落ちるため）。
+
+## 94c2ce4 のレビュー（Codex 8件・全部直した）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| 1 | `PLAN_FENCE` の `[ \t]*` と情報文字列が空白を取り合い、フェンスでない長い行の判定が二乗時間（空白1.6万で365ms） | `[ \t]*` を外して情報文字列に空白を含ませ、閉じ判定を `FENCE_BLANK` に。空白4万文字の回帰テスト |
+| 2 | `hideHome` を先にした結果、ホームパスの**直後**の制御文字が境界にならず `~` に置換されない（`PATH_END` の `\s` は C0・DEL・C1 を含まない） | `PATH_END` に ` --` を足す。`files.test` に制御文字5種の後置とパス内制御文字を追加 |
+| 3 | stderr は `oneLine` が `shown` より先に `printable` を呼ぶので、制御文字入りホームが隠れない | `oneLine` から `printable` を外し（`shown` が後で行う）、`shown` を通さない書込み失敗の行だけ自前で `printable` |
+| 4 | `next check --hook` は `JSON.stringify` が先にタブを `\t` にするので、生のホーム文字列と一致しない | `homePath` を `files.ts` へ移し、`nextCheck` が JSON に包む前に `printable(hideHome(...))` |
+| 5 | 正規化すると空になる層名（NUL だけ・SOH だけ）が `seen` に入り `層「」が重複` が出る | `printable(layer).trim()` が空なら重複集計から外す（空名と同じ扱い） |
+| 6 | SPEC の CLI 一覧（`next check` の行）に完了条件の警告と4件の表示制限がない | 英日の該当行に追記（`ほか<N>件` と hook の隠蔽順も） |
+| 7 | 4スペース字下げ・HTML コメント内の項目が層である契約に直接テストがない | `parsePlan` / `validatePlan` / `markDone` の3点でテスト |
+| 8 | `LOG_HEADER` の `/s` のテストが `parseLog` だけで、`rotateLog`・追記/削除判定・見出し拒否を守っていない | U+2028/2029 の見出しで rotate・`archiveLog`・`appendedEntries`・`removedEntries`・`appendLog` の拒否を1テストに

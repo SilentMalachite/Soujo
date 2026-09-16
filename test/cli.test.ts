@@ -505,6 +505,32 @@ test('output and errors show a path under the home directory as ~', { skip: proc
   }
 });
 
+test('a home directory carrying a control character is hidden in errors and in the hook line too', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {
+  // The home is hidden before control characters are flattened and before the hook line is encoded; either done first would
+  // leave the path in the message, since neither " " nor "\t" is what homedir() returns.
+  const home = join(realpathSync(temp(t)), 'a\tb');
+  const dir = join(home, 'p');
+  mkdirSync(dir, { recursive: true });
+  const flat = home.replace(/\t/g, ' ');
+  const at = (where: string) => ({ cwd: where, encoding: 'utf8' as const, env: { ...process.env, HOME: home, USERPROFILE: home } });
+
+  const missing = spawnSync(process.execPath, [CLI, 'map', 'code', join(home, 'nope')], at(home));
+  assert.deepEqual([missing.status, missing.stderr], [1, `soujo: ディレクトリがない: ${join('~', 'nope')}\n`]);
+
+  soujoIn(dir, 'init');
+  const log = join(dir, '.soujo', 'LOG.md');
+  chmodSync(log, 0o000);
+  try {
+    const hook = spawnSync(process.execPath, [CLI, 'next', 'check', '--hook'], at(dir));
+    assert.equal(hook.status, 0, hook.stderr);
+    const { systemMessage } = JSON.parse(hook.stdout) as { systemMessage: string };
+    assert.ok(systemMessage.includes(`~${sep}p${sep}.soujo${sep}LOG.md`), systemMessage);
+    assert.ok(!systemMessage.includes(flat), systemMessage);
+  } finally {
+    chmodSync(log, 0o644);
+  }
+});
+
 test('the home directory is hidden under another letter case where the file system ignores case', { skip: process.platform !== 'darwin' }, (t) => {
   const home = realpathSync(temp(t));
   const cased = home.toUpperCase();

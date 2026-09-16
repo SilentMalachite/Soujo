@@ -33,7 +33,7 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - A line of inline code (`` ``` `x` ``` ``) no longer opens a code fence in `PLAN.md`, so the layers after it are read as layers: a backtick fence's info string cannot hold a backtick.
 - `soujo next check` names a layer name repeated through control characters in the same run as the control characters themselves, instead of only after those are fixed, and its one warning line names the first four problems and counts the rest, instead of growing with every broken line of `PLAN.md`.
 - A `## YYYY-MM-DD <layer>` heading written into `LOG.md` by hand with a line separator in its layer name is read as a heading, instead of its lines being taken for the entry before it.
-- A path under the home directory is shown as `~` even when the line carries control characters, which were flattened first and could keep the path from being recognized.
+- A path under the home directory is shown as `~` even when a control character is inside it or right after it, on stderr and in the `--hook` line as well as on stdout. Before, the line was flattened (a home directory holding a tab kept its full path) or encoded as JSON (the `--hook` warning of `next check`) before the path was looked for.
 
 ## 0.3.1 — 2026-09-15
 

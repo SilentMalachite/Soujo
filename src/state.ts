@@ -53,11 +53,14 @@ const NEXT_LINE = /^(次|前提|確認|注意|effort)\s*[:：]\s*(.*)$/;
 // and validatePlan can report it instead of the line being dropped without a word. An item indented by four spaces or more is
 // still an item: a code fence is the only container of examples PLAN.md has (SPEC §決定), not an indented code block.
 const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/s;
-// A code fence as CommonMark writes one: three or more backticks or tildes indented by at most three spaces, with the info
-// string after an opening fence and nothing but spaces after a closing one. A backtick fence's info string cannot hold a
-// backtick, so a line of inline code (`` `x` ``) is not a fence. dotAll as in PLAN_ITEM, so that a line ending in U+2028/2029
-// is still read as a fence instead of matching nothing.
-const PLAN_FENCE = /^ {0,3}(?:(`{3,})[ \t]*([^`]*)|(~{3,})[ \t]*(.*))$/s;
+// A code fence as CommonMark writes one: three or more backticks or tildes indented by at most three spaces, followed by the
+// info string. A backtick fence's info string cannot hold a backtick, so a line of inline code (`` `x` ``) is not a fence.
+// dotAll as in PLAN_ITEM, so that a line ending in U+2028/2029 is still read as a fence instead of matching nothing. The info
+// string takes the spaces after the marker rather than a `[ \t]*` of its own, which would take them in as many ways as there
+// are spaces and make a long line that is not a fence quadratic to refuse.
+const PLAN_FENCE = /^ {0,3}(?:(`{3,})([^`]*)|(~{3,})(.*))$/s;
+// What a closing fence may have after its marker: an info string is an opening fence's alone (CommonMark).
+const FENCE_BLANK = /^[ \t]*$/;
 // Standalone tokens between the layer name and its completion condition. "—" is canonical; the rest are common typing variants.
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 // dotAll as in PLAN_ITEM: a layer name written by hand with a line separator in it is still read as a heading, instead of its
@@ -204,7 +207,7 @@ function planItems(text: string): PlanScan {
     const fence = fenceOf(raw.replace(/\r$/, ''));
     if (open !== undefined) {
       const closes = fence !== undefined && fence.marker[0] === open.marker[0] && fence.marker.length >= open.marker.length;
-      if (closes && fence.info === '') open = undefined;
+      if (closes && FENCE_BLANK.test(fence.info)) open = undefined;
       return;
     }
     if (fence !== undefined) {
@@ -256,7 +259,9 @@ export function validatePlan(text: string): string[] {
       continue;
     }
     // Counted by the name as it prints, so that a repeat through control characters is reported in the same run, not the next.
+    // A name that prints as nothing is left out like an empty one: 「」 names neither line, and each line is its own fix.
     const name = printable(layer).trim();
+    if (name === '') continue;
     if (seen.has(name)) problems.add(`PLAN.md の層「${name}」が重複`);
     else seen.add(name);
   }

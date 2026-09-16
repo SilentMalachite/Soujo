@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Entry point: parses arguments, runs the command, prints its lines to stdout, and turns any error into one stderr line with exit 1.
-import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { brief } from './commands/brief.js';
 import { close } from './commands/close.js';
@@ -11,7 +10,7 @@ import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
-import { foldsCase, hideHome, pluginDir } from './files.js';
+import { hideHome, homePath, pluginDir } from './files.js';
 import { printable } from './state.js';
 const HELP_HINT = '（soujo --help で一覧）';
 function usageError(usage) {
@@ -196,10 +195,12 @@ function describe(error) {
         return `オプションの値が不正: ${quoted}`;
     return error.message;
 }
+// Control characters are left to shown(), which flattens them after the home directory has been hidden: flattening first
+// would turn one inside the home path into a space and keep the path from being recognized.
 function oneLine(text) {
     return text
         .split('\n')
-        .map((line) => printable(line).trim())
+        .map((line) => line.trim())
         .filter((line) => line !== '')
         .join(' ');
 }
@@ -250,8 +251,9 @@ function write(stream, text) {
         if (CLOSED.has(error.code ?? ''))
             return;
         process.exitCode = 1;
+        // Written without shown(), so this line flattens control characters itself.
         if (stream !== process.stderr)
-            write(process.stderr, `soujo: 出力を書けない（${error.code ?? oneLine(error.message)}）\n`);
+            write(process.stderr, `soujo: 出力を書けない（${error.code ?? printable(oneLine(error.message))}）\n`);
     };
     stream.on('error', failed);
     try {
@@ -259,17 +261,6 @@ function write(stream, text) {
     }
     catch (error) {
         failed(error);
-    }
-}
-// The home directory as a path in a message spells it, and how this file system compares it; unknown when the environment
-// has none, which leaves the message as it is. Measured here rather than guessed, as .soujo/ paths are (see foldsCase).
-function homePath() {
-    try {
-        const home = homedir();
-        return [home, foldsCase(home)];
-    }
-    catch {
-        return [undefined, false];
     }
 }
 // Warnings and errors reach the same screens and get copied from them, so both hide the home directory (SPEC §6).
