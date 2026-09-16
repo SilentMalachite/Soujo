@@ -246,7 +246,7 @@ test('after layer done stops before its commit, close refuses and re-running lay
   const hash = gitLastCommit(dir)?.hash;
   assert.throws(
     () => close(dir, 'note', NOW),
-    /^Error: 層「L7 resume-close」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done "L7 resume-close" を再実行する$/,
+    /^Error: 層「L7 resume-close」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done 'L7 resume-close' を再実行する$/,
   );
   assert.equal(gitLastCommit(dir)?.hash, hash);
   assert.match(layerDone(dir, 'L7 resume-close', undefined, NOW)[0] ?? '', /のコミットをやり直した/);

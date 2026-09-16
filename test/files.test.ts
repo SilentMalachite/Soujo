@@ -23,6 +23,7 @@ import {
   createFile,
   ensureStateDir,
   findStateDir,
+  hideHome,
   isDotGit,
   isRunning,
   isSymlink,
@@ -263,6 +264,27 @@ test('pathKey compares paths in NFC, and ignores letter case only where told to'
   assert.equal(pathKey('/p/Á.md', false), pathKey('/p/Á.md', false));
   assert.notEqual(pathKey('/p/LOG.md', false), pathKey('/p/log.md', false));
   assert.equal(pathKey('/p/LOG.md', true), pathKey('/p/log.md', true));
+});
+
+test('hideHome shows a path under the home directory as ~, leaving every other path and a root as it is', () => {
+  assert.equal(hideHome(`open '/p/aya/p/.soujo/NEXT.md'`, '/p/aya', false), `open '~/p/.soujo/NEXT.md'`);
+  assert.equal(hideHome('/p/aya', '/p/aya/', false), '~');
+  assert.equal(hideHome('/p/aya と /p/aya/p', '/p/aya', false), '~ と ~/p');
+  // A longer name that starts with the home directory is another directory.
+  assert.equal(hideHome('/p/ayaka/p', '/p/aya', false), '/p/ayaka/p');
+  assert.equal(hideHome('C:\\p\\aya\\p', 'C:\\p\\aya\\', false), '~\\p');
+  // Letter case only where the file system ignores it.
+  assert.equal(hideHome('/p/Aya/p', '/p/aya', false), '/p/Aya/p');
+  assert.equal(hideHome('/p/Aya/p', '/p/aya', true), '~/p');
+  // The same directory can be spelled in either normalization.
+  assert.equal(hideHome('/p/が/p'.normalize('NFC'), '/p/が'.normalize('NFD'), false), '~/p');
+  assert.equal(hideHome('/p/が/p'.normalize('NFD'), '/p/が'.normalize('NFC'), false), '~/p');
+  // A root as the home directory would turn every absolute path into ~.
+  for (const home of ['', '/', '//', '\\', 'C:', 'C:\\', undefined]) {
+    assert.equal(hideHome('/p/aya/p', home, false), '/p/aya/p', String(home));
+  }
+  // Regular expression characters in the path are not patterns.
+  assert.equal(hideHome('/p/a.b/p', '/p/axb', false), '/p/a.b/p');
 });
 
 test('sameFile takes one inode for one file only when the path, or the size and creation time, agree as well', () => {

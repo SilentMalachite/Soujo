@@ -67,7 +67,7 @@ test('resume clips long layer names too, but keeps them whole inside commands', 
   const skipped = project(temp(t), { 'NEXT.md': NEXT.replace('L3 io', 'L4 cli'), 'PLAN.md': plan });
   assert.deepEqual([resume(skipped)[0], resume(skipped)[3]], [
     `次: ${clipped}（PLAN で未完了。NEXT.md は「L4 cli」）確認: io`,
-    `再開: 「${clipped}」を締めていない → 完了なら soujo layer done "${long}"、途中なら soujo next set で次を戻す`,
+    `再開: 「${clipped}」を締めていない → 完了なら soujo layer done '${long}'、途中なら soujo next set で次を戻す`,
   ]);
 
   const missing = project(temp(t), { 'PLAN.md': plan });
@@ -78,8 +78,25 @@ test('resume clips long layer names too, but keeps them whole inside commands', 
   writeFileSync(join(pending, '.soujo', 'PLAN.md'), plan.replace(`- [ ] ${long}`, `- [x] ${long}`));
   assert.equal(
     resume(pending)[3],
-    `再開: 「${clipped}」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done "${long}" を再実行`,
+    `再開: 「${clipped}」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done '${long}' を再実行`,
   );
+});
+
+test('resume quotes a layer name inside a command, so that a shell takes it as one argument', (t) => {
+  const cases: [string, string][] = [
+    ['L3 $(touch x)', `'L3 $(touch x)'`],
+    [`L3 it's`, `'L3 it'\\''s'`],
+    ['-L3 io', `-- '-L3 io'`],
+  ];
+  for (const [layer, quoted] of cases) {
+    const plan = `- [ ] ${layer} — io\n- [ ] L4 cli — cli\n`;
+    const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L3 io', 'L4 cli'), 'PLAN.md': plan });
+    assert.equal(
+      resume(dir)[3],
+      `再開: 「${layer}」を締めていない → 完了なら soujo layer done ${quoted}、途中なら soujo next set で次を戻す`,
+      layer,
+    );
+  }
 });
 
 test('resume falls back to the next layer of PLAN when NEXT.md is missing, invalid, or finished', (t) => {
@@ -149,7 +166,7 @@ test('resume names the unclosed layer when NEXT.md was moved on before layer don
     '次: L3 io（PLAN で未完了。NEXT.md は「L4 cli」）確認: io',
     '前回: LOG.md に記録なし',
     `コミット: ${gitLastCommit(dir)?.hash} test commit`,
-    '再開: 「L3 io」を締めていない → 完了なら soujo layer done "L3 io"、途中なら soujo next set で次を戻す',
+    `再開: 「L3 io」を締めていない → 完了なら soujo layer done 'L3 io'、途中なら soujo next set で次を戻す`,
   ]);
 
   writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', 'plan'));
@@ -164,7 +181,7 @@ test('resume says to re-run layer done when a PLAN check is not committed yet', 
     '次: L4 cli（effort: high）確認: io のテストが通る',
     '前回: LOG.md に記録なし',
     `コミット: ${gitLastCommit(dir)?.hash} test commit（未コミット 1件）`,
-    '再開: 「L3 io」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done "L3 io" を再実行',
+    `再開: 「L3 io」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done 'L3 io' を再実行`,
   ]);
 });
 
@@ -221,7 +238,7 @@ test('resume points to soujo brief from three days after the last commit, whatev
   writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN.replace('- [ ] L3 io', '- [x] L3 io'));
   assert.equal(
     resume(dir, new Date(2026, 8, 20))[3],
-    '再開: 「L3 io」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done "L3 io" を再実行・7日ぶり: 先に soujo brief',
+    `再開: 「L3 io」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done 'L3 io' を再実行・7日ぶり: 先に soujo brief`,
   );
   assert.equal(resume(project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN }), new Date(2030, 0, 1))[3], GO);
 });

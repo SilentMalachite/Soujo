@@ -19,6 +19,10 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - A symlink is followed part by part, through further symlinks, so that a `..` after one is taken from where it points, as the operating system does.
 - `soujo init` writes nothing where a file already is, so it succeeds in a directory that has every file and is read-only. Before, it wrote a temporary file next to each one and failed with `EACCES`.
 - Where hard links cannot be made (FAT, exFAT, some FUSE and SMB mounts), `soujo init` copies the new file into a place nothing holds instead of renaming over it, so a file created in between is never replaced. On those file systems only, an interruption can leave a half-written file there.
+- A layer name inside a command that `resume` or `close` suggests is a single-quoted argument, as the skills spell it, with `--` before one starting with `-`: copying the line runs the layer of that name instead of a `$(…)` in it, and names its spaces and quotes as one argument.
+- `soujo next check` and `soujo next show --hook` print nothing and exit 0 when the current directory has been removed while the shell stayed in it, so a Stop hook no longer fails there. Every other command says so in one line instead of showing `uv_cwd`.
+- A stream closed before `soujo` writes to it (`soujo resume | head -1`) ends the run quietly, instead of an `EPIPE` stack trace with exit code 1.
+- Errors show a path under the home directory as `~`, so that a line copied out of a terminal carries no user name.
 - Temporary files named after a process that is still running are kept: one `soujo` no longer deletes the file another one is writing. A commit made while one is there takes it along, and `log rotate` no longer counts it as an uncommitted change.
 
 ## 0.3.1 — 2026-09-15

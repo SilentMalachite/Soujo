@@ -5,6 +5,7 @@ import { mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import {
   clip,
+  commandArg,
   commitRecords,
   describeInvalidNext,
   headState,
@@ -20,6 +21,16 @@ import { gitLastCommit } from '../src/git.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
 const NEXT = '次: L3 io\n前提: p\n確認: c\n注意: なし\neffort: medium\n';
+
+test('commandArg quotes a layer name for the shell, and keeps one starting with "-" out of the options', () => {
+  assert.equal(commandArg('L3 io'), `'L3 io'`);
+  assert.equal(commandArg('L3 $(touch x)`rm`'), `'L3 $(touch x)\`rm\`'`);
+  assert.equal(commandArg(`L3 it's`), `'L3 it'\\''s'`);
+  assert.equal(commandArg('L3 "io"'), `'L3 "io"'`);
+  assert.equal(commandArg(''), `''`);
+  assert.equal(commandArg('-L3 io'), `-- '-L3 io'`);
+  assert.equal(commandArg('--note'), `-- '--note'`);
+});
 
 test('skill names both hosts, and clip shortens long text by characters', () => {
   assert.equal(skill('go'), '/soujo:go（Codex は $go）');

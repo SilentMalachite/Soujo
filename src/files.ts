@@ -256,6 +256,26 @@ export function isDotGit(part: string): boolean {
   return name === '.git' || /^git~\d+$/.test(name);
 }
 
+// The characters a path in a message ends at; a name may hold anything else, so "/p/aya" is not the start of "/p/ayaka".
+const PATH_END = String.raw`[/\\\s'"\`)\]}）」、。,]|$`;
+
+function escaped(text: string): string {
+  return text.replace(/[\\^$.*+?()[\]{}|]/g, String.raw`\$&`);
+}
+
+/**
+ * text with home shown as "~" (SPEC §6), so that a line copied out of a terminal carries no user name. Only a whole path
+ * matches, in either normalization, since a file system may store either, and in either letter case only where it ignores
+ * case. A root, or no home directory, leaves text as it is: every absolute path would otherwise become "~".
+ */
+export function hideHome(text: string, home: string | undefined, foldCase: boolean): string {
+  const root = (home ?? '').replace(/[\\/]+$/, '');
+  if (root === '' || /^[A-Za-z]:$/.test(root)) return text;
+  const spellings = [...new Set([root.normalize('NFC'), root.normalize('NFD')])];
+  const pattern = new RegExp(`(?:${spellings.map(escaped).join('|')})(?=${PATH_END})`, foldCase ? 'gi' : 'g');
+  return text.replace(pattern, '~');
+}
+
 /** How paths are compared: in NFC, since a file system may store either form, and in one letter case only where it ignores case. */
 export function pathKey(path: string, foldCase: boolean): string {
   const normalized = path.normalize('NFC');

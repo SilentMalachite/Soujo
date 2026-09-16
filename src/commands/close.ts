@@ -8,6 +8,7 @@ import { appendLog, formatDate, logLines, newlyDone, nextStatus, parsePlan, type
 import {
   INTERRUPTED,
   INTERRUPTION_NOTE,
+  commandArg,
   commitRecords,
   headState,
   requireCommittable,
@@ -56,7 +57,7 @@ export function close(cwd: string, note?: string, now: Date = new Date()): strin
   const [pending] = newlyDone(parsePlan(headState(root, 'PLAN.md') ?? ''), items);
   if (pending !== undefined) {
     const layer = pending.layer;
-    throw new Error(`層「${layer}」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done "${layer}" を再実行する`);
+    throw new Error(`層「${layer}」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done ${commandArg(layer)} を再実行する`);
   }
   const layer = status.state === 'skipped' ? status.unfinished.layer : next.layer;
 

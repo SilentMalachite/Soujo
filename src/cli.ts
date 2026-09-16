@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Entry point: parses arguments, runs the command, prints its lines to stdout, and turns any error into one stderr line with exit 1.
 
+import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { brief } from './commands/brief.js';
 import { close } from './commands/close.js';
@@ -11,7 +12,7 @@ import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
-import { pluginDir } from './files.js';
+import { hideHome, pluginDir } from './files.js';
 import { printable } from './state.js';
 
 // usage is what follows "soujo " in the --help line and in the usage error; run gets it too, so each entry spells it once.
@@ -219,25 +220,70 @@ function oneLine(text: string): string {
 
 // A host plugin directory holds a copy of Soujo with this repository's .soujo/ (SPEC §6): calls other than the hooks' refuse
 // there before reading or writing anything, so that resume never shows those records and init or a commit never lands in the copy.
-function run(found: ReturnType<typeof resolve>, cwd: string): string[] | undefined {
-  if (found === undefined) return undefined;
+function run(found: NonNullable<ReturnType<typeof resolve>>, cwd: string): string[] {
   const plugin = found.command.hook?.(found.args) ? undefined : pluginDir(cwd);
   if (plugin !== undefined) throw new Error(`プラグインの置き場所（${plugin}）では実行しない: 作業中のプロジェクトで実行する`);
   return found.command.run(found.args, cwd, found.command.usage);
 }
 
+const NO_CWD = '作業ディレクトリを読めない（消えていないか確かめ、別のディレクトリで実行する）';
+
+// The current directory is gone or unreadable when this fails; every command needs it, since .soujo/ is searched from there.
+function currentDir(): string | undefined {
+  try {
+    return process.cwd();
+  } catch {
+    return undefined;
+  }
+}
+
+// Runs the command, or says why there is none to run. Without a current directory the hooks' calls print nothing, as they
+// do outside a project, so that a removed directory does not make them fail; every other command says so and exits 1.
+function execute(argv: string[], found: ReturnType<typeof resolve>): string[] {
+  if (found === undefined) throw new Error(argv.length === 0 ? `コマンドがありません${HELP_HINT}` : unknownCommand(argv));
+  const cwd = currentDir();
+  if (cwd === undefined) {
+    if (found.command.hook?.(found.args) === true) return [];
+    throw new Error(NO_CWD);
+  }
+  return run(found, cwd);
+}
+
+/**
+ * Writes one finished output. An error event of a stream with no listener would be an uncaught exception with a stack
+ * trace: a closed pipe (`soujo resume | head -1`) has to end the run quietly, and a failed write cannot be reported
+ * through the stream that failed anyway.
+ */
+function write(stream: NodeJS.WriteStream, text: string): void {
+  stream.on('error', () => {});
+  try {
+    stream.write(text);
+  } catch {
+    // Lost with the stream.
+  }
+}
+
+// Where the file system ignores letter case, the home directory can be spelled in either case in the same message.
+const FOLD_CASE = process.platform === 'darwin' || process.platform === 'win32';
+
+// The home directory as an error shows it; unknown when the environment has none, which leaves the error as it is.
+function home(): string | undefined {
+  try {
+    return homedir();
+  } catch {
+    return undefined;
+  }
+}
+
 function main(argv: string[]): number {
   try {
     const found = resolve(argv);
-    const lines = help(argv, found) ?? run(found, process.cwd());
-    if (lines === undefined) {
-      throw new Error(argv.length === 0 ? `コマンドがありません${HELP_HINT}` : unknownCommand(argv));
-    }
+    const lines = help(argv, found) ?? execute(argv, found);
     // Values from files can carry CR or other controls; each returned line stays one terminal line.
-    if (lines.length > 0) process.stdout.write(`${lines.map(printable).join('\n')}\n`);
+    if (lines.length > 0) write(process.stdout, `${lines.map(printable).join('\n')}\n`);
     return 0;
   } catch (error) {
-    process.stderr.write(`soujo: ${oneLine(describe(error))}\n`);
+    write(process.stderr, `soujo: ${hideHome(oneLine(describe(error)), home(), FOLD_CASE)}\n`);
     return 1;
   }
 }

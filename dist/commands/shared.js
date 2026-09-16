@@ -59,6 +59,14 @@ export function clip(text, max = CLIP) {
     const chars = Array.from(text);
     return chars.length <= max ? text : `${chars.slice(0, max - 1).join('')}…`;
 }
+/**
+ * A layer name as one argument of a command a message suggests: single-quoted, as the skills spell it, so that a shell takes
+ * spaces and `$(…)` in it literally, with "--" before a name starting with "-", which the CLI would read as an option.
+ */
+export function commandArg(text) {
+    const quoted = `'${text.split("'").join(String.raw `'\''`)}'`;
+    return text.startsWith('-') ? `-- ${quoted}` : quoted;
+}
 /** "NEXT.md が無効: A、B" without repeating "NEXT.md" inside each problem. */
 export function describeInvalidNext(problems) {
     return `NEXT.md が無効: ${problems.map((problem) => problem.replace(/^NEXT\.md が/, '')).join('、')}`;

@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { commitAll, repo, temp } from './helpers.js';
 
@@ -373,6 +374,65 @@ test('inside a host plugin directory only --help, next check, and next show --ho
       }
     }
   }
+});
+
+test('next check exits 0 when the working directory is gone, and the other commands say so in one line', { skip: process.platform === 'win32' }, (t) => {
+  const dir = temp(t);
+  const work = join(dir, 'work');
+  mkdirSync(work);
+  // The helper removes its own working directory, so that the soujo runs it starts inherit one that no longer exists.
+  const script = join(dir, 'gone.cjs');
+  writeFileSync(
+    script,
+    `const { rmSync } = require('node:fs');
+const { spawnSync } = require('node:child_process');
+rmSync(${JSON.stringify(work)}, { recursive: true, force: true });
+let gone = false;
+try { process.cwd(); } catch { gone = true; }
+const run = (...args) => {
+  const result = spawnSync(process.execPath, [${JSON.stringify(CLI)}, ...args], { encoding: 'utf8' });
+  return [result.status, result.stdout, result.stderr];
+};
+process.stdout.write(JSON.stringify({ gone, check: run('next', 'check'), hook: run('next', 'check', '--hook'), resume: run('resume') }));
+`,
+  );
+  const helper = spawnSync(process.execPath, [script], { cwd: work, encoding: 'utf8' });
+  assert.equal(helper.status, 0, helper.stderr);
+  type Run = [number, string, string];
+  const { gone, check, hook, resume } = JSON.parse(helper.stdout) as { gone: boolean; check: Run; hook: Run; resume: Run };
+  assert.equal(gone, true, 'the working directory is still readable');
+  assert.deepEqual(check, [0, '', '']);
+  assert.deepEqual(hook, [0, '', '']);
+  assert.deepEqual([resume[0], resume[1]], [1, '']);
+  assert.match(resume[2], /^soujo: 作業ディレクトリを読めない[^\n]*\n$/);
+});
+
+test('a closed stdout ends the run without an EPIPE crash', async (t) => {
+  const dir = repo(t);
+  soujoIn(dir, 'init');
+  for (const args of [['--help'], ['resume']]) {
+    const child = spawn(process.execPath, [CLI, ...args], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+    // Closed while the child is still starting, so that its first write goes to a pipe no one reads.
+    child.stdout.destroy();
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    const [code] = (await once(child, 'close')) as [number | null];
+    assert.deepEqual([code, stderr], [0, ''], args.join(' '));
+  }
+});
+
+test('an error shows a path under the home directory as ~', (t) => {
+  // The real path, since the temporary directory of macOS is reached through a symlink.
+  const home = realpathSync(temp(t));
+  const result = spawnSync(process.execPath, [CLI, 'map', 'code', join(home, 'nope')], {
+    cwd: home,
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, USERPROFILE: home },
+  });
+  assert.deepEqual([result.status, result.stderr], [1, `soujo: ディレクトリがない: ${join('~', 'nope')}\n`]);
 });
 
 test('argument errors are one Japanese line with exit 1', () => {

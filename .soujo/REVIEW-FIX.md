@@ -62,3 +62,17 @@
 | R12 | 巨大 pid・先頭ゼロの temp が消えなくなった（`git add -A` が拾う） | pid の綴りでないものは NaN にして消す側に倒す |
 | R13, 14, 15, 18, C3 | SPEC・doc の不正確（`.soujo/` 前提、FS の列挙、pid の限界、掃除の責務、copy 経路の例外） | 文面を実装に合わせる |
 - 見送り: R8（`deadPid` の使い回し）は取得時の生存確認で足りる。R10（`place` の `link` 引数）は `symlinkTargetParts` の `separator` と同じ既存の流儀。
+
+## L24 追加レビュー（reviewer 18件・未対応）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| 1 | `write` が EPIPE 以外の書込み失敗も握り潰して終了0 | `code` を見て `EPIPE` / `ERR_STREAM_DESTROYED` / `EBADF` だけ黙り、ほかは stderr に1行出して1 |
+| 2 | `hideHome` が stderr だけ。`next check` の警告（stdout・systemMessage）に絶対パスが残る | stdout の行にも通す（cli.ts の1箇所）。SPEC の文言も広げる |
+| 3, 4 | `PATH_END` に `:;<>：；` がない。Windows の `/` 綴りと UNC ルートが未対応 | 文字クラスを足し、`spellings` に区切り違いを足し、UNC をルート除外に |
+| 5 | `FOLD_CASE` がプラットフォーム判定（既存は実測の `ignoresCase`） | 実測できない理由をコメントに。可能なら `ignoresCase(home)` を先に試す |
+| 6, 7, 18 | CLI テストの穴：EPIPE が通る側に競合、cwd 消滅に `next show --hook` と `--help` がない、ホームパスが1形だけ | 読み側を先に閉じる形にし、2件と darwin 限定の大小文字違いを足す |
+| 8, 9 | `commandArg` が文字列比較だけ。`--` を CLI が受けるか、close 側の引用が未検証 | `-` 始まりの層名で `layer done` が締まるテストと close の1件 |
+| 10 | usage 2本と `templates/CLAUDE.md` / `AGENTS.md` が二重引用符のまま（D7 と不一致） | L31 skills-docs で揃える |
+| 11, 12, 13 | CHANGELOG の英日で新項目の位置が違う。SPEC.ja の非文。「作業ディレクトリ」と「現在のディレクトリ」が不統一 | 並べ替え、「が要る」、語をどちらかに揃える（テストの正規表現も） |
+| 14, 15 | `currentDir` が失敗理由を捨てる。`findStateDir` / `requireStateDir` の既定値 `process.cwd()` が残る | `ENOENT` 以外は `code` を添える。既定値を外すか必ず渡す旨のコメント |
+| 16, 17 | 同じ行の `soujo next set` は `-` 始まりの層名で実行できない。空・制御文字の層名は貼っても一致しない | `--layer=<層名>` の形で示す。17 は L25 の後に前提をコメント |

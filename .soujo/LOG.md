@@ -340,3 +340,7 @@ symlinkTargetPath を symlinkTargetParts にし、Windows では相対リンク�
 
 ## 2026-09-16 L23 file-create
 hardlink を張れない FS では copyFileSync(COPYFILE_EXCL) で複製し、rename で既存を置き換えない。生存中 pid の一時ファイルは消さず、stateTemps がコミット検査から除く。createFile は既存があれば何も書かないので、揃った読取り専用ディレクトリで init が成功する。
+
+## 2026-09-16 L24 cli-robust
+案内するコマンドの層名を単一引用符で囲み（-- 前置つき）、cwd を取れないとき hook のコマンドは無言で終了0、stdout の EPIPE で落ちず、エラーのホームパスを ~ にした。
+reviewer の指摘18件は REVIEW-FIX.md に未対応で記録。
