@@ -440,6 +440,12 @@ process.stdout.write(JSON.stringify({
     }
     assert.equal(helper.status, 0, helper.stderr);
     const { code, check, hook, show, help, resume } = JSON.parse(helper.stdout) as Result;
+    // Linux answers getcwd in the kernel without checking permissions, so a locked parent leaves the directory readable there
+    // and only the removal can be tested; macOS (CI included) still tests the lock.
+    if (how === 'lock' && code === '' && process.platform === 'linux') {
+      t.diagnostic('lock: getcwd ignores permissions on Linux');
+      continue;
+    }
     assert.equal(code, expected, `${how}: the current directory is still readable`);
     for (const [label, silent] of [['check', check], ['hook', hook], ['show', show]] as [string, Run][]) {
       assert.deepEqual(silent, [0, '', ''], `${how}: ${label}`);

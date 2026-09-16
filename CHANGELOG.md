@@ -4,6 +4,12 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- `test/cli.test.ts` tests an unreadable current directory made by locking its parent only where that makes it unreadable: Linux answers `getcwd` without checking permissions, which failed CI on Ubuntu since 0.3.1.
+
 ## 0.3.2 — 2026-09-16
 
 Release: [v0.3.2](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.2).

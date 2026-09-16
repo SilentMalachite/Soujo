@@ -4,6 +4,12 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
+## 未リリース
+
+### 変更
+
+- `test/cli.test.ts` は、親ディレクトリを閉じて読めなくした現在のディレクトリを、それで読めなくなる環境でだけ試す。Linux は権限を見ずに `getcwd` に答えるので、0.3.1 以降 Ubuntu の CI が落ちていた。
+
 ## 0.3.2 — 2026-09-16
 
 リリース：[v0.3.2](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.2)。
