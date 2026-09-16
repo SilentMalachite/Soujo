@@ -344,3 +344,8 @@ hardlink を張れない FS では copyFileSync(COPYFILE_EXCL) で複製し、re
 ## 2026-09-16 L24 cli-robust
 案内するコマンドの層名を単一引用符で囲み（-- 前置つき）、cwd を取れないとき hook のコマンドは無言で終了0、stdout の EPIPE で落ちず、エラーのホームパスを ~ にした。
 reviewer の指摘18件は REVIEW-FIX.md に未対応で記録。
+
+## 2026-09-16 L25 plan-parse
+PLAN の層名は空も制御文字も行番号付きで拒否し、完了条件のない層は layer done が締めない。
+コードフェンスの中のチェック項目は層として数えない（parsePlan・markDone・validatePlan）。
+printable が C1 制御文字（U+0080-U+009F）も空白にする。

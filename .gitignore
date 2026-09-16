@@ -23,3 +23,7 @@ id_ecdsa_sk
 id_ecdsa_sk.pub
 *.pem
 *.key
+
+# Tool artifacts (Serena project cache, graphify knowledge graph): not part of the package.
+.serena/
+graphify-out/

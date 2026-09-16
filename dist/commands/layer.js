@@ -31,6 +31,7 @@ function describeAdded(root) {
  * States, decided before anything is written:
  * - not committable (no repository, unfinished merge/rebase, unmerged files, ignored .soujo/ files) → refuse
  * - PLAN with a repeated layer name or a layer named like a phase (see validatePlan) → refuse
+ * - the layer's PLAN item has no completion condition                                → refuse
  * - committed ("layer: <layer>" exists)                       → refuse
  * - checked in PLAN at HEAD (committed under another subject), even if unchecked again in the working tree → refuse
  * - NEXT.md missing, invalid, or still pointing to this layer → refuse (the commit must carry the next step)
@@ -53,6 +54,9 @@ export function layerDone(cwd, layer, note, now = new Date()) {
     const item = parsePlan(plan).find((candidate) => candidate.layer === name);
     if (item === undefined)
         throw new Error(`PLAN.md に層「${name}」がない`);
+    // Without it there is nothing to close the layer against, and resume's 確認: line would be blank for the next one.
+    if (item.condition === '')
+        throw new Error(`PLAN.md の層「${name}」に完了条件がない（「— <完了条件>」を書いてから）`);
     const subject = `${LAYER_COMMIT}${name}`;
     const committed = gitFindCommit(root, subject);
     if (committed !== undefined)

@@ -93,6 +93,22 @@ test('layer done refuses while PLAN repeats a layer name or names a layer like a
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L1 scaffold');
 });
 
+test('layer done refuses a layer without a completion condition and writes nothing', (t) => {
+  const dir = workingProject(t);
+  const plan = PLAN.replace('- [ ] L2 state — test', '- [ ] L2 state');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), plan);
+  assert.throws(
+    () => layerDone(dir, ' L2 state ', 'note', NOW),
+    /^Error: PLAN\.md の層「L2 state」に完了条件がない（「— <完了条件>」を書いてから）$/,
+  );
+  assert.deepEqual([read(dir, 'PLAN.md'), read(dir, 'LOG.md')], [plan, LOG]);
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L1 scaffold');
+  // A layer whose PLAN item is inside a code fence is not in PLAN at all.
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), `${PLAN}\n\`\`\`\n- [ ] L9 例 — c\n\`\`\`\n`);
+  assert.throws(() => layerDone(dir, 'L9 例', 'note', NOW), /^Error: PLAN\.md に層「L9 例」がない$/);
+  assert.equal(read(dir, 'LOG.md'), LOG);
+});
+
 test('layer done refuses without a usable NEXT.md and writes nothing', (t) => {
   const dir = workingProject(t);
   const nextPath = join(dir, '.soujo', 'NEXT.md');

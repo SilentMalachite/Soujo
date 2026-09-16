@@ -14,14 +14,20 @@ const NEXT_KEYS = [
     ['effort', 'effort'],
 ];
 const NEXT_LINE = /^(次|前提|確認|注意|effort)\s*[:：]\s*(.*)$/;
-const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/;
+// dotAll, so that a line separator pasted into a layer name (U+2028/2029, which "." would stop at) keeps the item readable
+// and validatePlan can report it instead of the line being dropped without a word.
+const PLAN_ITEM = /^\s*-\s+\[([ xX])\]\s+(.*)$/s;
+// A code fence as CommonMark writes one: three or more backticks or tildes indented by at most three spaces, with the info
+// string after an opening fence and nothing but spaces after a closing one.
+const PLAN_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/;
 // Standalone tokens between the layer name and its completion condition. "—" is canonical; the rest are common typing variants.
 const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-// Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, U+2028/2029.
-const CONTROL = /[\u0000-\u001f\u007f\u2028\u2029]/g;
+// Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, the C1 controls
+// U+0080-U+009F (a terminal decoding Latin-1 takes them for escape sequences, U+0085 for a line break), and U+2028/2029.
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
 // A calendar date: the month from 01 to 12 and a day that month has, leap years included.
 function isDate(value) {
     const match = DATE.exec(value);
@@ -126,32 +132,61 @@ function splitItem(body) {
     }
     return { layer: body.trim(), condition: '' };
 }
-/** Checklist items of PLAN.md in order; other lines are ignored. */
-export function parsePlan(text) {
+/**
+ * Checklist items of PLAN.md with the 1-based line each is on, in order. Other lines are ignored, code fences included: an
+ * item inside one is an example the plan skill wrote, not a layer, and neither markDone nor validatePlan may touch it. A
+ * fence closes on the same character, at least as long, with nothing but spaces after; one left open ends the file.
+ */
+function planItems(text) {
     const items = [];
-    for (const line of text.split('\n')) {
+    let fence;
+    text.split('\n').forEach((raw, index) => {
+        const line = raw.replace(/\r$/, '');
+        const fenced = PLAN_FENCE.exec(line);
+        if (fence !== undefined) {
+            const marker = fenced?.[1] ?? '';
+            const closes = marker.startsWith(fence[0] ?? '') && marker.length >= fence.length && (fenced?.[2] ?? '') === '';
+            if (closes)
+                fence = undefined;
+            return;
+        }
+        if (fenced) {
+            fence = fenced[1];
+            return;
+        }
         const match = matchItem(line);
         if (match)
-            items.push({ ...splitItem(match[2] ?? ''), done: match[1] !== ' ' });
-    }
+            items.push({ item: { ...splitItem(match[2] ?? ''), done: match[1] !== ' ' }, line: index + 1 });
+    });
     return items;
 }
+/** Checklist items of PLAN.md in order; other lines and code fences are ignored (see planItems). */
+export function parsePlan(text) {
+    return planItems(text).map(({ item }) => item);
+}
 /**
- * Problems that make a layer name of PLAN.md ambiguous; empty when valid. A repeated name cannot get its own "layer: <layer>"
- * commit, a layer named like a phase cannot be told from that phase in NEXT.md, and the completion entry of a layer named
- * 節目 would be taken for a milestone.
+ * Problems that make a layer name of PLAN.md unusable; empty when valid. An empty name and one with control characters are
+ * named by line, since neither can be quoted back to the user or matched when pasted; the rest are named by the name itself.
+ * A repeated name cannot get its own "layer: <layer>" commit, a layer named like a phase cannot be told from that phase in
+ * NEXT.md, and the completion entry of a layer named 節目 would be taken for a milestone.
  */
 export function validatePlan(text) {
     const problems = new Set();
     const seen = new Set();
-    for (const { layer } of parsePlan(text)) {
-        if (PHASES.includes(layer))
+    for (const { item, line } of planItems(text)) {
+        const { layer } = item;
+        if (layer === '')
+            problems.add(`PLAN.md の${line}行目の層名が空`);
+        else if (printable(layer) !== layer)
+            problems.add(`PLAN.md の${line}行目の層名に制御文字がある`);
+        else if (PHASES.includes(layer))
             problems.add(`PLAN.md の層名「${layer}」がフェーズ名と同じ`);
         else if (layer === MILESTONE)
             problems.add(`PLAN.md の層名「${layer}」が LOG の節目と同じ`);
         else if (seen.has(layer))
             problems.add(`PLAN.md の層「${layer}」が重複`);
-        seen.add(layer);
+        else
+            seen.add(layer);
     }
     return [...problems];
 }
@@ -184,15 +219,13 @@ export function newlyDone(before, after) {
 }
 /** PLAN.md text with the layer checked. Already checked layers are left as is; unknown layers throw. */
 export function markDone(text, layer) {
-    const lines = text.split('\n');
-    const index = lines.findIndex((line) => {
-        const match = matchItem(line);
-        return match !== null && splitItem(match[2] ?? '').layer === layer.trim();
-    });
-    const line = lines[index];
-    if (line === undefined)
+    const name = layer.trim();
+    const found = planItems(text).find(({ item }) => item.layer === name);
+    if (found === undefined)
         throw new Error(`PLAN.md に層「${layer}」がない`);
-    lines[index] = line.replace(/\[[ xX]\]/, '[x]');
+    const lines = text.split('\n');
+    const index = found.line - 1;
+    lines[index] = (lines[index] ?? '').replace(/\[[ xX]\]/, '[x]');
     return lines.join('\n');
 }
 /** text with every control character (line breaks included) turned into a space, so it prints as one terminal line. */

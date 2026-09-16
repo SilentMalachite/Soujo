@@ -24,6 +24,10 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - A stream closed before `soujo` writes to it (`soujo resume` piped into `head -1`) ends the run quietly, instead of an `EPIPE` stack trace with exit code 1. Any other failed write (a full disk) is reported on stderr in one line and fails the run.
 - Output and errors show a path under the home directory as `~`, the warnings of `soujo next check` included, so that a line copied out of a terminal carries no user name. The path is recognized in either normalization, with either separator, and in another letter case only where the file system ignores case.
 - Temporary files named after a process that is still running are kept: one `soujo` no longer deletes the file another one is writing. A commit made while one is there takes it along, and `log rotate` no longer counts it as an uncommitted change.
+- A `PLAN.md` item with an empty layer name or a layer name carrying control characters is refused by `next set` and `layer done` and warned about by `next check`, naming the line to fix. Before, an empty name went through and no command could name it back, and a name with a line separator in it was dropped from the plan without a word.
+- `soujo layer done` refuses a layer whose `PLAN.md` item has no completion condition, instead of closing it and leaving the `確認:` line of the next `NEXT.md` to be written from nothing.
+- Checklist items inside a code fence in `PLAN.md` are examples, not layers: the format example the `plan` skill writes is no longer counted as a layer, checked by `layer done`, or reported by `next check`.
+- Characters in the C1 range (U+0080–U+009F), which a terminal decoding Latin-1 takes for escape sequences, are flattened to a space in output and in `LOG.md` lines, as C0 controls and U+2028/2029 already were.
 
 ## 0.3.1 — 2026-09-15
 

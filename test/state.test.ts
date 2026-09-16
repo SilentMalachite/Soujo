@@ -115,6 +115,15 @@ test('printable and logLines turn control characters into spaces', () => {
   assert.throws(() => appendLog('', { date: '2026-09-13', layer: 'L1\rx', lines: [] }), /制御文字なし/);
 });
 
+test('printable turns C1 controls into spaces and leaves printable Latin-1 alone', () => {
+  const [nextLine, apc] = [String.fromCharCode(0x85), String.fromCharCode(0x9f)];
+  const [padding, delete_] = [String.fromCharCode(0x80), String.fromCharCode(0x7f)];
+  assert.equal(printable(`a${nextLine}b${apc}c${padding}d${delete_}e`), 'a b c d e');
+  assert.equal(printable('a b­cÿd'), 'a b­cÿd');
+  assert.deepEqual(logLines([`a${nextLine}b`]), ['a b']);
+  assert.throws(() => appendLog('', { date: '2026-09-13', layer: `L1${apc}`, lines: [] }), /制御文字なし/);
+});
+
 test('appendLog refuses any line lastLog would read as a heading, and only those', () => {
   const entry = { date: '2026-09-13', layer: 'L1', lines: ['a'] };
   assert.throws(() => appendLog('', { ...entry, lines: ['##\t2026-09-14 fake'] }), /見出しの形/);
@@ -349,6 +358,29 @@ test('validatePlan reports repeated layer names and layers named like a phase or
     'PLAN.md の層名「spec」がフェーズ名と同じ',
     'PLAN.md の層名「節目」が LOG の節目と同じ',
   ]);
+});
+
+test('validatePlan reports an empty layer name or one with control characters, with its line number', () => {
+  const [nextLine, lineSeparator] = [String.fromCharCode(0x85), String.fromCharCode(0x2028)];
+  assert.deepEqual(validatePlan(`# PLAN\n\n- [ ] \n- [ ] L1\tx — a\n- [ ] L2${nextLine} — b\n- [ ] L3 — c\n`), [
+    'PLAN.md の3行目の層名が空',
+    'PLAN.md の4行目の層名に制御文字がある',
+    'PLAN.md の5行目の層名に制御文字がある',
+  ]);
+  assert.deepEqual(validatePlan(`- [x] L1${lineSeparator}x\n`), ['PLAN.md の1行目の層名に制御文字がある']);
+  assert.deepEqual(validatePlan('- [ ] L1 — a\r\n- [ ] \r\n'), ['PLAN.md の2行目の層名が空']);
+  // Two empty names are two lines to fix, not a repeated layer name.
+  assert.deepEqual(validatePlan('- [ ] \n- [ ] \n'), ['PLAN.md の1行目の層名が空', 'PLAN.md の2行目の層名が空']);
+});
+
+test('parsePlan, markDone, and validatePlan ignore checklist items inside code fences', () => {
+  const text = ['# PLAN', '', '- [ ] L1 real — a', '', '```markdown', '- [ ] 例 — b', '```', '', '   ~~~', '- [x] 節目 — c', '   ~~~', '- [ ] L4 real — d', ''].join('\n');
+  assert.deepEqual(parsePlan(text).map((item) => item.layer), ['L1 real', 'L4 real']);
+  assert.deepEqual(validatePlan(text), []);
+  assert.throws(() => markDone(text, '例'), /PLAN.md に層「例」がない/);
+  assert.equal(markDone(text, 'L4 real'), text.replace('- [ ] L4 real', '- [x] L4 real'));
+  // A closing fence needs the same character and at least the opening length, so the items stay inside the block.
+  assert.deepEqual(parsePlan('- [ ] L1 — a\n````\n- [ ] X — b\n~~~\n```\n- [ ] Y — c\n').map((item) => item.layer), ['L1']);
 });
 
 test('newlyDone lists layers checked only in the later PLAN', () => {

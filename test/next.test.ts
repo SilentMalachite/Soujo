@@ -168,6 +168,16 @@ test('next check warns about repeated layer names and layers named like a phase,
   assert.match(nextCheck(missing, false)[0] ?? '', /^soujo 警告: NEXT\.md がない \/ PLAN\.md の層名「plan」/);
 });
 
+test('next check and next set point at the line of an empty or control-character layer name', (t) => {
+  const plan = `- [x] L1 scaffold — build\n- [ ] \n- [ ] L2\tstate — test\n`;
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': plan });
+  assert.deepEqual(nextCheck(dir, false), [
+    'soujo 警告: PLAN.md の2行目の層名が空 / PLAN.md の3行目の層名に制御文字がある',
+  ]);
+  assert.throws(() => nextSet(dir, { layer: 'L1 scaffold', premise: 'p', check: 'c' }), /PLAN\.md の2行目の層名が空/);
+  assert.equal(readFileSync(join(dir, '.soujo', 'NEXT.md'), 'utf8'), NEXT);
+});
+
 test('next show --hook and next check never read a state file through a symlink leaving the project', { skip: process.platform === 'win32' }, (t) => {
   const secret = join(temp(t), 'secret');
   writeFileSync(secret, '次: token-123\n');
