@@ -87,8 +87,12 @@ export function scanNotes(scan, limits = MAP_LIMITS) {
 }
 // Words after which "/" starts a regular expression instead of a division.
 const REGEX_AFTER = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
-// Words after which "{" opens a block: every word outside REGEX_AFTER, and these two inside it.
+// Words after which "{" opens a block: every word outside REGEX_AFTER and VALUE_AFTER, and these two inside REGEX_AFTER.
 const BLOCK_AFTER = new Set(['do', 'else']);
+// Words after which "{" opens an object literal or a type, though a word usually has a block after it.
+const VALUE_AFTER = new Set(['as', 'satisfies', 'default']);
+// Words whose body is a block only where the keyword itself stands where a statement can start.
+const BODY_BEFORE = new Set(['function', 'class']);
 // Words whose "(" opens a statement's condition.
 const CONDITION_BEFORE = new Set(['if', 'while', 'for', 'with']);
 const SINGLE_ESCAPES = new Map([['b', '\b'], ['f', '\f'], ['n', '\n'], ['r', '\r'], ['t', '\t'], ['v', '\v']]);
@@ -112,24 +116,21 @@ function lineEnd(text, from) {
     return -1;
 }
 /**
- * Whether a "{" opens a block (a statement) rather than an object literal, judged from the token before it. Known
- * misjudgements, each harmless unless a "/" follows the matching "}": a block after a label or a "case" is read as an object
- * literal, and an object type or literal after "as", "satisfies", "=>", or "export default" is read as a block.
+ * Whether a "{" opens a block (a statement) rather than an object literal or a type, judged from the token before it. Known
+ * misjudgement, harmless unless a "/" follows the matching "}": a block after a label or a "case" is read as an object literal.
  */
 function opensBlock(tokens) {
     const previous = tokens.at(-1);
     if (previous === undefined)
         return true;
     if (previous.kind === 'word')
-        return BLOCK_AFTER.has(previous.value) || !REGEX_AFTER.has(previous.value);
+        return !VALUE_AFTER.has(previous.value) && (BLOCK_AFTER.has(previous.value) || !REGEX_AFTER.has(previous.value));
     if (previous.kind !== 'punct')
         return false;
-    // "=>" opens a function body; after ")", ";", and "{" a statement can start, and after "}" when that one closed a block.
-    if (previous.value === '>')
-        return isPunct(tokens.at(-2), '=');
+    // After ")", ";", and "{" a statement can start; "]" and ">" end a return type or a type parameter list, "=>" a signature.
     if (previous.value === '}')
         return previous.block === true;
-    return ';{)'.includes(previous.value);
+    return ';{)]>'.includes(previous.value);
 }
 // A token that ends an operand, so that "++" or "--" after it is postfix.
 function endsOperand(token) {
@@ -238,6 +239,7 @@ function scriptTokens(text) {
     const blocks = [];
     const substitutions = []; // brace depth at which each open "${" closes
     const conditions = []; // for each open "(", whether it opens a statement's condition
+    const bodies = []; // for each "function" or "class" awaiting its body, whether it stands where a statement can
     let index = 0;
     const after = (found, length) => (found === -1 ? text.length : found + length);
     const fixed = (content) => (content === undefined ? { kind: 'other', value: '' } : { kind: 'string', value: content });
@@ -259,11 +261,14 @@ function scriptTokens(text) {
             if (char === '}')
                 substitutions.pop();
             const template = scanTemplate(text, index + 1);
-            // Only a template without substitutions has a fixed value; its later parts add no token.
-            if (char === '`')
-                tokens.push(fixed(template.substitution ? undefined : template.content));
-            if (template.substitution)
+            // A part ending in "${" leaves what follows at the start of an expression; the last part ends an operand however the
+            // substitutions read, and only a template without any has a fixed value.
+            if (template.substitution) {
+                tokens.push({ kind: 'punct', value: '$' }); // "$" is a word character, so no punctuation token can be one.
                 substitutions.push(blocks.length);
+            }
+            else
+                tokens.push(char === '`' ? fixed(template.content) : { kind: 'other', value: '' });
             index = template.next;
         }
         else if (char === '/' && regexAllowed(tokens, text[index - 1])) {
@@ -274,13 +279,18 @@ function scriptTokens(text) {
             let end = index + 1;
             while (end < text.length && isWordChar(text[end] ?? ''))
                 end += 1;
-            tokens.push({ kind: 'word', value: text.slice(index, end) });
+            const value = text.slice(index, end);
+            if (BODY_BEFORE.has(value))
+                bodies.push(opensBlock(tokens));
+            tokens.push({ kind: 'word', value });
             index = end;
         }
         else {
             const token = { kind: 'punct', value: char };
+            // A function or class body is a block only where its keyword could start a statement: the "}" of one written as an
+            // expression (const f = function () {}) ends an operand, so a "/" after it divides.
             if (char === '{')
-                blocks.push(opensBlock(tokens));
+                blocks.push(opensBlock(tokens) && (bodies.pop() ?? true));
             else if (char === '}') {
                 // A "}" with no "{" of its own closes a block the scanned text does not hold, so that "/" after it is not division.
                 token.block = blocks.pop() ?? true;

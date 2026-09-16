@@ -167,21 +167,46 @@ test('TS/JS imports tell a division and a JSX closing tag from a regex, and a re
   assert.deepEqual(imports(text), ['./after-jsx.js', './after-self-closing.js', './after-increment.js', './after-decrement.js', './after-paren.js', './after-member.js']);
 });
 
-test('TS/JS imports tell a regex after a block from a division after an object literal', () => {
-  const text = [
+test('TS/JS imports read a "/" after a declaration body as a regex and after a value as a division', () => {
+  const blocks = [
     "function f() {} /from '.\\/fake-block.js'/.test(s); import('./after-block.js');",
     "if (a) { b(); } /import('.\\/fake-if.js')/.test(s);",
     "class C {} /require('.\\/fake-class.js')/.test(s);",
-    "const arrow = () => {} /import('.\\/fake-arrow.js')/.test(s);",
+    "class D<T> {} /import('.\\/fake-generic.js')/.test(s);",
+    "function g(): number[] {} /import('.\\/fake-return-type.js')/.test(s);",
+    "function h() { const o = { a: 1 }; } /import('.\\/fake-outer.js')/.test(s);",
+  ].join('\n');
+  assert.deepEqual(imports(blocks), ['./after-block.js']);
+  const values = [
     "const ratio = { a: 1 } / 2; import('./after-object.js');",
     "const nested = f({ a: { b: 1 } }) / 2; import('./after-call.js');",
     "const method = { m() { return 1 } } / 2; import('./after-method.js');",
-    "function g() { const o = { a: 1 }; } /import('.\\/fake-outer.js')/.test(s);",
+    "const value = function () {} / 2; import('./after-function-expression.js');",
+    "const klass = class {} / 2; import('./after-class-expression.js');",
+    "export default {} / 2; import('./after-default.js');",
+    "const cast = x as {} / 2; import('./after-as.js');",
+    "const ok = x satisfies {} / 2; import('./after-satisfies.js');",
   ].join('\n');
-  assert.deepEqual(imports(text), ['./after-block.js', './after-object.js', './after-call.js', './after-method.js']);
+  assert.deepEqual(imports(values), [
+    './after-object.js',
+    './after-call.js',
+    './after-method.js',
+    './after-function-expression.js',
+    './after-class-expression.js',
+    './after-default.js',
+    './after-as.js',
+    './after-satisfies.js',
+  ]);
   // A brace with no match of its own: a "}" closes a block the text does not hold, an open "{" leaves a statement started.
   assert.deepEqual(imports("} /import('.\\/fake-loose.js')/.test(s); import('./after-loose.js');"), ['./after-loose.js']);
   assert.deepEqual(imports("function f() { /import('.\\/fake-unclosed.js')/.test(s);"), []);
+});
+
+test('TS/JS imports end a template at its last part, so what a substitution held is not the token before "/"', () => {
+  assert.deepEqual(imports('const s = `${function () {}}` / 2; import("./after-template.js");'), ['./after-template.js']);
+  assert.deepEqual(imports("const s = `${/import('.\\/fake-sub.js')/}`; import('./after-substitution.js');"), ['./after-substitution.js']);
+  assert.deepEqual(imports("const r = `${require}`('./fake-tag.js'); import('./after-tag.js');"), ['./after-tag.js']);
+  assert.deepEqual(imports('const n = `${1}${{ a: 2 }}` / 2; import("./after-parts.js");'), ['./after-parts.js']);
 });
 
 test('TS/JS imports end a line comment, a regex, and an unterminated quote at every line terminator', () => {
@@ -192,8 +217,11 @@ test('TS/JS imports end a line comment, a regex, and an unterminated quote at ev
   }
   // Every line of a file whose lines end with a carriage return, not only the first.
   assert.deepEqual(imports(`// a${cr}import './one.js';${cr}// b${cr}import './two.js';`), ['./one.js', './two.js']);
-  // A backslash escapes a character of a regular expression, but not a line terminator.
-  assert.deepEqual(imports(`const re = /a\\${cr}import './after-escape.js';`), ['./after-escape.js']);
+  assert.deepEqual(imports(`// a${cr}${lf}import './crlf.js';`), ['./crlf.js']);
+  // A backslash escapes a character of a regular expression, but not a line terminator, inside a character class either.
+  assert.deepEqual(imports(`const re = /a\\${cr}import './escape-cr.js';`), ['./escape-cr.js']);
+  assert.deepEqual(imports(`const re = /a\\${ps}import './escape-ps.js';`), ['./escape-ps.js']);
+  assert.deepEqual(imports(`const re = /[a${cr}import './class-cr.js';`), ['./class-cr.js']);
   for (const [name, end] of [['lf', lf], ['cr', cr]] as const) {
     assert.deepEqual(imports(`const unclosed = 'from ${end}import './quote-${name}.js';`), [`./quote-${name}.js`], name);
     assert.deepEqual(imports(`const unclosed = "from ${end}import './double-${name}.js';`), [`./double-${name}.js`], name);
@@ -203,11 +231,12 @@ test('TS/JS imports end a line comment, a regex, and an unterminated quote at ev
 });
 
 test('TS/JS imports read white space above ASCII as a separator, not as part of a name', () => {
-  const [nbsp, ideographic, bom] = [0xa0, 0x3000, 0xfeff].map((code) => String.fromCharCode(code));
-  assert.deepEqual(imports(`import${nbsp}'./nbsp.js';`), ['./nbsp.js']);
-  assert.deepEqual(imports(`import${ideographic}'./ideographic.js';`), ['./ideographic.js']);
-  assert.deepEqual(imports(`import a from${nbsp}'./from-nbsp.js';`), ['./from-nbsp.js']);
-  assert.deepEqual(imports(`import${bom}'./bom.js';`), ['./bom.js']);
+  const [nbsp, ogham, em, ideographic, bom] = [0xa0, 0x1680, 0x2003, 0x3000, 0xfeff].map((code) => String.fromCharCode(code));
+  for (const [name, space] of [['nbsp', nbsp], ['ogham', ogham], ['em', em], ['ideographic', ideographic], ['bom', bom]] as const) {
+    assert.deepEqual(imports(`import${space}'./${name}.js';`), [`./${name}.js`], name);
+    assert.deepEqual(imports(`import a from${space}'./from-${name}.js';`), [`./from-${name}.js`], name);
+  }
+  assert.deepEqual(imports(`import${ideographic}{ a }${ideographic}from${ideographic}'./named.js';`), ['./named.js']);
   // Letters above ASCII still hold a name together, so a member call is still skipped.
   assert.deepEqual(imports("モジュール.import('./member.js'); import('./real.js');"), ['./real.js']);
 });
@@ -318,6 +347,8 @@ test('importGraph scans long and repetitive input in linear time', () => {
     'あ'.repeat(100_000),
   ];
   for (const text of inputs) importGraph(RULES, [{ path: 'a.ts', imports: imports(text) }]);
+  // The end of a long input is still read: a scan that swallowed a line or stopped early would drop this one.
+  assert.deepEqual(imports(`// x${String.fromCharCode(0x0d)}`.repeat(30_000) + "import './end.js';"), ['./end.js']);
   assert.ok(performance.now() - started < 2000, `took ${Math.round(performance.now() - started)}ms`);
 });
 
