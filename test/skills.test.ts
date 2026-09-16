@@ -201,3 +201,13 @@ test('agents/reviewer.md is the subagent the review skill names', () => {
   const review = readFileSync(join(packageDir(), 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.ok(review.includes('`soujo:reviewer`'), 'review スキルが soujo:reviewer を名指しする');
 });
+
+// The working tree moves on after the range is handed over, so a diff copied out then can be older than what is reviewed.
+test('the review skill hands the reviewer a range, and the reviewer takes the diff itself when it starts', () => {
+  const task = sections(split(join(packageDir(), 'skills', 'review', 'SKILL.md')).body).get('やること')?.join('\n') ?? '';
+  assert.ok(task.includes('範囲だけを渡し（diff の写しは渡さない'), 'review は範囲だけを渡す');
+  const { body } = split(join(packageDir(), 'agents', 'reviewer.md'));
+  const reads = body.split('\n').find((line) => line.startsWith('- 読むもの：')) ?? '';
+  assert.ok(reads.includes('始めるときに自分で `git diff` で取る'), 'reviewer は diff を自分で取る');
+  assert.ok(reads.includes('写しを渡されても使わない'), 'reviewer は渡された写しを使わない');
+});

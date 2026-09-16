@@ -219,21 +219,35 @@ test('TS/JS imports keep two JSX braces apart, so what they hold does not read a
 });
 
 test('TS/JS imports read "<x>" as a type in .ts, .mts, and .cts and as a JSX element in the other extensions', () => {
-  const text = "const s = <string>text from './fake.js'; import('./after.js');";
+  const text = "const s = <string>text from './fake.js'</string>; import('./after.js');";
   for (const from of ['a.ts', 'a.mts', 'a.cts', 'types.d.ts', 'A.TS']) assert.deepEqual(imports(text, from), ['./fake.js', './after.js'], from);
-  for (const from of ['a.tsx', 'a.jsx', 'a.js', 'a.mjs', 'a.cjs', 'a.JSX']) assert.deepEqual(imports(text, from), [], from);
+  for (const from of ['a.tsx', 'a.jsx', 'a.js', 'a.mjs', 'a.cjs', 'a.JSX']) assert.deepEqual(imports(text, from), ['./after.js'], from);
   // The extensions that allow JSX are a list of their own: one outside it is read the way ".ts" is, not the way ".tsx" is.
   for (const from of ['a.foo', 'a', 'a.tsx.bak']) assert.deepEqual(imports(text, from), ['./fake.js', './after.js'], from);
 });
 
-test('TS/JS imports read again from after a "<" that no tag follows, and stop at an element left open', () => {
+test('TS/JS imports read again from after a "<" that no tag follows, and from an element nothing closes', () => {
   assert.deepEqual(imports("const f = <T,>(x: T) => import('./generic.js');"), ['./generic.js']);
   assert.deepEqual(imports("const g = <div; import('./after-broken.js');"), ['./after-broken.js']);
   assert.deepEqual(imports("const h = <p title='unclosed>import('./after-unterminated.js');"), []);
-  assert.deepEqual(imports("const i = <div>text; import('./fake-unclosed.js');"), []);
-  // A generic function type where a value can start reads as an element, and nothing closes it: every import after it is lost.
-  assert.deepEqual(imports("const j = <T>(x: T) => import('./fake-generic.js');"), []);
-  assert.deepEqual(imports("type X = <T>(a: T) => T;\nimport('./fake-after-type.js');"), []);
+  // Nothing closes these by the end of the text, so they were no elements: what follows each is read again as code.
+  assert.deepEqual(imports("const i = <div>text; import('./after-unclosed.js');"), ['./after-unclosed.js']);
+  assert.deepEqual(imports("const j = <T>(x: T) => import('./after-generic.js');"), ['./after-generic.js']);
+  assert.deepEqual(imports("type X = <T>(a: T) => T;\nimport('./after-type.js');"), ['./after-type.js']);
+  assert.deepEqual(imports("const k = <Box icon=<Icon>text; import('./after-value.js');"), ['./after-value.js']);
+  // What its braces held is read once, not twice.
+  assert.deepEqual(imports("const l = <p>{import('./in-open.js'); import('./after-open.js');"), ['./in-open.js', './after-open.js']);
+  // Two generic types: the second is text inside the first, so both are read again at once, and a later element still is one.
+  const types = "type A = <T>(a: T) => T;\ntype B = <U>(b: U) => U;\nconst v = <p>from './fake-text.js'</p>;\nimport('./after-types.js');";
+  assert.deepEqual(imports(types), ['./after-types.js']);
+  // One left open inside the braces of another: only that one is read again, and the other then closes. The quote is text in
+  // the first reading, where it opens the braces that nothing closes, and a string in the second.
+  const inner = "const m = <p>{(x: <T>(a: T) => T, s = '{') => x}from './fake-outer.js'</p>; import('./after-inner.js');";
+  assert.deepEqual(imports(inner), ['./after-inner.js']);
+  // What the braces left open goes with them: a "{" (a block), a "(" (a condition), and a "function" awaiting its body.
+  assert.deepEqual(imports("const a = <p>{ } } / import('.\\/fake-object.js') / 1; import('./after-object.js'); { {"), ['./after-object.js']);
+  assert.deepEqual(imports("const b = <p>{ ) / import('./divided.js') / 1; import('./after-condition.js'); if ("), ['./divided.js', './after-condition.js']);
+  assert.deepEqual(imports("const c = <p>{ } / import('.\\/fake-body.js') / 1; import('./after-body.js'); {function"), ['./after-body.js']);
   // Inside another element the "<" is text, not punctuation, so what follows it is no more code than the rest.
   assert.deepEqual(imports("const k = <p>a <b, from './fake-nested.js' {import('./nested.js')}</p>;"), ['./nested.js']);
   // What a rejected element's braces held is read once, not twice, since the text they hold is read again as code.
@@ -507,6 +521,11 @@ test('importGraph scans long and repetitive input in linear time', () => {
     "<p title='".repeat(30_000),
     // A rejected element in the "{ }" of another: reading it again once per level around it would double the work each time.
     `${'<T a={'.repeat(20_000)}1${'},'.repeat(20_000)}`,
+    // Elements nothing closes, read again from each: nested as children, as generic types, and each in the braces of the last.
+    '<p>'.repeat(40_000),
+    'type X = <T>(a: T) => T;\n'.repeat(5_000),
+    '<p>{(function '.repeat(10_000),
+    '<a b=<c>'.repeat(20_000),
   ];
   for (const text of inputs) importGraph(RULES, [{ path: 'a.tsx', imports: imports(text) }]);
   // The end of a long input is still read: a scan that swallowed a line or stopped early would drop this one.

@@ -286,7 +286,7 @@ interface JsxElement {
   children: boolean;
   /** The open "{" count when the element started; the element is being read only while the count is back to it. */
   braces: number;
-  /** Where its "<" is, to read again from after it when what follows turns out not to be a tag. */
+  /** Where its "<" is, to read again from after it when what follows is no tag, or from it when nothing closes the element. */
   open: number;
   /** How many tokens there were then, to drop what its "{ }" left when that text is read again. */
   tokens: number;
@@ -317,8 +317,9 @@ function skipTypeArguments(text: string, start: number): number {
  * What the reading of elements carries between steps, so that the text of one is read again only as often as it must be.
  * A "<" found not to open a tag is read again as code; nest those and each level would read the ones inside it again, which
  * squares the work. rejected keeps the answer for a "<" already judged (it rests on the text after it, so it does not
- * change), and spent counts what has been read twice; once it passes budget, off turns the reading of elements off for the
- * rest of the text, which is then read as code alone.
+ * change), the "<" of each element nothing closed by the end of the text among them, and spent counts what has been read
+ * twice; once it passes budget, off turns the reading of elements off for the rest of the text, which is then read as code
+ * alone.
  */
 interface JsxScan {
   rejected: Set<number>;
@@ -352,9 +353,10 @@ function jsxAllowed(tokens: Token[], before: string | undefined): boolean {
  * that. Nothing read here is code, so the only tokens it adds are the operand a finished element leaves behind and, where
  * what follows a "<" turns out not to be a tag, that "<" itself; brace tells the caller a "{" opened, whose contents it
  * reads as code. Known misjudgements: a generic function type where a value can start (`type X = <T>(a: T) => T`) reads as
- * an element, and since nothing closes it the rest of the text becomes its children, which hides every import left in it;
- * a closing tag's name is not matched against the opening one, so an unmatched one ends the wrong element; a type argument
- * list holding an object or a string type (`<Box<{a: 1}>>`) is not read as one, so its tag is taken for no tag at all.
+ * an element, and since nothing closes it the rest of the text is its children until the end, where it is read again as code
+ * (see scriptTokens); a closing tag's name is not matched against the opening one, so an unmatched one ends the wrong
+ * element; a type argument list holding an object or a string type (`<Box<{a: 1}>>`) is not read as one, so its tag is taken
+ * for no tag at all.
  */
 function scanJsx(text: string, start: number, tokens: Token[], elements: JsxElement[], braces: number, scan: JsxScan): { next: number; brace: boolean } {
   const element = elements.at(-1);
@@ -441,8 +443,10 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
   const tokens: Token[] = [];
   // blocks.length is the brace depth: for each open "{", whether it opens a block rather than an object literal.
   const blocks: boolean[] = [];
-  // For each open "${" or JSX "{", the brace depth at which its "}" sits, innermost last, so the two nest in the right order.
-  const braces: { depth: number; kind: 'substitution' | 'container' }[] = [];
+  // For each open "${" or JSX "{", innermost last so the two nest in the right order: the brace depth at which its "}" sits,
+  // and how many conditions and bodies were open outside it. Its code neither closes those nor leaves its own open past its
+  // "}", so what one leaves on the stacks is gone once it closes, and none of them ever shrinks below where it opened.
+  const braces: { depth: number; kind: 'substitution' | 'container'; conditions: number; bodies: number }[] = [];
   const conditions: boolean[] = []; // for each open "(", whether it opens a statement's condition
   const bodies: boolean[] = []; // for each "function" or "class" awaiting its body, whether it stands where a statement can
   const elements: JsxElement[] = []; // for each JSX element being read, innermost last
@@ -453,14 +457,55 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
   // The "${" or JSX "{" that a "}" here closes, if any: only one at the depth it was opened at. Code with unmatched braces
   // never reaches that depth again, so a later "}" closes it instead and the element around it resumes in the wrong place.
   const closing = () => (braces.at(-1)?.depth === blocks.length ? braces.at(-1) : undefined);
-  while (index < text.length) {
+  const openBrace = (kind: 'substitution' | 'container') => {
+    braces.push({ depth: blocks.length, kind, conditions: conditions.length, bodies: bodies.length });
+  };
+  const closeBrace = () => {
+    const brace = braces.pop();
+    if (brace === undefined) return;
+    conditions.length = brace.conditions;
+    bodies.length = brace.bodies;
+  };
+  // At the end of the text, an element still open was none, since nothing closed it. The innermost group of them, one read
+  // where code stands with those read inside it as children or as an attribute's value, is dropped with all it read, and the
+  // text is read again from its "<", now known to open no tag. The rest of the group goes with it, since each is open to the
+  // end as well and dropping them one at a time would read the text again once per level; an element around the group is
+  // kept, since what the group took from it may yet close it. What is read twice counts toward the budget, and past it every
+  // element still open is dropped and the rest is read as code. The stacks go back to where they stood at the "<": the first
+  // "{ }" opened after it saved them, and before that nothing but the group was read.
+  const reopen = (): boolean => {
+    // One read where code stands has more braces open than the element around it; a child or an attribute's value has as many.
+    let first = elements.length - 1;
+    while (first > 0 && elements[first]?.braces === elements[first - 1]?.braces) first -= 1;
+    const group = elements[first];
+    if (group === undefined) return false;
+    scan.spent += text.length - group.open;
+    if (scan.spent > scan.budget) {
+      scan.off = true;
+      first = 0;
+    }
+    const element = elements[first] ?? group;
+    for (const dropped of elements.slice(first)) scan.rejected.add(dropped.open);
+    const brace = braces[element.braces];
+    if (brace !== undefined) {
+      blocks.length = brace.depth;
+      conditions.length = brace.conditions;
+      bodies.length = brace.bodies;
+    }
+    braces.length = element.braces;
+    elements.length = first;
+    tokens.length = element.tokens;
+    index = element.open;
+    return true;
+  };
+  while (index < text.length || reopen()) {
     const char = text[index] ?? '';
     const following = text[index + 1];
     // Inside a JSX element, unless the code of one of its "{ }" is what is being read.
     if (elements.at(-1)?.braces === braces.length) {
       const step = scanJsx(text, index, tokens, elements, braces.length, scan);
       if (step.brace) {
-        braces.push({ depth: blocks.length, kind: 'container' });
+        openBrace('container');
         // What a "{ }" holds is an expression of its own, whatever the element or an earlier "{ }" left before it. A "("
         // would say so too, but it would also let "{require}{'./x'}" read as a call, so the mark is one no code can write.
         tokens.push({ kind: 'punct', value: EXPRESSION });
@@ -478,18 +523,18 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
       tokens.push(fixed(literal.content));
       index = literal.next;
     } else if (char === '`' || (char === '}' && closing()?.kind === 'substitution')) {
-      if (char === '}') braces.pop();
+      if (char === '}') closeBrace();
       const template = scanTemplate(text, index + 1);
       // A part ending in "${" leaves what follows at the start of an expression; the last part ends an operand however the
       // substitutions read, and only a template without any has a fixed value.
       if (template.substitution) {
         tokens.push({ kind: 'punct', value: EXPRESSION });
-        braces.push({ depth: blocks.length, kind: 'substitution' });
+        openBrace('substitution');
       } else tokens.push(char === '`' ? fixed(template.content) : { kind: 'other', value: '' });
       index = template.next;
     } else if (char === '}' && closing()?.kind === 'container') {
       // The value of a JSX "{ }" belongs to the element around it, which leaves the operand token of its own.
-      braces.pop();
+      closeBrace();
       index += 1;
     } else if (
       jsx &&
@@ -513,9 +558,11 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
       index = end;
     } else {
       const token: Token = { kind: 'punct', value: char };
+      // Only a condition or a body opened since the innermost "${" or JSX "{" can be closed or taken from inside it.
+      const brace = braces.at(-1);
       // A function or class body is a block only where its keyword could start a statement: the "}" of one written as an
       // expression (const f = function () {}) ends an operand, so a "/" after it divides.
-      if (char === '{') blocks.push(opensBlock(tokens) && (bodies.pop() ?? true));
+      if (char === '{') blocks.push(opensBlock(tokens) && (bodies.length > (brace?.bodies ?? 0) ? (bodies.pop() ?? true) : true));
       else if (char === '}') {
         // A "}" with no "{" of its own closes a block the scanned text does not hold, so that "/" after it is not division.
         token.block = blocks.pop() ?? true;
@@ -524,7 +571,7 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
         const at = isWord(tokens.at(-1), 'await') && isWord(tokens.at(-2), 'for') ? -2 : -1;
         const keyword = tokens.at(at);
         conditions.push(keyword?.kind === 'word' && CONDITION_BEFORE.has(keyword.value) && !isPunct(tokens.at(at - 1), '.'));
-      } else if (char === ')') token.condition = conditions.pop() === true;
+      } else if (char === ')') token.condition = conditions.length > (brace?.conditions ?? 0) && conditions.pop() === true;
       tokens.push(token);
       index += 1;
     }
