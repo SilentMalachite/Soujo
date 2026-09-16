@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync
 import { join } from 'node:path';
 import { layerDone } from '../src/commands/layer.js';
 import { logRotate } from '../src/commands/log.js';
+import { foldsCase } from '../src/files.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
 import { parseLog } from '../src/state.js';
 import { markDone } from '../src/state.js';
@@ -413,6 +414,20 @@ test('layer done refuses an untracked credential file before writing, and commit
   layerDone(dir, 'L2 state', undefined, NOW);
   assert.deepEqual(gitStatus(dir), []);
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
+});
+
+test('layer done refuses a credential file named in another letter case only where the file system ignores case', (t) => {
+  const dir = workingProject(t);
+  mkdirSync(join(dir, 'config'));
+  writeFileSync(join(dir, '.NPMRC'), 'x\n');
+  writeFileSync(join(dir, 'config', 'ID_RSA'), 'x\n');
+  if (foldsCase(dir)) {
+    assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: \.NPMRC, config\/ID_RSA は認証情報のファイル名なのでコミットしない/);
+    assert.equal(read(dir, 'PLAN.md'), PLAN);
+  } else {
+    layerDone(dir, 'L2 state', undefined, NOW);
+    assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
+  }
 });
 
 test('layer done lists at most five added files', (t) => {

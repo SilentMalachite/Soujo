@@ -1,6 +1,6 @@
 // soujo map plan / map code: PLAN.md as a vertical diagram, and a directory's imports as Mermaid (or its tree).
 
-import { closeSync, fstatSync, openSync, readSync, readdirSync, statSync, type Dirent } from 'node:fs';
+import { closeSync, fstatSync, openSync, readSync, readdirSync, realpathSync, statSync, type Dirent } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { findStateDir, foldsCase, pathKey } from '../files.js';
 import {
@@ -14,7 +14,7 @@ import {
   type MapLimits,
   type ScannedFile,
 } from '../map.js';
-import { NO_LAYERS, readPlan } from './shared.js';
+import { NO_LAYERS, attempt, readPlan } from './shared.js';
 
 interface Scan {
   files: string[];
@@ -120,6 +120,20 @@ function headReader(limit: number): (path: string) => { text: string; partial: b
 }
 
 /**
+ * Whether dir is outside project, both taken by their real paths, since the scan follows a symlink given as dir, and compared
+ * as the file system holding project compares names. A path whose real path cannot be found is taken as given.
+ */
+function isOutside(project: string, dir: string): boolean {
+  const real = (path: string) => {
+    const found = attempt(() => realpathSync(path));
+    return found instanceof Error ? resolve(path) : found;
+  };
+  const folds = foldsCase(project);
+  const away = relative(pathKey(real(project), folds), pathKey(real(dir), folds));
+  return away === '..' || away.startsWith(`..${sep}`) || isAbsolute(away);
+}
+
+/**
  * Mermaid of the imports in the main language under dir (default: the project root, or cwd outside Soujo projects);
  * a directory tree when that language has no import rules or no file is recognized. Unreadable files are counted and skipped,
  * and a file longer than the byte limit is read only to it and counted.
@@ -132,8 +146,7 @@ export function mapCode(cwd: string, dir?: string, limits: MapLimits = MAP_LIMIT
   requireDirectory(root, shown);
   // A dir outside the project is read as asked, and said so first: what it holds is not the project's, and it may be as
   // large as the limits allow.
-  const away = relative(project, root);
-  const outside = away === '..' || away.startsWith(`..${sep}`) || isAbsolute(away) ? [`プロジェクトの外を読んだ: ${shown}`] : [];
+  const outside = isOutside(project, root) ? [`プロジェクトの外を読んだ: ${shown}`] : [];
   const scan = scanDirectory(root, shown, limits.entries);
   const main = mainLanguage(scan.files);
   const rules = main?.language.graph;

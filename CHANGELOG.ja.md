@@ -58,10 +58,10 @@
 
 ### 変更
 
-- `layer done`・`close`・`log rotate` はプロジェクト全体をステージするので、git に無視されていない未追跡ファイルに認証情報のファイル名（`.env.example` 以外の `.env` と `.env.*`、`.npmrc`、`.netrc`、`.git-credentials`、`auth.json`、SSH の鍵、`*.pem`、`*.key` など）があれば、何も書く前に拒否する。`.gitignore` に足すか、コミットするなら先に `git add` する。
+- `layer done`・`close`・`log rotate` はプロジェクト全体をステージするので、git に無視されていない未追跡ファイルに認証情報のファイル名（`.env.example` 以外の `.env` と `.env.*`、`.npmrc`、`.netrc`、`.git-credentials`、`auth.json`、SSH の鍵、`*.pem`、`*.key` など。大小文字を区別しないファイルシステムでは大小文字を問わない）があれば、何も書く前に拒否する。`.gitignore` に足すか、コミットするなら先に `git add` する。
 - git リポジトリの外では `.soujo/` を、`soujo init` が作るカレントディレクトリでだけ探す。ホームディレクトリに作った `.soujo/` が、その下の全ディレクトリのプロジェクトにならない。
 - `resume` と `next check` の未コミット件数は `git status` の出力を 16 MiB までしか読まず、超えたら `N件以上` と出す。
-- `soujo map code` はプロジェクトの外のディレクトリを読んだとき最初の注記でそう示し、`map` スキルはユーザーが名指ししたときだけ渡す。
+- `soujo map code` はプロジェクトの外のディレクトリ（外へ向かう symlink を含め、実体のパスで判定）を読んだとき最初の注記でそう示し、`map` スキルはユーザーが名指ししたときだけ渡す。
 - コミットは引き続きリポジトリの git hook を通す。その理由を SPEC §14 に記した。
 
 - `test/privacy.test.ts` は、追跡ファイルと HEAD のコミットメッセージだけでなく、ref（ブランチ・タグ・リモート追跡ブランチ・stash）から届くすべての版のファイルと、コミット・タグのメッセージを検査し、Codex のクラウドタスクと ChatGPT の会話・共有チャットへのリンクも検出する。自分自身も検査し、ファイルごと飛ばす代わりに、自分の fixture の架空の値だけを通す。

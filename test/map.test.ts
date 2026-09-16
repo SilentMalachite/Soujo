@@ -16,7 +16,7 @@ import {
   type ImportRules,
   type ScannedFile,
 } from '../src/map.js';
-import { pathKey } from '../src/files.js';
+import { foldsCase, pathKey } from '../src/files.js';
 import { parsePlan } from '../src/state.js';
 import { project, repo, temp } from './helpers.js';
 
@@ -607,6 +607,19 @@ test('map code scans the project root by default, skipping output directories, d
   assert.deepEqual(mapCode(join(outside, 'sub'), '..').slice(1, 3), [NOTE, '  %% プロジェクトの外を読んだ: ..']);
   const elixir = write(temp(t), { 'mix.exs': '', 'lib/x.ex': '' });
   assert.deepEqual(mapCode(join(dir, 'src'), elixir).slice(-1), [`注: プロジェクトの外を読んだ: ${elixir}`]);
+});
+
+test('map code tells a dir outside the project by its real path, as the file system compares names', { skip: process.platform === 'win32' }, (t) => {
+  const dir = write(project(repo(t)), { 'src/a.ts': '' });
+  const outside = write(temp(t), { 'lib/b.ts': '' });
+  // A symlink in the project that leads out: the scan follows it, so what it reads is not the project's.
+  symlinkSync(join(outside, 'lib'), join(dir, 'external'));
+  assert.deepEqual(mapCode(dir, 'external'), ['graph LR', NOTE, '  %% プロジェクトの外を読んだ: external', '  m_b_ts["b.ts"]']);
+  // A path outside that leads into the project is the project's.
+  symlinkSync(join(dir, 'src'), join(outside, 'into'));
+  assert.deepEqual(mapCode(dir, join(outside, 'into')), ['graph LR', NOTE, '  m_a_ts["a.ts"]']);
+  // Another letter case of a directory in the project stays in it where the file system ignores case.
+  if (foldsCase(dir)) assert.deepEqual(mapCode(dir, 'SRC'), ['graph LR', NOTE, '  m_a_ts["a.ts"]']);
 });
 
 test('map code reads each file by its own extension, so a .tsx text is no edge and a .ts "<x>" is a type', (t) => {

@@ -58,10 +58,10 @@ The English version is canonical; the Japanese page is a translation. Versions f
 
 ### Changed
 
-- `layer done`, `close`, and `log rotate` refuse, before writing anything, an untracked file that git does not ignore and whose name is a credential file's (`.env` and `.env.*` other than `.env.example`, `.npmrc`, `.netrc`, `.git-credentials`, `auth.json`, SSH keys, `*.pem`, `*.key`, …), since they stage the whole project. Add it to `.gitignore`, or `git add` it first to commit it.
+- `layer done`, `close`, and `log rotate` refuse, before writing anything, an untracked file that git does not ignore and whose name is a credential file's (`.env` and `.env.*` other than `.env.example`, `.npmrc`, `.netrc`, `.git-credentials`, `auth.json`, SSH keys, `*.pem`, `*.key`, …, in any letter case where the file system ignores case), since they stage the whole project. Add it to `.gitignore`, or `git add` it first to commit it.
 - Outside a git repository `.soujo/` is looked for in the current directory only, where `soujo init` creates it, so a `.soujo/` made in the home directory is no longer the project of every directory below it.
 - The uncommitted count of `resume` and `next check` reads at most 16 MiB of `git status` output and then says `N件以上`.
-- `soujo map code` says in its first note when it read a directory outside the project, and the `map` skill passes one only when the user names it.
+- `soujo map code` says in its first note when it read a directory outside the project, judged by real paths so that a symlink leading out counts, and the `map` skill passes one only when the user names it.
 - Commits keep running the repository's git hooks; SPEC §14 now records why.
 
 - `test/privacy.test.ts` checks every version of a file and every commit and tag message that a ref reaches (a branch, a tag, a remote-tracking branch, the stash), not only the tracked files and the commit messages on HEAD, and catches links to Codex cloud tasks and to ChatGPT conversations and shared chats. It scans itself too: instead of the whole file, only the made-up values of its own fixtures are let through.

@@ -1,6 +1,6 @@
 // Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 import { join, posix } from 'node:path';
-import { STATE_DIR, STATE_FILES, MAX_SYMLINKS, isSymlink, readState, requireState, requireStateDir, stateIdentities, stateTarget, statePath, symlinkTargetParts, trackedStatePath, } from '../files.js';
+import { STATE_DIR, STATE_FILES, MAX_SYMLINKS, foldsCase, isSymlink, readState, requireState, requireStateDir, stateIdentities, stateTarget, statePath, symlinkTargetParts, trackedStatePath, } from '../files.js';
 import { gitAddAll, gitCommit, gitHasCommits, gitHasStagedChanges, gitHeadEntry, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, gitUntracked, } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext } from '../state.js';
 const CLIP = 60;
@@ -10,8 +10,8 @@ const RECORDS = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'];
 // How many paths an error names before counting the rest.
 const SHOWN_PATHS = 3;
 /**
- * The name of a file that holds credentials (by its base name). .env.example is a template without values. A commit that
- * stages everything must not take one in only because the project's .gitignore forgot it.
+ * The name of a file that holds credentials (by its base name, in lower case). .env.example is a template without values. A
+ * commit that stages everything must not take one in only because the project's .gitignore forgot it.
  */
 export const CREDENTIAL_FILE = /^(?:\.env(?:\.(?!example$).+)?|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|auth\.json|id_(?:rsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.+\.(?:pem|key))$/;
 export const NO_LAYERS = 'PLAN.md に層がない';
@@ -99,6 +99,16 @@ export function requireNext(dir, hint) {
         throw new Error(`${describeInvalidNext(validateNext(text))}${hint}`);
     return next;
 }
+/**
+ * Whether path (relative to root) names a credential file: as written, or in another letter case where the file system
+ * ignores case, since a tool opening .npmrc there opens .NPMRC. The file system is asked only for a name that needs it.
+ */
+function isCredential(root, path) {
+    const name = posix.basename(path);
+    if (CREDENTIAL_FILE.test(name))
+        return true;
+    return CREDENTIAL_FILE.test(name.toLowerCase()) && foldsCase(join(root, path));
+}
 /** paths joined for a message: the first SHOWN_PATHS of them, then how many are left. */
 function listPaths(paths) {
     const rest = paths.length > SHOWN_PATHS ? ` ほか${paths.length - SHOWN_PATHS}件` : '';
@@ -108,7 +118,7 @@ function listPaths(paths) {
  * Throws unless committing the project at root is safe: a repository, .soujo/ not a symlink, every state file (a symlink's
  * target included) inside the project, outside .git, and not another state file or archive, no unfinished
  * merge/rebase/cherry-pick/revert anywhere in the repository, no unmerged files in the project, no state file or symlink
- * target ignored by git, and no untracked credential file (see CREDENTIAL_FILE) that staging everything would take in. One
+ * target ignored by git, and no untracked credential file (see isCredential) that staging everything would take in. One
  * added with `git add` first is tracked, and is committed as the user chose.
  */
 export function requireCommittable(root) {
@@ -126,7 +136,7 @@ export function requireCommittable(root) {
     if (unmerged > 0)
         throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
     requireNotIgnored(root, STATE_FILES);
-    const credentials = gitUntracked(root).filter((path) => CREDENTIAL_FILE.test(posix.basename(path)));
+    const credentials = gitUntracked(root).filter((path) => isCredential(root, path));
     if (credentials.length > 0) {
         throw new Error(`${listPaths(credentials)} は認証情報のファイル名なのでコミットしない（.gitignore に足すか、コミットするなら先に git add する）`);
     }
