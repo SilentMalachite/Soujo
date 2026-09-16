@@ -4,7 +4,9 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
-## 未リリース
+## 0.3.2 — 2026-09-16
+
+リリース：[v0.3.2](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.2)。
 
 ### 修正
 
@@ -63,7 +65,7 @@
 - `resume` と `next check` の未コミット件数は `git status` の出力を 16 MiB までしか読まず、超えたら `N件以上` と出す。
 - `soujo map code` はプロジェクトの外のディレクトリ（外へ向かう symlink を含め、実体のパスで判定）を読んだとき最初の注記でそう示し、`map` スキルはユーザーが名指ししたときだけ渡す。
 - コミットは引き続きリポジトリの git hook を通す。その理由を SPEC §14 に記した。
-
+- `CLAUDE.md` のテンプレートは、`AGENTS.md` と `close` スキルと同じく `soujo close` の note を単一引用符で囲む。
 - `test/privacy.test.ts` は、追跡ファイルと HEAD のコミットメッセージだけでなく、ref（ブランチ・タグ・リモート追跡ブランチ・stash）から届くすべての版のファイルと、コミット・タグのメッセージを検査し、Codex のクラウドタスクと ChatGPT の会話・共有チャットへのリンクも検出する。自分自身も検査し、ファイルごと飛ばす代わりに、自分の fixture の架空の値だけを通す。
 - `test/docs.test.ts` は `SPEC.md` と `SPEC.ja.md` も比べる。
 - `npm test` は glob を使わず、テストファイルを自分で `node --test` に渡す（`test/run.ts`）。Windows で npm がスクリプトを実行する `cmd.exe` は glob を展開せず、Node 20 は glob を受け付けないため。

@@ -106,7 +106,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 
 ## CLI
 
-`soujo` takes arguments and exits. Output is usually a few Japanese lines (`map` prints diagrams, `--help` one usage line per command); errors are one line on stderr with exit code 1. Output and errors show a path under your home directory as `~`. A closed pipe (`soujo resume` piped into `head -1`) ends the run quietly, any other failed write is reported on stderr, and when the current directory cannot be read, `soujo next check` and `soujo next show --hook` still print nothing and exit 0 while every other command says so in one line. Inside a host's plugin directory (`.claude/plugins` or `.codex/plugins`, in any letter case, in the real path of the current directory, where installed copies of Soujo live), `soujo next check` and `soujo next show --hook` behave as outside a Soujo project and print nothing, and every other command but `--help`, `soujo next show` without `--hook` included, exits 1 without reading or writing anything: run `soujo` in the project you are working on. Any directory there is refused, a copy of Soujo or not; a checkout that a host reads in place (`claude --plugin-dir`, a local directory marketplace) is not. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
+`soujo` takes arguments and exits. Output is usually a few Japanese lines (`map` prints diagrams, `--help` one usage line per command); errors are one line on stderr with exit code 1. `.soujo/` is looked for from the current directory up to the git top level, and outside a repository in the current directory only. Output and errors show a path under your home directory as `~`. A closed pipe (`soujo resume` piped into `head -1`) ends the run quietly, any other failed write is reported on stderr, and when the current directory cannot be read, `soujo next check` and `soujo next show --hook` still print nothing and exit 0 while every other command says so in one line. Inside a host's plugin directory (`.claude/plugins` or `.codex/plugins`, in any letter case, in the real path of the current directory, where installed copies of Soujo live), `soujo next check` and `soujo next show --hook` behave as outside a Soujo project and print nothing, and every other command but `--help`, `soujo next show` without `--hook` included, exits 1 without reading or writing anything: run `soujo` in the project you are working on. Any directory there is refused, a copy of Soujo or not; a checkout that a host reads in place (`claude --plugin-dir`, a local directory marketplace) is not. Full behavior: [SPEC.md §6](SPEC.md#6-cli-soujo).
 
 | Command | Does |
 |---|---|
@@ -118,11 +118,11 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo plan list` / `soujo plan next` | Layers with their state / the next layer |
 | `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md`; nothing when `LOG.md` already ends with the same uncommitted entry |
 | `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md` as they are, keeping the last entry and the last `節目` entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
-| `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>` |
-| `soujo resume` | Four-line status; from 3 days after the last commit, `再開:` points to `soujo brief` |
-| `soujo brief` | Five lines for returning after days or weeks away: PLAN progress and the last layer, commits since it, the last `節目` entry, days since the last commit, the next step; writes nothing |
-| `soujo close [--note '<note>']` | Logs the interruption → commits `wip: <layer>` |
-| `soujo map plan` / `soujo map code [<dir>]` | ASCII plan diagram / Mermaid import graph or directory tree |
+| `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>`; refuses while an untracked file that git does not ignore is named like a credential file (`.env`, `.npmrc`, SSH keys, `*.pem`, …) |
+| `soujo resume` | Four-line status; from 3 calendar days after the last commit, `再開:` points to `soujo brief` |
+| `soujo brief` | Five lines for returning after days or weeks away: PLAN progress and the last layer, commits since it, the last `節目` entry, calendar days since the last commit, the next step; writes nothing |
+| `soujo close [--note '<note>']` | Logs the interruption → commits `wip: <layer>`; refuses what `layer done` refuses before committing |
+| `soujo map plan` / `soujo map code [<dir>]` | ASCII plan diagram / Mermaid import graph or directory tree, with a note when `<dir>` is outside the project |
 
 ## Development
 

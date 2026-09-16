@@ -106,7 +106,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 
 ## CLI
 
-`soujo` は引数を受けて終了する。出力は通常数行の日本語（`map` は図、`--help` は1コマンド1行の使い方）、エラーは標準エラーに1行で終了コード1。ホームディレクトリ以下のパスは、出力もエラーも `~` で示す。閉じたパイプ（`soujo resume` を `head -1` に渡すなど）では静かに終わり、それ以外の書き込みの失敗は標準エラーに1行出す。現在のディレクトリを読めなくても `soujo next check` と `soujo next show --hook` は何も出さず終了コード0、ほかのコマンドは1行でその旨を伝える。ホストのプラグインの置き場所（現在のディレクトリの実パスに `.claude/plugins` か `.codex/plugins` があるところ。大文字小文字は区別しない。インストールされた Soujo の写しがある）では、`soujo next check` と `soujo next show --hook` は Soujo のプロジェクトの外と同じに振る舞って何も出さず、それ以外のコマンド（`--hook` なしの `soujo next show` も）は `--help` を除き、何も読み書きせずに終了コード1で終わる。`soujo` は作業中のプロジェクトで実行する。そこにあるディレクトリは Soujo の写しでなくても対象で、ホストがその場で読む作業ツリー（`claude --plugin-dir`、ローカルディレクトリのマーケットプレイス）は対象外。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
+`soujo` は引数を受けて終了する。出力は通常数行の日本語（`map` は図、`--help` は1コマンド1行の使い方）、エラーは標準エラーに1行で終了コード1。`.soujo/` は現在のディレクトリから git のトップレベルまで遡って探し、リポジトリの外では現在のディレクトリだけを見る。ホームディレクトリ以下のパスは、出力もエラーも `~` で示す。閉じたパイプ（`soujo resume` を `head -1` に渡すなど）では静かに終わり、それ以外の書き込みの失敗は標準エラーに1行出す。現在のディレクトリを読めなくても `soujo next check` と `soujo next show --hook` は何も出さず終了コード0、ほかのコマンドは1行でその旨を伝える。ホストのプラグインの置き場所（現在のディレクトリの実パスに `.claude/plugins` か `.codex/plugins` があるところ。大文字小文字は区別しない。インストールされた Soujo の写しがある）では、`soujo next check` と `soujo next show --hook` は Soujo のプロジェクトの外と同じに振る舞って何も出さず、それ以外のコマンド（`--hook` なしの `soujo next show` も）は `--help` を除き、何も読み書きせずに終了コード1で終わる。`soujo` は作業中のプロジェクトで実行する。そこにあるディレクトリは Soujo の写しでなくても対象で、ホストがその場で読む作業ツリー（`claude --plugin-dir`、ローカルディレクトリのマーケットプレイス）は対象外。詳しい動作：[SPEC.ja.md §6](SPEC.ja.md#6-cli-soujo)。
 
 | コマンド | 動作 |
 |---|---|
@@ -118,11 +118,11 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo plan list` / `soujo plan next` | 層と状態 / 次の層 |
 | `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記。`LOG.md` が同じ未コミットのエントリで終わっていれば足さない |
 | `soujo log rotate [--before <YYYY-MM>]` | 今月（か `--before`）より前の月のエントリをそのままの形で `LOG-YYYY-MM.md` へ移し（最後のエントリと最後の `節目` エントリは残す）、`log: rotate <月>` でコミット。ほかの未コミットの変更があれば拒否し、失敗後の再実行は同じ移動を仕上げる |
-| `soujo layer done '<層>' [--note '<メモ>']` | PLAN の層にチェック → LOG に追記 → `layer: <層>` でコミット |
-| `soujo resume` | 4行の現在地。最終コミットから3日以上なら `再開:` が `soujo brief` を指す |
-| `soujo brief` | 何日も・何週間も離れた後に戻るための5行：PLAN の進捗と最後の層、その後のコミット、最後の `節目` エントリ、最終コミットからの日数、次の一手。何も書かない |
-| `soujo close [--note '<メモ>']` | 中断を記録 → `wip: <層>` でコミット |
-| `soujo map plan` / `soujo map code [<ディレクトリ>]` | 計画の ASCII 図 / import の Mermaid 図かディレクトリ木 |
+| `soujo layer done '<層>' [--note '<メモ>']` | PLAN の層にチェック → LOG に追記 → `layer: <層>` でコミット。git に無視されていない未追跡ファイルが認証情報のファイル名（`.env`・`.npmrc`・SSH の鍵・`*.pem` など）なら拒否する |
+| `soujo resume` | 4行の現在地。最終コミットから暦日で3日以上なら `再開:` が `soujo brief` を指す |
+| `soujo brief` | 何日も・何週間も離れた後に戻るための5行：PLAN の進捗と最後の層、その後のコミット、最後の `節目` エントリ、最終コミットからの日数（暦日）、次の一手。何も書かない |
+| `soujo close [--note '<メモ>']` | 中断を記録 → `wip: <層>` でコミット。`layer done` がコミット前に拒否するものは拒否する |
+| `soujo map plan` / `soujo map code [<ディレクトリ>]` | 計画の ASCII 図 / import の Mermaid 図かディレクトリ木。`<ディレクトリ>` がプロジェクトの外なら注記する |
 
 ## 開発
 

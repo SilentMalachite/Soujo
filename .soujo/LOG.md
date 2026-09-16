@@ -380,3 +380,7 @@ PLAN の全層完了: Codex 全体レビュー44件の修正（L20〜L31）で g
 review は soujo を呼ばないので止まらず、map は plan/code だけ止まる（skills.test が頼むことから組んだ文と照合）
 既定の diff を review と map で同文に：最新 layer の層の最も古い wip/layer の親から、layer がなければ最古の wip か HEAD（D15）
 境界の規約を SPEC(+ja)・CLAUDE.md・AGENTS.md・CONTRIBUTING(+ja) で同じ文言に（D16: templates には入れない）
+
+## 2026-09-16 release-0.3.2
+0.3.2 をリリース（2026-09-16）: L20〜L31 と Grok 全件調査・Codex レビューの修正（resume のコミット行・close の PLAN 検査・認証ファイルの拒否・暦日など）
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.2 にし、CHANGELOG(+ja) を 0.3.2 — 2026-09-16 に。README(+ja)・SECURITY(+ja)・CLAUDE.md(+template) を同期

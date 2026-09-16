@@ -4,7 +4,9 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.2 — 2026-09-16
+
+Release: [v0.3.2](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.2).
 
 ### Fixed
 
@@ -63,7 +65,7 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - The uncommitted count of `resume` and `next check` reads at most 16 MiB of `git status` output and then says `N件以上`.
 - `soujo map code` says in its first note when it read a directory outside the project, judged by real paths so that a symlink leading out counts, and the `map` skill passes one only when the user names it.
 - Commits keep running the repository's git hooks; SPEC §14 now records why.
-
+- The `CLAUDE.md` template quotes the note of `soujo close` in single quotes, as `AGENTS.md` and the `close` skill do.
 - `test/privacy.test.ts` checks every version of a file and every commit and tag message that a ref reaches (a branch, a tag, a remote-tracking branch, the stash), not only the tracked files and the commit messages on HEAD, and catches links to Codex cloud tasks and to ChatGPT conversations and shared chats. It scans itself too: instead of the whole file, only the made-up values of its own fixtures are let through.
 - `test/docs.test.ts` compares `SPEC.md` with `SPEC.ja.md` as well.
 - `npm test` hands the test files to `node --test` itself (`test/run.ts`) instead of through a glob, which `cmd.exe`, where npm runs scripts on Windows, does not expand and Node 20 does not take.
