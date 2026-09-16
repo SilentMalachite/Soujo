@@ -247,6 +247,11 @@ test('next set, show, and check work through the CLI; check exits 0 even with ba
   assert.deepEqual([fixed.status, fixed.stdout], [0, 'NEXT.md を更新: 次: plan\n']);
   assert.equal(soujoIn(dir, 'next', 'show').stdout, '次: plan\n前提: p\n確認: c\n注意: なし\neffort: high\n');
 
+  // An invalid NEXT.md is printed with the line that says why, on stdout, still exit 0.
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), '次: L1\n確認: c\n');
+  const invalid = soujoIn(dir, 'next', 'show');
+  assert.deepEqual([invalid.status, invalid.stdout], [0, '次: L1\n確認: c\nsoujo 警告: 「前提」がない / 「注意」がない / 「effort」がない\n']);
+
   const outside = temp(t);
   for (const args of [['next', 'check', '--hook'], ['next', 'check', '--bogus', 'x'], ['next', 'show', '--hook']]) {
     const result = soujoIn(outside, ...args);

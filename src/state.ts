@@ -86,8 +86,11 @@ function isEffort(value: string): value is Effort {
   return (EFFORTS as readonly string[]).includes(value);
 }
 
-// Only the final line break is dropped, so trailing blank lines count toward the line limit.
-function contentLines(text: string): string[] {
+/**
+ * The lines of a state file as its line limit counts them: only the final line break is dropped, so trailing blank lines
+ * count, and text that is blank throughout is no lines at all. What next show prints is what validateNext counted here.
+ */
+export function contentLines(text: string): string[] {
   const body = text.endsWith('\r\n') ? text.slice(0, -2) : text.endsWith('\n') ? text.slice(0, -1) : text;
   return body.trim() === '' ? [] : body.split(/\r?\n/);
 }
@@ -279,6 +282,29 @@ export function missingConditions(text: string): string[] {
     .map(({ item, line }) => `PLAN.md の${line}行目の層「${item.layer}」に完了条件がない`);
 }
 
+// Two lines as the user means them: whitespace runs are one space, so a condition re-spaced or rewrapped by hand still
+// matches. printable runs first, so a control character compares as the space it prints as, as everywhere else.
+function sameWords(a: string, b: string): boolean {
+  const words = (text: string) => printable(text).trim().split(/\s+/).join(' ');
+  return words(a) === words(b);
+}
+
+/**
+ * A warning when NEXT.md's 確認 is not the completion condition PLAN.md gives its layer, or undefined when they agree. The
+ * two say the same thing in two files (the go skill copies one into the other), so a PLAN edited afterwards leaves the layer
+ * being worked on with the old condition. Nothing to compare gives no warning: a phase, a layer PLAN has not got, one left
+ * without a condition (missingConditions names it), and a name PLAN repeats, whose two conditions are neither of them the
+ * layer's (validatePlan names the repeat).
+ */
+export function checkMismatch(next: Next, items: readonly PlanItem[]): string | undefined {
+  if (PHASES.includes(next.layer)) return undefined;
+  const matches = items.filter(({ layer }) => layer === next.layer);
+  const [item] = matches;
+  if (matches.length !== 1 || item === undefined || item.condition === '') return undefined;
+  if (sameWords(next.check, item.condition)) return undefined;
+  return `NEXT.md の確認が PLAN の層「${next.layer}」の完了条件と違う（PLAN に合わせて soujo next set）`;
+}
+
 /** "[x] <layer>" or "[ ] <layer>", as plan list and map plan show a layer. */
 export function formatItem(item: PlanItem): string {
   return `[${item.done ? 'x' : ' '}] ${item.layer}`;
@@ -461,13 +487,26 @@ export function archiveLog(archive: string | undefined, month: string, blocks: r
   return text;
 }
 
+// Whether the lines before a new archive's first entry are the heading archiveLog writes for month, and nothing else. The
+// heading is compared as written, at the start of its line: archiveLog never indents it, so an indented one is someone else's.
+function freshPreamble(lines: readonly string[], month: string): boolean {
+  const written = lines.map((line) => line.replace(/\r$/, '')).filter((line) => line.trim() !== '');
+  return written.length === 1 && written[0] === `# LOG ${month}`;
+}
+
 /**
  * The entries appended to before to make after, or undefined when after is not before followed by whole entries (blank lines
- * allowed): what archiveLog writes. CRLF and LF compare equal, as git's line-ending conversion may change them. A missing or
- * blank before (a new archive) gives every entry of after.
+ * allowed): what archiveLog writes for month. CRLF and LF compare equal, as git's line-ending conversion may change them. A
+ * missing or blank before (a new archive) gives every entry of after, but only under the heading archiveLog gives that month:
+ * any other text there is a file no rotate wrote, and nothing checks it later, since a new archive has no entries at HEAD.
+ * Throws when month is not YYYY-MM, which the ArchiveFile the caller names it from already rules out.
  */
-export function appendedEntries(before: string | undefined, after: string): LogEntry[] | undefined {
-  if (before === undefined || before.trim() === '') return parseLog(after);
+export function appendedEntries(before: string | undefined, after: string, month: string): LogEntry[] | undefined {
+  requireMonth(month);
+  if (before === undefined || before.trim() === '') {
+    const { lines, preamble, blocks } = logBlocks(after);
+    return freshPreamble(lines.slice(0, preamble), month) ? blocks.map(({ entry }) => entry) : undefined;
+  }
   const [old, now] = [lf(before), lf(after)];
   if (!now.startsWith(old)) return undefined;
   const rest = now.slice(old.length);

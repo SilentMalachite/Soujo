@@ -115,7 +115,7 @@ function stoppedRotation(root: string, dir: string, log: string, before: string)
   if (removed === undefined) throw new Error(DIRTY);
   for (const [file, text] of texts) {
     if (!trackedPaths(root, file).some((path) => changed.has(path))) continue;
-    const appended = appendedEntries(headState(root, file), text);
+    const appended = appendedEntries(headState(root, file), text, archiveMonth(file));
     if (appended === undefined || appended.length === 0 || appended.some((entry) => logMonth(entry) !== archiveMonth(file))) {
       throw new Error(DIRTY);
     }

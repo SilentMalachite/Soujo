@@ -4,6 +4,8 @@ import {
   appendLog,
   appendedEntries,
   archiveLog,
+  checkMismatch,
+  contentLines,
   daysBetween,
   formatDate,
   formatItem,
@@ -28,6 +30,7 @@ import {
   rotateLog,
   validateNext,
   validatePlan,
+  type Next,
 } from '../src/state.js';
 
 const NEXT = '次: L2 state\n前提: L1 完了\n確認: npm test が通る\n注意: なし\neffort: medium\n';
@@ -298,15 +301,29 @@ test('appendedEntries reads what archiveLog appended and refuses any other chang
   const blocks = rotateLog(ROTATING, '2026-09').moved;
   const head = '# LOG 2026-08\n\n## 2026-08-01 L0\nz';
   const entry = (text: string) => parseLog(text);
-  assert.deepEqual(appendedEntries(head, archiveLog(head, '2026-08', blocks.slice(1))), entry('## 2026-08-02 L3\nc\n'));
-  assert.deepEqual(appendedEntries(head, `${head}\n`), []);
-  assert.deepEqual(appendedEntries(head, head), []);
-  assert.deepEqual(appendedEntries(undefined, '# LOG 2026-08\n\n## 2026-08-01 L0\nz\n'), entry('## 2026-08-01 L0\nz\n'));
-  assert.deepEqual(appendedEntries(' \n', '# LOG 2026-08\n'), []);
-  assert.deepEqual(appendedEntries(`${head}\r\n`, `${head}\r\n\r\n## 2026-08-02 L3\r\nc\r\n`), entry('## 2026-08-02 L3\nc\n'));
+  assert.deepEqual(appendedEntries(head, archiveLog(head, '2026-08', blocks.slice(1)), '2026-08'), entry('## 2026-08-02 L3\nc\n'));
+  assert.deepEqual(appendedEntries(head, `${head}\n`, '2026-08'), []);
+  assert.deepEqual(appendedEntries(head, head, '2026-08'), []);
+  assert.deepEqual(appendedEntries(undefined, '# LOG 2026-08\n\n## 2026-08-01 L0\nz\n', '2026-08'), entry('## 2026-08-01 L0\nz\n'));
+  assert.deepEqual(appendedEntries(' \n', '# LOG 2026-08\n', '2026-08'), []);
+  assert.deepEqual(appendedEntries(`${head}\r\n`, `${head}\r\n\r\n## 2026-08-02 L3\r\nc\r\n`, '2026-08'), entry('## 2026-08-02 L3\nc\n'));
   for (const after of ['# LOG 2026-08\n', `${head}more\n`, `${head}\nmore\n## 2026-08-02 L3\n`, `# Log 2026-08\n\n## 2026-08-01 L0\nz\n`]) {
-    assert.equal(appendedEntries(head, after), undefined, after);
+    assert.equal(appendedEntries(head, after, '2026-08'), undefined, after);
   }
+});
+
+test('appendedEntries takes a new archive only under the heading archiveLog writes for that month', () => {
+  const entries = '## 2026-08-01 L0\nz\n';
+  const parsed = parseLog(entries);
+  assert.deepEqual(appendedEntries(undefined, `# LOG 2026-08\n\n${entries}`, '2026-08'), parsed);
+  assert.deepEqual(appendedEntries(' \n', `# LOG 2026-08\r\n\r\n${entries}`, '2026-08'), parsed);
+  // Anything else before the entries is text no rotate wrote, so the file is not one a stopped rotate left. An indented
+  // heading is one of them: archiveLog writes the heading at the start of the line.
+  const other = ['', '# LOG 2026-07', '# LOG 2026-08 x', '# log 2026-08', ' # LOG 2026-08', 'note\n# LOG 2026-08', entries.trimEnd()];
+  for (const preamble of other) assert.equal(appendedEntries(undefined, `${preamble}\n\n${entries}`, '2026-08'), undefined, preamble);
+  // The heading alone is what archiveLog writes before the first block, so it reads back as no entry rather than as a change.
+  assert.deepEqual(appendedEntries(undefined, '# LOG 2026-08\n', '2026-08'), []);
+  assert.throws(() => appendedEntries(undefined, '# LOG 2026-8\n', '2026-8'), /^Error: 月は YYYY-MM: 2026-8$/);
 });
 
 test('removedEntries reads what rotateLog removed and refuses any other change', () => {
@@ -484,6 +501,29 @@ test('missingConditions names the line of every layer left without a completion 
   assert.deepEqual(missingConditions('```\n- [ ] X\n```\n'), []);
 });
 
+test('checkMismatch names a 確認 that is not the completion condition PLAN gives the layer', () => {
+  const next = parseNext(NEXT) as Next;
+  const items = parsePlan('- [x] L1 scaffold — build\n- [ ] L2 state — test が通る\n');
+  assert.equal(checkMismatch(next, items), 'NEXT.md の確認が PLAN の層「L2 state」の完了条件と違う（PLAN に合わせて soujo next set）');
+  // Whitespace runs compare equal, control characters among them, so a condition re-spaced by hand is not a difference.
+  assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state —  npm\ttest  が通る \n')), undefined);
+  assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state — npm test が通る\r\n')), undefined);
+  assert.equal(checkMismatch(parseNext(NEXT.replace('npm test', 'npm\ttest')) as Next, parsePlan('- [ ] L2 state — npm test が通る\n')), undefined);
+  // Nothing to compare against: either phase, a layer PLAN does not have, and a layer left without a condition.
+  for (const layer of ['spec', 'plan', 'L9']) assert.equal(checkMismatch({ ...next, layer }, items), undefined, layer);
+  assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state\n')), undefined);
+  assert.equal(checkMismatch(next, []), undefined);
+  // A repeated layer name matches two conditions, so neither is the layer's: validatePlan names the repeat instead.
+  assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state — test が通る\n- [ ] L2 state — 別\n')), undefined);
+});
+
+test('contentLines drops only the final line break, so trailing blank lines count as lines', () => {
+  assert.deepEqual(contentLines('a\nb\n'), ['a', 'b']);
+  assert.deepEqual(contentLines('a\r\nb\r\n'), ['a', 'b']);
+  assert.deepEqual(contentLines('a\n\n\n'), ['a', '', '']);
+  for (const text of ['', '\n', ' \n \n']) assert.deepEqual(contentLines(text), [], JSON.stringify(text));
+});
+
 test('parseLog reads a heading whose layer name carries a line separator', () => {
   const lineSeparator = String.fromCharCode(0x2028);
   const log = `# LOG\n\n## 2026-09-13 L1\na\n\n## 2026-09-14 L2${lineSeparator}x\nb\n`;
@@ -502,7 +542,7 @@ test('a heading with a line separator in its layer name bounds an entry everywhe
     assert.equal(kept, '# LOG\n\n## 2026-09-13 L3\nnew\n');
     // The archive it writes reads back as that one entry, appended and removed as a whole.
     const archive = archiveLog(undefined, '2026-07', moved);
-    assert.deepEqual(appendedEntries(undefined, archive)?.map((entry) => entry.layer), [odd], odd);
+    assert.deepEqual(appendedEntries(undefined, archive, '2026-07')?.map((entry) => entry.layer), [odd], odd);
     assert.deepEqual(removedEntries(log, kept)?.map((entry) => entry.layer), [odd], odd);
     // And appendLog still refuses a body line of that shape, so no entry can be written that splits another.
     assert.throws(() => appendLog('', { date: '2026-09-13', layer: 'L1', lines: [`## 2026-09-14 ${odd}`] }), /見出しの形/);

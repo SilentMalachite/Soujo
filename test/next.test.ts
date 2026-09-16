@@ -7,7 +7,8 @@ import { nextCheck, nextSet, nextShow } from '../src/commands/next.js';
 import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 
 const NEXT = '次: L2 state\n前提: L1 完了\n確認: npm test が通る\n注意: なし\neffort: medium\n';
-const PLAN = '- [x] L1 scaffold — build\n- [ ] L2 state — test\n';
+// L2 state's completion condition is NEXT.md's 確認, so that next check has nothing to warn about by default.
+const PLAN = '- [x] L1 scaffold — build\n- [ ] L2 state — npm test が通る\n';
 
 function readNext(dir: string): string {
   return readFileSync(join(dir, '.soujo', 'NEXT.md'), 'utf8');
@@ -24,6 +25,31 @@ test('next show reports a missing NEXT.md, and --hook stays silent', (t) => {
   const dir = project(temp(t));
   assert.deepEqual(nextShow(dir, false), ['NEXT.md なし']);
   assert.deepEqual(nextShow(dir, true), []);
+});
+
+test('next show adds one line naming what makes NEXT.md unusable, with and without --hook', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': '次: L2 state\n前提:\n確認: c\n' });
+  const shown = ['次: L2 state', '前提:', '確認: c', 'soujo 警告: 「前提」が空 / 「注意」がない / 「effort」がない'];
+  assert.deepEqual(nextShow(dir, false), shown);
+  assert.deepEqual(nextShow(dir, true), shown);
+  // The line stays bounded as next check's does, naming the first problems and counting the rest.
+  const broken = project(temp(t), { 'NEXT.md': 'a\nb\nc\nd\ne\nf\n' });
+  assert.match(nextShow(broken, false).at(-1) ?? '', /^soujo 警告: NEXT\.md が5行を超えている（6行） \/ 1行目を読めない: a \/ .+ \/ ほか8件$/);
+  // A valid NEXT.md is shown as it is.
+  assert.deepEqual(nextShow(project(temp(t), { 'NEXT.md': NEXT }), false), NEXT.trimEnd().split('\n'));
+});
+
+test('next show counts the lines it prints, so a blank line at the end is shown as the line it is warned about', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': `${NEXT}\n` });
+  assert.deepEqual(nextShow(dir, false), [...NEXT.trimEnd().split('\n'), '', 'soujo 警告: NEXT.md が5行を超えている（6行） / 6行目が空行']);
+});
+
+test('next show says a NEXT.md that is there but empty is empty, and only a missing one is missing', (t) => {
+  for (const text of ['', ' \n\n']) {
+    const dir = project(temp(t), { 'NEXT.md': text });
+    assert.deepEqual(nextShow(dir, false), ['soujo 警告: NEXT.md が空'], JSON.stringify(text));
+    assert.deepEqual(nextShow(dir, true), ['soujo 警告: NEXT.md が空'], JSON.stringify(text));
+  }
 });
 
 test('next show outside Soujo projects throws, and --hook stays silent', (t) => {
@@ -146,11 +172,13 @@ test('next check warns about a missing NEXT.md and a NEXT.md pointing to a finis
   const missing = project(temp(t), { 'PLAN.md': PLAN });
   assert.deepEqual(nextCheck(missing, false), ['soujo 警告: NEXT.md がない']);
 
+  // The 確認 of a layer already done is not compared: the layer being the wrong one is the problem to fix, and the one to name.
   const finished = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'L1 scaffold'), 'PLAN.md': PLAN });
   assert.deepEqual(nextCheck(finished, false), ['soujo 警告: NEXT.md の次「L1 scaffold」は PLAN で完了済み']);
 });
 
 test('next check warns when NEXT.md moved past a layer that was never closed', (t) => {
+  // As for a finished layer, the 確認 of a layer reached too early is not compared.
   const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'L3 io'), 'PLAN.md': `${PLAN}- [ ] L3 io — io\n` });
   assert.deepEqual(nextCheck(dir, false), ['soujo 警告: NEXT.md の次「L3 io」より前の「L2 state」が PLAN で未完了']);
 
@@ -189,6 +217,21 @@ test('next check warns about a layer left without a completion condition, before
   assert.match(readNext(dir), /^次: L2 state$/m);
 });
 
+test('next check warns when 確認 in NEXT.md is not the completion condition PLAN gives the layer', (t) => {
+  const differs = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN.replace('npm test が通る', 'test') });
+  assert.deepEqual(nextCheck(differs, false), [
+    'soujo 警告: NEXT.md の確認が PLAN の層「L2 state」の完了条件と違う（PLAN に合わせて soujo next set）',
+  ]);
+  // Whitespace runs compare equal, so a condition re-spaced by hand is not a difference.
+  const same = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN.replace('npm test', 'npm\ttest ') });
+  assert.deepEqual(nextCheck(same, false), []);
+  // Nothing to compare against: a phase, and a layer left without a completion condition (named by that warning alone).
+  const phase = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'plan'), 'PLAN.md': '- [x] L1 scaffold — build\n' });
+  assert.deepEqual(nextCheck(phase, false), []);
+  const none = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': '- [x] L1 scaffold — build\n- [ ] L2 state\n' });
+  assert.deepEqual(nextCheck(none, false), ['soujo 警告: PLAN.md の2行目の層「L2 state」に完了条件がない']);
+});
+
 test('next check keeps its one line bounded, naming the first problems and counting the rest', (t) => {
   const dir = project(temp(t), { 'PLAN.md': '- [ ] \n- [ ] \n- [ ] \n- [ ] \n- [ ] \n' });
   assert.deepEqual(nextCheck(dir, false), [
@@ -205,7 +248,7 @@ test('next show --hook and next check never read a state file through a symlink 
   assert.throws(() => nextShow(dir, false), /^Error: NEXT\.md を読まない: 実体（symlink の先）がプロジェクトの外$/);
   const [line] = nextCheck(dir, true);
   assert.doesNotMatch(line ?? '', /token-123/);
-  assert.match(line ?? '', /確認できない: NEXT\.md を読まない/);
+  assert.match(line ?? '', /NEXT\.md を読まない: 実体（symlink の先）がプロジェクトの外/);
 });
 
 test('next check counts untracked files even when git hides them from status', (t) => {
@@ -238,10 +281,19 @@ test('next check reports an unreadable LOG.md together with the other warnings',
   symlinkSync(secret, join(linked, '.soujo', 'LOG.md'));
   assert.deepEqual(nextCheck(linked, false), ['soujo 警告: NEXT.md がない / LOG.md を読まない: 実体（symlink の先）がプロジェクトの外']);
 
-  // A state file that is another one is refused the same way, as one warning among the others.
+  // A state file that is another one is refused the same way, and each file that cannot be read is named on its own.
   const shared = project(temp(t), { 'LOG.md': `# LOG\n\n${PLAN}` });
   symlinkSync('LOG.md', join(shared, '.soujo', 'PLAN.md'));
-  assert.deepEqual(nextCheck(shared, false), ['soujo 警告: 確認できない: PLAN.md を読まない: 実体（symlink の先）が LOG.md と同じ']);
+  assert.deepEqual(nextCheck(shared, false), [
+    'soujo 警告: NEXT.md がない / PLAN.md を読まない: 実体（symlink の先）が LOG.md と同じ / LOG.md を読まない: 実体が PLAN.md（symlink）の先と同じ',
+  ]);
+});
+
+test('next check reports an unreadable PLAN.md together with the warnings about NEXT.md', (t) => {
+  const dir = project(temp(t), { 'NEXT.md': `${NEXT}補足: x\n` });
+  mkdirSync(join(dir, '.soujo', 'PLAN.md'));
+  const [line] = nextCheck(dir, false);
+  assert.match(line ?? '', /^soujo 警告: NEXT\.md が5行を超えている（6行） \/ 6行目を読めない: 補足: x \/ PLAN\.md を読めない: /);
 });
 
 test('next check reports a git failure together with the other warnings', (t) => {
@@ -256,10 +308,10 @@ test('next check --hook returns a systemMessage JSON line', (t) => {
   assert.deepEqual(nextCheck(dir, true), [JSON.stringify({ systemMessage: 'soujo 警告: NEXT.md がない' })]);
 });
 
-test('next check turns unexpected failures into a warning instead of throwing', (t) => {
+test('next check reports an unreadable NEXT.md together with the other warnings, and never throws', (t) => {
   const dir = project(temp(t));
   mkdirSync(join(dir, '.soujo', 'NEXT.md'));
-  writeFileSync(join(dir, '.soujo', 'PLAN.md'), PLAN);
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [ ] L2 state\n');
   const [line] = nextCheck(dir, false);
-  assert.match(line ?? '', /^soujo 警告: 確認できない: NEXT\.md を読めない: /);
+  assert.match(line ?? '', /^soujo 警告: NEXT\.md を読めない: .+ \/ PLAN\.md の1行目の層「L2 state」に完了条件がない$/);
 });

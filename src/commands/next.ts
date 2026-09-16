@@ -5,6 +5,8 @@ import { findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requi
 import { gitStatus, gitToplevel } from '../git.js';
 import {
   PHASES,
+  checkMismatch,
+  contentLines,
   formatDate,
   formatNext,
   logMonths,
@@ -17,17 +19,33 @@ import {
   validateNext,
   validatePlan,
   type Effort,
+  type Next,
   type NextInput,
+  type PlanItem,
 } from '../state.js';
 
-/** NEXT.md as lines. With hook, silent when there is nothing to show (no project, no file, unreadable). */
+// How many problems a warning names before counting the rest, so that the line stays readable where a hook shows it.
+const SHOWN_PROBLEMS = 4;
+
+// The one line that names problems: the first SHOWN_PROBLEMS of them, then how many are left. Problems named by line are one
+// per broken line, so a badly broken PLAN or NEXT would otherwise stretch this one line without end.
+function warning(found: readonly string[]): string {
+  const shown = found.length > SHOWN_PROBLEMS ? [...found.slice(0, SHOWN_PROBLEMS), `ほか${found.length - SHOWN_PROBLEMS}件`] : found;
+  return `soujo 警告: ${shown.join(' / ')}`;
+}
+
+/**
+ * NEXT.md as the lines its limit counts, with one line naming what makes it unusable after them: resume and close refuse
+ * such a file, and the text alone does not say why. A file that is there but empty is one of those, so only a missing file
+ * gives NEXT.md なし. With hook, silent when there is nothing to show (no project, no file, unreadable).
+ */
 export function nextShow(cwd: string, hook: boolean): string[] {
   try {
     const dir = hook ? findStateDir(cwd) : requireStateDir(cwd);
-    const text = dir === undefined ? '' : (readState(dir, 'NEXT.md') ?? '');
-    const body = text.trimEnd();
-    if (body === '') return hook ? [] : ['NEXT.md なし'];
-    return body.split(/\r?\n/);
+    const text = dir === undefined ? undefined : readState(dir, 'NEXT.md');
+    if (text === undefined) return hook ? [] : ['NEXT.md なし'];
+    const problems = validateNext(text);
+    return problems.length === 0 ? contentLines(text) : [...contentLines(text), warning(problems)];
   } catch (error) {
     if (hook) return [];
     throw error;
@@ -48,15 +66,15 @@ export function nextSet(cwd: string, input: NextInput): string[] {
   const phase = PHASES.includes(layer);
   // A phase defaults to PHASE_EFFORT; a given effort is kept, so that a multi-line or unknown value is reported first.
   const text = formatNext({ ...input, effort: phase ? (input.effort ?? PHASE_EFFORT) : input.effort });
-  const problems = validateNext(text);
-  if (problems.length > 0) throw new Error(`NEXT.md を書かない: ${problems.join('、')}`);
+  const invalid = validateNext(text);
+  if (invalid.length > 0) throw new Error(`NEXT.md を書かない: ${invalid.join('、')}`);
   if (phase && parseNext(text)?.effort !== PHASE_EFFORT) {
     throw new Error(`NEXT.md を書かない: 層「${layer}」の effort は ${PHASE_EFFORT} 固定（--effort を外して再実行）`);
   }
   const plan = readState(dir, 'PLAN.md') ?? '';
-  const planProblems = validatePlan(plan);
+  const broken = validatePlan(plan);
   // "PLAN.md を" rather than "PLAN.md の層名を": a problem can be an unclosed code fence, which is not a name.
-  if (planProblems.length > 0) throw new Error(`NEXT.md を書かない: ${planProblems.join('、')}（PLAN.md を直してから）`);
+  if (broken.length > 0) throw new Error(`NEXT.md を書かない: ${broken.join('、')}（PLAN.md を直してから）`);
   const items = parsePlan(plan);
   if (items.length > 0 && !phase && !items.some((item) => item.layer === layer)) {
     throw new Error(`NEXT.md を書かない: PLAN.md に層「${layer}」がない（PLAN の層名をそのまま、または ${PHASES.join(' / ')}）`);
@@ -70,52 +88,76 @@ export function nextSet(cwd: string, input: NextInput): string[] {
 // Rotating is suggested once it would move this many months: right after a month ends, only the month before is left behind.
 const ROTATE_MONTHS = 2;
 
-// Kept apart from the other checks, so that an unreadable LOG.md does not hide their warnings.
+function reason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// Each state file is read on its own, so that one that cannot be read leaves the other warnings standing instead of taking
+// their place. Only the checks needing that file are the ones left out.
+function nextState(dir: string): { problems: string[]; next?: Next } {
+  try {
+    const text = readState(dir, 'NEXT.md');
+    if (text === undefined) return { problems: ['NEXT.md がない'] };
+    return { problems: validateNext(text), next: parseNext(text) };
+  } catch (error) {
+    return { problems: [reason(error)] };
+  }
+}
+
+// PLAN's layers come back too, since what NEXT.md's layer stands as depends on them (see nextState).
+function planState(dir: string): { problems: string[]; items?: PlanItem[] } {
+  try {
+    const plan = readState(dir, 'PLAN.md') ?? '';
+    // missingConditions is a warning, not a refusal like layer done's: an existing PLAN written before the rule still
+    // resumes, and the layer is named now rather than after the half hour of work it takes to reach layer done.
+    return { problems: [...validatePlan(plan), ...missingConditions(plan)], items: parsePlan(plan) };
+  } catch (error) {
+    return { problems: [reason(error)] };
+  }
+}
+
 function logProblems(dir: string, now: Date): string[] {
   try {
     const { moved } = rotateLog(readState(dir, 'LOG.md') ?? '', formatDate(now).slice(0, 7));
     const months = logMonths(moved.map(({ entry }) => entry)).length;
     return months >= ROTATE_MONTHS ? [`LOG.md に移せる過去${months}か月分のエントリ（soujo log rotate）`] : [];
   } catch (error) {
-    return [(error as Error).message];
+    return [reason(error)];
   }
 }
 
 function problems(dir: string, now: Date): string[] {
-  const found: string[] = [];
-  const next = readState(dir, 'NEXT.md');
-  const plan = readState(dir, 'PLAN.md');
-  if (next === undefined) {
-    found.push('NEXT.md がない');
-  } else {
-    found.push(...validateNext(next));
-    const layer = parseNext(next)?.layer;
-    const status = layer === undefined || plan === undefined ? undefined : nextStatus(layer, parsePlan(plan));
-    if (status?.state === 'done') found.push(`NEXT.md の次「${layer}」は PLAN で完了済み`);
-    if (status?.state === 'skipped') found.push(`NEXT.md の次「${layer}」より前の「${status.unfinished.layer}」が PLAN で未完了`);
+  const next = nextState(dir);
+  const plan = planState(dir);
+  const found = [...next.problems];
+  if (next.next !== undefined && plan.items !== undefined) {
+    const { layer } = next.next;
+    const status = nextStatus(layer, plan.items);
+    // The 確認 is compared only while the layer itself stands: pointing at a finished or skipped layer is the problem to
+    // fix, and its condition differing is what follows from it, not a second thing to do.
+    if (status.state === 'done') found.push(`NEXT.md の次「${layer}」は PLAN で完了済み`);
+    else if (status.state === 'skipped') found.push(`NEXT.md の次「${layer}」より前の「${status.unfinished.layer}」が PLAN で未完了`);
+    else {
+      const mismatch = checkMismatch(next.next, plan.items);
+      if (mismatch !== undefined) found.push(mismatch);
+    }
   }
-  found.push(...validatePlan(plan ?? ''));
-  // A warning, not a refusal like layer done's: an existing PLAN written before the rule still resumes, and the layer is
-  // named now rather than after the half hour of work it takes to reach layer done.
-  found.push(...missingConditions(plan ?? ''));
+  found.push(...plan.problems);
   found.push(...logProblems(dir, now));
   found.push(...changeProblems(dirname(dir)));
   return found;
 }
 
-// Kept apart like logProblems, so that a git failure does not hide the other warnings.
+// Kept apart like the state files, so that a git failure does not hide the other warnings.
 function changeProblems(root: string): string[] {
   try {
     if (gitToplevel(root) === undefined) return [];
     const changes = gitStatus(root).length;
     return changes > 0 ? [`未コミットの変更 ${changes}件`] : [];
   } catch (error) {
-    return [`未コミットの変更を確認できない: ${(error as Error).message}`];
+    return [`未コミットの変更を確認できない: ${reason(error)}`];
   }
 }
-
-// How many problems the warning names before counting the rest, so that the line stays readable where a hook shows it.
-const SHOWN_PROBLEMS = 4;
 
 /** One warning line when the project is not safely resumable; nothing otherwise or outside Soujo projects. Never throws. */
 export function nextCheck(cwd: string, hook: boolean, now: Date = new Date()): string[] {
@@ -125,12 +167,10 @@ export function nextCheck(cwd: string, hook: boolean, now: Date = new Date()): s
     if (dir === undefined) return [];
     found = problems(dir, now);
   } catch (error) {
-    found = [`確認できない: ${error instanceof Error ? error.message : String(error)}`];
+    found = [`確認できない: ${reason(error)}`];
   }
   if (found.length === 0) return [];
-  // Problems named by line are one per broken line, so a badly broken PLAN would otherwise stretch this one line without end.
-  const shown = found.length > SHOWN_PROBLEMS ? [...found.slice(0, SHOWN_PROBLEMS), `ほか${found.length - SHOWN_PROBLEMS}件`] : found;
-  const line = `soujo 警告: ${shown.join(' / ')}`;
+  const line = warning(found);
   if (!hook) return [line];
   // Hidden and flattened before the line is encoded: cli.ts does both to what a command returns, and JSON escaping would have
   // turned a control character in the home path into "\t" or "" by then, which the path it compares against has not.

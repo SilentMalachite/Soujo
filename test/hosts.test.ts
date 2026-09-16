@@ -125,6 +125,15 @@ test('hook commands exit 0: SessionStart prints NEXT.md, Stop prints one systemM
   assert.deepEqual(runHook('Stop', dir), { status: 0, stdout: '' });
 });
 
+test('SessionStart puts an invalid NEXT.md into the session with the line that says why', (t) => {
+  const next = '次: L1 a\n前提: なし\n確認: x\n';
+  const dir = project(repo(t), { 'NEXT.md': next, 'PLAN.md': '- [ ] L1 a — x\n' });
+  assert.deepEqual(runHook('SessionStart', dir), {
+    status: 0,
+    stdout: `${next}soujo 警告: 「注意」がない / 「effort」がない\n`,
+  });
+});
+
 test('hook commands stay silent outside Soujo projects', (t) => {
   const dir = temp(t);
   assert.deepEqual(runHook('SessionStart', dir), { status: 0, stdout: '' });

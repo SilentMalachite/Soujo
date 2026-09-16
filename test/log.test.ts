@@ -188,6 +188,8 @@ test('log rotate refuses uncommitted changes a rotate does not make, writing and
     ['a line added to the last entry of an archive', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), `${june}more\n`)],
     ['an archive named for no month', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-13.md'), '')],
     ['a new archive without entries', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-05.md'), '# LOG 2026-05\n')],
+    ['a new archive under another preamble', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-07.md'), 'note\n\n## 2026-07-30 L1\na\n')],
+    ["a new archive under another month's heading", (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-07.md'), '# LOG 2026-06\n\n## 2026-07-30 L1\na\n')],
     ['only a blank line added to an archive', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), `${june}\n`)],
     ['an entry LOG.md never had added to an archive', (dir) => writeFileSync(join(dir, '.soujo', 'LOG-2026-06.md'), `${june}\n## 2026-06-02 hand\nh\n`)],
     [
@@ -353,11 +355,29 @@ test('log rotate in a project inside a larger repository ignores changes outside
   assert.equal(state(app, 'LOG-2026-08.md'), AUGUST);
 });
 
-test('log rotate keeps CRLF in LOG.md and writes new archives with it', (t) => {
+test('log rotate keeps CRLF in LOG.md and writes new archives with it, and a re-run reads back the CRLF archives it wrote', (t) => {
   const crlf = (text: string) => text.replace(/\n/g, '\r\n');
   const dir = logProject(t, { 'LOG.md': crlf(ROTATING) });
+  // The commit fails after the archives are written, so the re-run has to take the CRLF headings for its own work.
+  const restore = failCommits(dir);
+  assert.throws(() => logRotate(dir, undefined, SEPTEMBER), /git commit に失敗/);
+  restore();
   assert.deepEqual(logRotate(dir, undefined, SEPTEMBER), [MOVED, commitLine(dir)]);
   assert.deepEqual([state(dir, 'LOG.md'), state(dir, 'LOG-2026-07.md'), state(dir, 'LOG-2026-08.md')], [crlf(ROTATED), crlf(JULY), crlf(AUGUST)]);
+});
+
+test('log rotate moves entries repeated word for word once each, but not past a copy the archive already has', (t) => {
+  const twice = '# LOG\n\n## 2026-07-30 L1\na\n\n## 2026-07-30 L1\na\n\n## 2026-09-10 L5\ne\n';
+  const both = logProject(t, { 'LOG.md': twice });
+  assert.deepEqual(logRotate(both, undefined, SEPTEMBER), ['LOG.md から2件を1書庫へ移動（2026-07）', commitLine(both, 'log: rotate 2026-07')]);
+  assert.deepEqual([state(both, 'LOG.md'), state(both, 'LOG-2026-07.md')], ['# LOG\n\n## 2026-09-10 L5\ne\n', `${JULY}\n## 2026-07-30 L1\na\n`]);
+
+  // Entries are told apart by content alone, so a copy the archive of its month already has is removed without being
+  // appended again: LOG.md loses both and the archive keeps one (SPEC §14, the decision on log rotate).
+  const dropped = logProject(t, { 'LOG.md': twice, 'LOG-2026-07.md': JULY });
+  assert.deepEqual(logRotate(dropped, undefined, SEPTEMBER), ['LOG.md から2件を1書庫へ移動（2026-07）', commitLine(dropped, 'log: rotate 2026-07')]);
+  assert.deepEqual([state(dropped, 'LOG.md'), state(dropped, 'LOG-2026-07.md')], ['# LOG\n\n## 2026-09-10 L5\ne\n', `${JULY}\n## 2026-07-30 L1\na\n`]);
+  assert.equal(parseLog(state(dropped, 'LOG-2026-07.md')).length, 2);
 });
 
 test('log rotate re-run works when LOG.md is a symlink to a file inside the project', { skip: process.platform === 'win32' }, (t) => {

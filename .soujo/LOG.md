@@ -349,3 +349,8 @@ reviewer の指摘18件は REVIEW-FIX.md に未対応で記録。
 PLAN の層名は空も制御文字も行番号付きで拒否し、完了条件のない層は layer done が締めない。
 コードフェンスの中のチェック項目は層として数えない（parsePlan・markDone・validatePlan）。
 printable が C1 制御文字（U+0080-U+009F）も空白にする。
+
+## 2026-09-16 L26 next-log
+新しい書庫は # LOG <月> の見出しの下だけ rotate の仕事と認める。確認と完了条件の違いを next check が警告し、無効な NEXT を next show が1行で診断する。
+NEXT・PLAN・LOG は1つ読めなくても他の警告が残る。#40（同じ内容のエントリは書庫に写しがあると1本になる）を SPEC に記載。
+レビュー32件のうち30件を同じ層で修正（#19 パース回数・#28 Fixed 節は見送り）。
