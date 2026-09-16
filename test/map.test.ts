@@ -196,12 +196,31 @@ test('TS/JS imports skip JSX text and attribute values and read only what its br
 test('TS/JS imports leave an operand where a JSX element ends, so a "/" after it divides', () => {
   assert.deepEqual(imports("const n = <a/> / 2; import('./after-division.js');"), ['./after-division.js']);
   assert.deepEqual(imports("const o = <a>t</a> / 2; import('./after-children.js');"), ['./after-children.js']);
+  // The white space between the "/" and the ">" of a self-closing tag: without it the element would not end here.
+  assert.deepEqual(imports("const p = <br / > / 2; import('./after-spaced.js');"), ['./after-spaced.js']);
+});
+
+test('TS/JS imports keep reading a tag through its type arguments, a comment, and an element written as a value', () => {
+  assert.deepEqual(imports("const a = <Box<T>>from './fake-type.js'</Box>; import('./after-type.js');"), ['./after-type.js']);
+  assert.deepEqual(imports("const b = <M<K, V[] | N>>from './fake-nested-type.js'</M>; import('./after-nested-type.js');"), ['./after-nested-type.js']);
+  assert.deepEqual(imports("const c = <Box /* x */>from './fake-block.js'</Box>; import('./after-block.js');"), ['./after-block.js']);
+  assert.deepEqual(imports("const d = <Box // x\n>from './fake-line.js'</Box>; import('./after-line.js');"), ['./after-line.js']);
+  assert.deepEqual(imports("const e = <Box icon = <Icon/>>from './fake-value.js'</Box>; import('./after-value.js');"), ['./after-value.js']);
+  // A type argument list holding something this reading does not know is no tag, and the text is read again as code.
+  assert.deepEqual(imports("const f = <Box<{a: 1}>>from './read-again.js'</Box>;"), ['./read-again.js']);
+});
+
+test('TS/JS imports keep two JSX braces apart, so what they hold does not read as one call', () => {
+  assert.deepEqual(imports("const a = <p>{require}{'./fake-call.js', 1}</p>; import('./after.js');"), ['./after.js']);
+  assert.deepEqual(imports("const b = <p>{from}{'./fake-from.js'}</p>; import('./after-from.js');"), ['./after-from.js']);
 });
 
 test('TS/JS imports read "<x>" as a type in .ts, .mts, and .cts and as a JSX element in the other extensions', () => {
   const text = "const s = <string>text from './fake.js'; import('./after.js');";
   for (const from of ['a.ts', 'a.mts', 'a.cts', 'types.d.ts', 'A.TS']) assert.deepEqual(imports(text, from), ['./fake.js', './after.js'], from);
   for (const from of ['a.tsx', 'a.jsx', 'a.js', 'a.mjs', 'a.cjs', 'a.JSX']) assert.deepEqual(imports(text, from), [], from);
+  // The extensions that allow JSX are a list of their own: one outside it is read the way ".ts" is, not the way ".tsx" is.
+  for (const from of ['a.foo', 'a', 'a.tsx.bak']) assert.deepEqual(imports(text, from), ['./fake.js', './after.js'], from);
 });
 
 test('TS/JS imports read again from after a "<" that no tag follows, and stop at an element left open', () => {
@@ -216,6 +235,11 @@ test('TS/JS imports read again from after a "<" that no tag follows, and stop at
   assert.deepEqual(imports("const k = <p>a <b, from './fake-nested.js' {import('./nested.js')}</p>;"), ['./nested.js']);
   // What a rejected element's braces held is read once, not twice, since the text they hold is read again as code.
   assert.deepEqual(imports("const l = <T a={import('./once.js')},>(x: T) => x;"), ['./once.js']);
+  // One rejected element in the braces of another: both are read again, and neither is read again once per level around it.
+  assert.deepEqual(imports("const m = <T a={<U b={import('./inner.js')},>(y: U) => y},>(x: T) => x; import('./after.js');"), ['./inner.js', './after.js']);
+  // Where no value can start a "<" compares, so no element is read there; and a digit starts no name, so "<3" opens none.
+  assert.deepEqual(imports("const n = a<b>c; import('./after-compare.js');"), ['./after-compare.js']);
+  assert.deepEqual(imports("const o = <3>v; import('./after-digit.js');"), ['./after-digit.js']);
 });
 
 test('TS/JS imports keep a template substitution and a JSX brace in the order they were opened', () => {
@@ -409,6 +433,8 @@ test('importGraph scans long and repetitive input in linear time', () => {
     '<p>{'.repeat(30_000),
     `<a ${'y '.repeat(50_000)},`,
     "<p title='".repeat(30_000),
+    // A rejected element in the "{ }" of another: reading it again once per level around it would double the work each time.
+    `${'<T a={'.repeat(20_000)}1${'},'.repeat(20_000)}`,
   ];
   for (const text of inputs) importGraph(RULES, [{ path: 'a.tsx', imports: imports(text) }]);
   // The end of a long input is still read: a scan that swallowed a line or stopped early would drop this one.

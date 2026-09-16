@@ -157,6 +157,9 @@ const LINE_ENDS = new Set([...QUOTE_ENDS, ...SEPARATORS]);
 // Extensions whose "<x>" opens a JSX element. In .ts, .mts, and .cts it is a type assertion or a type argument list instead,
 // and an extension outside both sets is read as one of those, the reading that swallows the least when it is wrong.
 const JSX_EXTENSIONS = new Set(['.tsx', '.jsx', '.js', '.mjs', '.cjs']);
+// The value of a punctuation token that marks where an expression starts without being punctuation any code could write:
+// "$" is a word character, so a scan never makes a punctuation token of it. Every rule below reads it as "anything may follow".
+const EXPRESSION = '$';
 
 // Characters of a name, judged one UTF-16 code unit at a time. Above ASCII everything but white space counts, so that names
 // in any script hold together (white space is all in the BMP, so a surrogate pair is never split) while a no-break or
@@ -283,6 +286,41 @@ interface JsxElement {
   open: number;
   /** How many tokens there were then, to drop what its "{ }" left when that text is read again. */
   tokens: number;
+  /** Whether the last thing read in the opening tag was an attribute's "=", so what follows is its value. */
+  value?: boolean;
+}
+
+// Characters a type argument list may hold, so that "<Box<T>>" reads as one tag: names, white space, and the punctuation of
+// unions, tuples, and nested lists. One holding anything else (an object or a string type) is not recognised as one.
+const TYPE_ARGUMENT = /[\w$\s,.[\]|&:?<>]/;
+
+// The end of the type argument list at text[start] (a "<"), or start when no balanced one written this plainly stands there.
+function skipTypeArguments(text: string, start: number): number {
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index] ?? '';
+    if (!TYPE_ARGUMENT.test(char) && !isWordChar(char)) return start;
+    if (char === '<') depth += 1;
+    else if (char === '>') {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+  return start;
+}
+
+/**
+ * What the reading of elements carries between steps, so that the text of one is read again only as often as it must be.
+ * A "<" found not to open a tag is read again as code; nest those and each level would read the ones inside it again, which
+ * squares the work. rejected keeps the answer for a "<" already judged (it rests on the text after it, so it does not
+ * change), and spent counts what has been read twice; once it passes budget, off turns the reading of elements off for the
+ * rest of the text, which is then read as code alone.
+ */
+interface JsxScan {
+  rejected: Set<number>;
+  spent: number;
+  budget: number;
+  off: boolean;
 }
 
 // Whether a name can start here: a JSX name is an identifier, which no digit leads.
@@ -311,9 +349,10 @@ function jsxAllowed(tokens: Token[], before: string | undefined): boolean {
  * what follows a "<" turns out not to be a tag, that "<" itself; brace tells the caller a "{" opened, whose contents it
  * reads as code. Known misjudgements: a generic function type where a value can start (`type X = <T>(a: T) => T`) reads as
  * an element, and since nothing closes it the rest of the text becomes its children, which hides every import left in it;
- * a closing tag's name is not matched against the opening one, so an unmatched one ends the wrong element.
+ * a closing tag's name is not matched against the opening one, so an unmatched one ends the wrong element; a type argument
+ * list holding an object or a string type (`<Box<{a: 1}>>`) is not read as one, so its tag is taken for no tag at all.
  */
-function scanJsx(text: string, start: number, tokens: Token[], elements: JsxElement[], braces: number): { next: number; brace: boolean } {
+function scanJsx(text: string, start: number, tokens: Token[], elements: JsxElement[], braces: number, scan: JsxScan): { next: number; brace: boolean } {
   const element = elements.at(-1);
   // The caller reads an element only while one is open.
   if (element === undefined) return { next: start + 1, brace: false };
@@ -333,18 +372,27 @@ function scanJsx(text: string, start: number, tokens: Token[], elements: JsxElem
       return { next: end, brace: false };
     }
     if (following === '/') return ended(after(text, text.indexOf('>', start + 2), 1));
+    // A "<" already found not to open a tag is text here like any other character.
+    if (scan.rejected.has(start)) return { next: start + 1, brace: false };
     elements.push({ children: false, braces, open: start, tokens: tokens.length });
     return { next: start + 1, brace: false };
   }
+  // Whether an "=" came just before, which only the value after it may read; white space between the two does not end it.
+  const value = element.value === true;
+  if (!/\s/.test(char)) element.value = false;
   if (/\s/.test(char)) return { next: start + 1, brace: false };
   if (char === '{') return { next: start + 1, brace: true };
-  if (char === '=') return { next: start + 1, brace: false };
+  if (char === '=') {
+    element.value = true;
+    return { next: start + 1, brace: false };
+  }
   if (char === '>') {
     element.children = true;
     return { next: start + 1, brace: false };
   }
   if (char === '/') {
     if (following === '*') return { next: after(text, text.indexOf('*/', start + 2), 2), brace: false };
+    if (following === '/') return { next: after(text, lineEnd(text, start), 0), brace: false };
     // White space may stand between the "/" and the ">" of a self-closing tag.
     let at = start + 1;
     while (at < text.length && /\s/.test(text[at] ?? '')) at += 1;
@@ -352,11 +400,27 @@ function scanJsx(text: string, start: number, tokens: Token[], elements: JsxElem
   }
   // An attribute value in quotes: it holds no escape, and a line terminator does not end it.
   if (char === '"' || char === "'") return { next: after(text, text.indexOf(char, start + 1), 1), brace: false };
+  if (char === '<' && !scan.rejected.has(start)) {
+    // After an "=" an element stands as the attribute's value; anywhere else the "<" opens the tag name's type arguments.
+    if (value) {
+      elements.push({ children: false, braces, open: start, tokens: tokens.length });
+      return { next: start + 1, brace: false };
+    }
+    const arguments_ = skipTypeArguments(text, start);
+    if (arguments_ > start) return { next: arguments_, brace: false };
+  }
   const name = scanJsxName(text, start);
   if (name > start) return { next: name, brace: false };
   // Not a tag after all: what its "{ }" left is dropped, since the text they hold is about to be read again.
   elements.pop();
+  scan.rejected.add(element.open);
+  scan.spent += start - element.open;
   tokens.length = element.tokens;
+  // Too much read twice already: the caller drops the elements still open and reads the rest, from here, as code.
+  if (scan.spent > scan.budget) {
+    scan.off = true;
+    return { next: start, brace: false };
+  }
   // In code the "<" is punctuation and what follows is read again; in another element's children it is text like the rest.
   if (elements.at(-1)?.braces !== braces) tokens.push({ kind: 'punct', value: '<' });
   return { next: element.open + 1, brace: false };
@@ -378,6 +442,8 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
   const conditions: boolean[] = []; // for each open "(", whether it opens a statement's condition
   const bodies: boolean[] = []; // for each "function" or "class" awaiting its body, whether it stands where a statement can
   const elements: JsxElement[] = []; // for each JSX element being read, innermost last
+  // Text read again after a "<" turned out not to open a tag, bounded so that the whole scan stays linear in the text length.
+  const scan: JsxScan = { rejected: new Set(), spent: 0, budget: text.length, off: false };
   let index = 0;
   const fixed = (content: string | undefined): Token => (content === undefined ? { kind: 'other', value: '' } : { kind: 'string', value: content });
   // The "${" or JSX "{" that a "}" here closes, if any: only one at the depth it was opened at. Code with unmatched braces
@@ -388,13 +454,18 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
     const following = text[index + 1];
     // Inside a JSX element, unless the code of one of its "{ }" is what is being read.
     if (elements.at(-1)?.braces === braces.length) {
-      const step = scanJsx(text, index, tokens, elements, braces.length);
+      const step = scanJsx(text, index, tokens, elements, braces.length, scan);
       if (step.brace) {
         braces.push({ depth: blocks.length, kind: 'container' });
-        // What a "{ }" holds is an expression of its own, whatever the element or an earlier "{ }" left before it.
-        tokens.push({ kind: 'punct', value: '(' });
+        // What a "{ }" holds is an expression of its own, whatever the element or an earlier "{ }" left before it. A "("
+        // would say so too, but it would also let "{require}{'./x'}" read as a call, so the mark is one no code can write.
+        tokens.push({ kind: 'punct', value: EXPRESSION });
       }
       index = step.next;
+      if (scan.off) {
+        elements.length = 0;
+        for (let at = braces.length - 1; at >= 0; at -= 1) if (braces[at]?.kind === 'container') braces.splice(at, 1);
+      }
     } else if (/\s/.test(char)) index += 1;
     else if (char === '/' && following === '/') index = after(text, lineEnd(text, index), 0);
     else if (char === '/' && following === '*') index = after(text, text.indexOf('*/', index + 2), 2);
@@ -408,7 +479,7 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
       // A part ending in "${" leaves what follows at the start of an expression; the last part ends an operand however the
       // substitutions read, and only a template without any has a fixed value.
       if (template.substitution) {
-        tokens.push({ kind: 'punct', value: '$' }); // "$" is a word character, so no punctuation token can be one.
+        tokens.push({ kind: 'punct', value: EXPRESSION });
         braces.push({ depth: blocks.length, kind: 'substitution' });
       } else tokens.push(char === '`' ? fixed(template.content) : { kind: 'other', value: '' });
       index = template.next;
@@ -416,7 +487,14 @@ function scriptTokens(text: string, jsx: boolean): Token[] {
       // The value of a JSX "{ }" belongs to the element around it, which leaves the operand token of its own.
       braces.pop();
       index += 1;
-    } else if (jsx && char === '<' && (following === '>' || startsJsxName(following ?? '')) && jsxAllowed(tokens, text[index - 1])) {
+    } else if (
+      jsx &&
+      char === '<' &&
+      !scan.off &&
+      !scan.rejected.has(index) &&
+      (following === '>' || startsJsxName(following ?? '')) &&
+      jsxAllowed(tokens, text[index - 1])
+    ) {
       elements.push({ children: false, braces: braces.length, open: index, tokens: tokens.length });
       index += 1;
     } else if (char === '/' && regexAllowed(tokens, text[index - 1])) {
