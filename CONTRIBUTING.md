@@ -24,7 +24,7 @@ claude --plugin-dir .   # try the plugin from the working tree without installin
 [SPEC.md](SPEC.md) is the specification. A change in behavior updates it in the same pull request, together with [SPEC.ja.md](SPEC.ja.md).
 
 - **No runtime dependencies.** The CLI uses `node:*` only; devDependencies stay `typescript` and `@types/node`.
-- **Logic lives in `src/`.** `state.ts` and `map.ts` are pure functions; file and git access stay in the thin `files.ts` and `git.ts`. `skills/*/SKILL.md` only says when to call `soujo` (`test/skills.test.ts` checks the format).
+- **The boundary between `src/` and the skills.** Judgment, formatting, and checks that are mechanically determined live in `src/`; dialogue, diagrams the model draws, and review (choosing the diff included) are written in SKILL.md. `state.ts` and `map.ts` are pure functions; file and git access stay in the thin `files.ts` and `git.ts`. `test/skills.test.ts` checks the format of the skills and that this rule reads the same in SPEC, CLAUDE.md, AGENTS.md, and here.
 - **Tests use `node:test`.** Run `npm run build` and commit `dist/` with the source change.
 - **Documentation is English first.** User documentation (README, SPEC, CHANGELOG, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT) is English with a Japanese translation of the same blocks (`test/docs.test.ts` compares them). Text read at run time — CLI output, skills, templates, CLAUDE.md, AGENTS.md — is Japanese.
 - **CLAUDE.md and AGENTS.md differ on purpose.** A rule change edits both, and their copies in `templates/`, which lack only the last section on this repository.

@@ -40,7 +40,7 @@ Spec-kit の「仕様→計画→実装」と Superpowers の「作法をスキ�
 | 文章理解は高い | 平易化しない。短く濃く | CLAUDE.md / AGENTS.md の応答規約 |
 | セッションが予告なく途切れる | 常に再開可能な状態を保つ | 1層=1コミット。`soujo next check` が再開不能を検知 |
 | 使用枠が小さい | 消費を抑える | 検証・再確認の指示を書かない。判断不要な処理は CLI に寄せる |
-| 2ホストを併用する | 記録とロジックはモデル非依存 | ロジックは TypeScript CLI に集約。SKILL.md は共有。ホスト差はマニフェストと指示ファイルのみ |
+| 2ホストを併用する | 記録とロジックはモデル非依存 | 機械的に決まる判断は TypeScript CLI に集約。SKILL.md は共有。ホスト差はマニフェストと指示ファイルのみ |
 
 ## 3. ユーザーストーリー
 
@@ -82,7 +82,7 @@ Soujo/
 ```
 
 方針：
-- **ロジックは全部 `src/` に置く。** SKILL.md は「いつ何を `soujo` に頼むか」だけを書き、判断や整形を SKILL.md に書かない。
+- **`src/` とスキルの境界。** 機械的に決まる判断・整形・検証は `src/`、対話・モデルが描く図・レビュー（対象の diff の決め方を含む）は SKILL.md に書く。SKILL.md には「いつ何を `soujo` に頼むか」も書く。
 - プラグイン直下の CLAUDE.md / AGENTS.md はどちらのホストでも文脈として読まれない。`soujo init` が `templates/` から導入先へ複製する。
 - SKILL.md の frontmatter は `name` / `description` のみ。`disable-model-invocation` は使わない（Codex の `validate_plugin.py` が `true` を拒否するため）。
 - 実行時に使う文面（CLI の出力、スキル、テンプレート、CLAUDE.md / AGENTS.md）は日本語。利用者向け文書は英語を正本とし、日本語訳を添える。
@@ -142,7 +142,7 @@ effort: <low|medium|high|xhigh>
 
 ## 7. スキル（`skills/`、両ホスト共有）
 
-共通規約：description は1文・狭いトリガー（Astra はスキルが多いと description を切り詰める）。本文は「読むもの → やること → `soujo` に頼むこと → 出力の形」の4節、各節3行以内。「読むもの」の1行目で、`soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもので、スキルの置き場所へ cd したりそこの `.soujo/`・`dist/` を使ったりしない、と示す。「必ず〜を読め」「テストしろ」「再確認しろ」は書かない（両モデルとも自分でやる）。コマンド例の値は単一引用符で書く。形式と `soujo` のコマンド・オプションは `test/skills.test.ts` が検査する。
+共通規約：description は1文・狭いトリガー（Astra はスキルが多いと description を切り詰める）。本文は「読むもの → やること → `soujo` に頼むこと → 出力の形」の4節、各節3行以内。「読むもの」の1行目で、`soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもので、スキルの置き場所へ cd したりそこの `.soujo/`・`dist/` を使ったりしない、と示す。その行は `soujo` が見つからないときに止まるかで終える。止まるのはスキルが `soujo` を呼ぶところだけなので、`review` は止まらず、`map` は `plan` と `code` のときだけ止まる。「必ず〜を読め」「テストしろ」「再確認しろ」は書かない（両モデルとも自分でやる）。コマンド例の値は単一引用符で書く。形式と `soujo` のコマンド・オプションは `test/skills.test.ts` が検査する。
 
 | スキル | 読むもの | やること | 呼ぶ CLI | 出力 | effort |
 |---|---|---|---|---|---|
@@ -150,8 +150,8 @@ effort: <low|medium|high|xhigh>
 | `plan` | `SPEC.md` と既存の `PLAN.md` | 未実装を30分以内の層に分割。依存順。未完了は最大12層。未実装がなければ層を足さず終える | `soujo log add 節目`（層を足したときだけ：何層か・何を外したか）→ `soujo next check` → `soujo next set`（その警告が `次:` か `確認:` を指したときだけ）→ `soujo map plan` | `PLAN.md` と図 | high |
 | `go` | `soujo resume` → `NEXT.md` → `SPEC.md` → PLAN の該当層 | `再開:` が go 以外ならそれに従う（`soujo brief` の案内には従わない）。層を完了条件まで実装。**終わったら次の層の `NEXT.md` を先に書き（最後の層の後は `次: plan`）、その後 `layer done`。最後の層では `NEXT.md` の前に `節目` エントリを LOG へ書く**。拒否されたコマンドは失敗したところから再実行する。NEXT が spec / plan を指すならそちらへ | `soujo resume` → `soujo log add 節目`（最後の層だけ：層で何ができたか・何が未決か）→ `soujo next set` → `soujo layer done` | 結果1文＋変更ファイル | `NEXT.md` の指定 |
 | `resume` | — | CLI の出力をそのまま返す。`再開:` の行が `・N日ぶり: 先に soujo brief` で終われば、4行の後に `soujo brief` も実行する | `soujo resume` → `soujo brief`（`再開:` の行がそう終わるときだけ） | 4行。`brief` を実行したらその後に5行。`resume` が失敗したらエラーの1行だけで `brief` は実行しない。`brief` が失敗したら4行の後にエラーの1行 | low |
-| `map` | `diff` のときだけ、直近の層の diff とその周辺 | `plan` / `code [dir]` は CLI の図をそのまま示す。`diff` は Before/After を自分で描く | `soujo map` | 図＋5行以内 | medium |
-| `review` | 引数の範囲、なければ最新の `layer:` コミットの親から作業ツリーまでの diff（未追跡も含む） | **見つけたものは全部**、表 `# / 場所 / 何が / なぜ / 直し方`。`soujo:reviewer` を起動できれば1体だけ起動し、diff の写しでなく範囲を渡して（渡した後も作業ツリーは変わるので、reviewer が始めるときに diff を取る）、表を加工せず出す | — | 表 | medium |
+| `map` | `diff` のときだけ、`review` と同じ diff とその周辺 | `plan` / `code [dir]` は CLI の図をそのまま示す。`diff` は Before/After を自分で描く | `soujo map` | 図＋5行以内 | medium |
+| `review` | 引数の範囲、なければ直近の層の diff（未追跡も含む）：最新の `layer:` コミットの層の、最も古い `wip: <層>` か `layer: <層>` コミットの親から作業ツリーまで。`layer:` コミットがなければ最も古い `wip:` コミットの親から、それもなければ HEAD から。親や HEAD がなければ最初から。数えるのはプロジェクトを変えたコミットだけで、`soujo close` は層の途中を `wip:` でコミットするのでそれも数える | **見つけたものは全部**、表 `# / 場所 / 何が / なぜ / 直し方`。`soujo:reviewer` を起動できれば1体だけ起動し、diff の写しでなく範囲を渡して（渡した後も作業ツリーは変わるので、reviewer が始めるときに diff を取る）、表を加工せず出す | — | 表 | medium |
 | `close` | — | 引数の一言を `--note` に渡す。なければ進んだところを1行にして渡す | `soujo close` | 2行 | low |
 
 effort 列は人やホストの設定で使う目安（§8）。SKILL.md の frontmatter には書く場所がない。

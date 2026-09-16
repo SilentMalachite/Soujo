@@ -228,3 +228,12 @@
 
 ## L30 の Codex レビュー（`283be8b`・0件）
 - 指摘なし。Codex は読み取り専用で型検査と16件を実行し、書き込みを伴うテストと Windows は未検証と明記。書き込みを伴う全380件は手元で通過済み。Windows は D5 のとおり CI に足さない。
+
+## L31 実装計画（skills-docs）
+| 指摘 | 直すもの | RED で書くテスト（skills.test） |
+|---|---|---|
+| #19 soujo 必須条件 | review は「`soujo` は呼ばないので止めない」、map は「`plan`・`code` のときだけ止める」。他の5つは今のまま | 各スキルの止める条件が、そのスキルの `soujo` コマンドの有無（map はモードごと）から組んだ文と一致する |
+| #31 差分基準 | review と map の既定の diff を同じ1文に：最新 `layer: <層>` の層の最も古い `wip:`/`layer:` の親から。`layer:` がなければ最も古い `wip:` の親、なければ HEAD。数えるのはプロジェクトを変えたコミットだけ。SPEC §7 英日も | review と map が同じ基準の文を含み、`layer:` コミットがない場合を書く |
+| #32 規約の文言 | 「機械的に決まる判断・整形・検証は `src/`、対話・モデルが描く図・レビュー（対象の diff の決め方を含む）は SKILL.md」を SPEC §2・§4（英日）・CLAUDE.md §8・AGENTS.md・CONTRIBUTING（英日）に | 日本語の同じ文が SPEC.ja・CLAUDE.md・AGENTS.md・CONTRIBUTING.ja に、英語の文が SPEC・CONTRIBUTING にあり、旧文言（ロジックは全部・呼び方だけ）がない |
+- D15: 既定の差分は「層が始まる前」から。`soujo close` の `wip:` コミットも層の一部なので、`layer:` の親からだと層の前半を見落とす。`layer:` がない既存リポジトリで「最初から」にするとリポジトリ全体になるため、最も古い `wip:` か HEAD にする。
+- D16: 規約は templates/ に入れない（導入先にはスキルがない）。CLAUDE.md §8 と AGENTS.md の本体節だけを直す。

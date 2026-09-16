@@ -84,6 +84,75 @@ for (const name of SKILLS) {
   });
 }
 
+// SPEC §7: a missing soujo stops a skill only where the skill runs soujo.
+const STOP = '`soujo` が見つからなければ止めて1行で伝える。';
+const NO_STOP = '`soujo`（PATH 上のコマンド）は呼ばないので、見つからなくても止めない。';
+
+// The sentence a skill ends its first line with, from its soujo commands: a line "- `<argument>`：…" holds those of one argument.
+function stopWhen(asks: readonly string[]): string {
+  const lines = asks.map((line) => ({ argument: /^- `(\w+)`：/.exec(line)?.[1], runs: commands(line).length > 0 }));
+  const running = lines.filter((line) => line.runs);
+  if (running.length === 0) return NO_STOP;
+  if (!lines.some((line) => line.argument !== undefined && !line.runs)) return STOP;
+  const names = running.map((line) => {
+    assert.ok(line.argument, `引数ごとの行でない soujo の行: ${asks.join(' / ')}`);
+    return `\`${line.argument}\``;
+  });
+  return `\`soujo\` が見つからなければ、${names.join('・')} のときだけ止めて1行で伝える。`;
+}
+
+test('each skill stops for a missing soujo exactly where it runs soujo', () => {
+  assert.equal(stopWhen(['- なし（`soujo` は呼ばない）。']), NO_STOP);
+  assert.equal(stopWhen(['- `soujo resume`', '- 最後に `soujo brief`']), STOP);
+  assert.equal(stopWhen(['- `a`：`soujo map plan`', '- `b`：なし']), '`soujo` が見つからなければ、`a` のときだけ止めて1行で伝える。');
+  const expected: Record<string, string> = {};
+  for (const name of SKILLS) {
+    const found = sections(split(join(packageDir(), 'skills', name, 'SKILL.md')).body);
+    const sentence = stopWhen(found.get('soujo に頼むこと') ?? []);
+    expected[name] = sentence;
+    const first = found.get('読むもの')?.[0] ?? '';
+    assert.ok(first.endsWith(sentence), `${name} の読むもの1行目の終わりは「${sentence}」`);
+    assert.equal(first.split('見つから').length, 2, `${name} の止める条件は1つ`);
+  }
+  assert.equal(expected.review, NO_STOP);
+  assert.equal(expected.map, '`soujo` が見つからなければ、`plan`・`code` のときだけ止めて1行で伝える。');
+});
+
+// SPEC §7: without a range, review and map take the diff of the latest layer from before it began.
+const LATEST_LAYER =
+  '引数の範囲。なければ直近の層の diff（未追跡のファイルも含む）：最新の `layer: <層>` コミットの層の、最も古い `wip: <層>` か `layer: <層>` コミットの親から作業ツリーまで。' +
+  '`layer:` コミットがなければ最も古い `wip:` コミットの親から、それもなければ HEAD から。親や HEAD がなければ最初から。' +
+  'コミットは作業中のプロジェクトを変えたものだけ数える。';
+
+test('review and map read the same default diff, which says where it starts without a layer: commit', () => {
+  for (const name of ['review', 'map']) {
+    const reads = sections(split(join(packageDir(), 'skills', name, 'SKILL.md')).body).get('読むもの') ?? [];
+    assert.equal(reads.filter((line) => line.includes(LATEST_LAYER)).length, 1, `${name} の読むものに既定の diff`);
+  }
+});
+
+// SPEC §4: the boundary between src/ and the skills, worded the same wherever this repository states it.
+const BOUNDARY_JA = '機械的に決まる判断・整形・検証は `src/`、対話・モデルが描く図・レビュー（対象の diff の決め方を含む）は SKILL.md に書く。';
+const BOUNDARY_EN =
+  'Judgment, formatting, and checks that are mechanically determined live in `src/`; dialogue, diagrams the model draws, and review (choosing the diff included) are written in SKILL.md.';
+const BOUNDARY_OLD = ['ロジックは全部', 'ロジックは `src/`', 'ロジックは TypeScript CLI', 'にロジックを書かない', '呼び方だけ', 'All logic lives', 'Logic lives in'];
+
+test('the boundary between src/ and the skills reads the same in SPEC, CLAUDE.md, AGENTS.md, and CONTRIBUTING', () => {
+  const pages: [string, string][] = [
+    ['SPEC.md', BOUNDARY_EN],
+    ['SPEC.ja.md', BOUNDARY_JA],
+    ['CLAUDE.md', BOUNDARY_JA],
+    ['AGENTS.md', BOUNDARY_JA],
+    ['CONTRIBUTING.md', BOUNDARY_EN],
+    ['CONTRIBUTING.ja.md', BOUNDARY_JA],
+  ];
+  for (const [page, rule] of pages) {
+    const text = readFileSync(join(packageDir(), page), 'utf8');
+    assert.equal(text.split(rule).length, 2, `${page} に境界の規約が1回`);
+    for (const old of BOUNDARY_OLD) assert.ok(!text.includes(old), `${page} に旧文言「${old}」`);
+  }
+});
+
 test('every soujo command in the skills is a known command with known options', (t) => {
   const cwd = temp(t);
   for (const name of SKILLS) {

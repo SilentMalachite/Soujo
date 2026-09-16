@@ -371,3 +371,12 @@ query・fragment・%エンコードを解く。大小文字と正規化は FS �
 ## 2026-09-16 L30 privacy-ci
 privacy テストが全 ref の blob・コミットとタグのメッセージ・Codex と ChatGPT のリンクを検査し、自身は架空値（SYNTHETIC）だけ通す。
 docs テストに SPEC を加え、英日の差2か所を直した。npm test は test/run.ts が列挙して node --test に渡す（D11〜D14）。
+
+## 2026-09-16 節目
+PLAN の全層完了: Codex 全体レビュー44件の修正（L20〜L31）で git の範囲・状態ファイルの実体・map の字句解析と解決・privacy と CI・スキルの規約を直した
+未決: なし
+
+## 2026-09-16 L31 skills-docs
+review は soujo を呼ばないので止まらず、map は plan/code だけ止まる（skills.test が頼むことから組んだ文と照合）
+既定の diff を review と map で同文に：最新 layer の層の最も古い wip/layer の親から、layer がなければ最古の wip か HEAD（D15）
+境界の規約を SPEC(+ja)・CLAUDE.md・AGENTS.md・CONTRIBUTING(+ja) で同じ文言に（D16: templates には入れない）

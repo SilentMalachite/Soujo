@@ -38,4 +38,4 @@ Claude Code 用の `CLAUDE.md` より短いのは意図的（Astra は指示が�
 ## Soujo 本体（このリポジトリだけ）
 
 - ここより上は `soujo init` が導入先へ複製する `templates/AGENTS.md` と同一。この節は複製しない。
-- TypeScript / Node 20+ / ESM、実行時依存ゼロ、`node:test`。ロジックは `src/`、SKILL.md には `soujo` の呼び方だけ。`dist/` はコミットする。
+- TypeScript / Node 20+ / ESM、実行時依存ゼロ、`node:test`。機械的に決まる判断・整形・検証は `src/`、対話・モデルが描く図・レビュー（対象の diff の決め方を含む）は SKILL.md に書く。`dist/` はコミットする。

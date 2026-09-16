@@ -24,7 +24,7 @@ claude --plugin-dir .   # 導入せずに作業ツリーのプラグインを試
 仕様は [SPEC.md](SPEC.md)。動作を変えるときは、同じプルリクエストで [SPEC.ja.md](SPEC.ja.md) とともに更新する。
 
 - **実行時依存を持たない。** CLI は `node:*` だけを使い、devDependencies は `typescript` と `@types/node` のまま。
-- **ロジックは `src/` に置く。** `state.ts` と `map.ts` は純粋関数、ファイルと git へのアクセスは薄い `files.ts` と `git.ts` に留める。`skills/*/SKILL.md` には `soujo` をいつ呼ぶかだけを書く（形式は `test/skills.test.ts` が検査する）。
+- **`src/` とスキルの境界。** 機械的に決まる判断・整形・検証は `src/`、対話・モデルが描く図・レビュー（対象の diff の決め方を含む）は SKILL.md に書く。`state.ts` と `map.ts` は純粋関数、ファイルと git へのアクセスは薄い `files.ts` と `git.ts` に留める。スキルの形式と、この規約が SPEC・CLAUDE.md・AGENTS.md・ここで同じ文言であることは `test/skills.test.ts` が検査する。
 - **テストは `node:test`。** `npm run build` を実行し、ソースの変更と一緒に `dist/` をコミットする。
 - **文書は英語が先。** 利用者向けの文書（README・SPEC・CHANGELOG・CONTRIBUTING・SECURITY・CODE_OF_CONDUCT）は英語で、同じブロック構成の日本語訳を付ける（`test/docs.test.ts` が比べる）。実行時に読まれる文面（CLI の出力・スキル・templates・CLAUDE.md・AGENTS.md）は日本語。
 - **CLAUDE.md と AGENTS.md は意図して文面が違う。** 規約を変えるときは両方と、`templates/` の写し（末尾のこのリポジトリの節だけがない）を直す。

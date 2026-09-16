@@ -68,5 +68,5 @@ Codex 用の `AGENTS.md` は**写しではない**（GPT-6 Astra 向けに文面
 §1〜§7 は `soujo init` が導入先へ複製する `templates/CLAUDE.md` と同一。この節は複製しない。
 - TypeScript / Node 20+ / ESM。**実行時依存ゼロ**（`node:*` のみ）。devDependencies は `typescript` と `@types/node` だけ。
 - テストは `node:test`。`state.ts` は純粋関数中心にし、ファイル I/O と git は薄い層に分離する。
-- `skills/*/SKILL.md` にロジックを書かない。判断・整形・検証は `src/` に置き、SKILL.md は `soujo` の呼び方だけを書く。
+- `skills/*/SKILL.md` との境界：機械的に決まる判断・整形・検証は `src/`、対話・モデルが描く図・レビュー（対象の diff の決め方を含む）は SKILL.md に書く。SKILL.md には、いつ何を `soujo` に頼むかも書く。
 - `dist/` はコミットする（`hooks/hooks.json` が `dist/cli.js` を直接呼ぶ）。`npm run build` を忘れたら `next check` が壊れる。

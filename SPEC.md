@@ -40,7 +40,7 @@ The design targets a user with the following traits.
 | High reading comprehension | Don't simplify; be short and dense | Response rules in CLAUDE.md / AGENTS.md |
 | Sessions end without warning | Always keep a resumable state | 1 layer = 1 commit; `soujo next check` detects unresumable states |
 | Small usage quota | Keep consumption low | No verification/re-check instructions; work that needs no judgment goes to the CLI |
-| Uses two hosts | Keep records and logic model-agnostic | Logic lives in the TypeScript CLI; SKILL.md is shared; host differences are limited to manifests and instruction files |
+| Uses two hosts | Keep records and logic model-agnostic | Mechanically determined judgment lives in the TypeScript CLI; SKILL.md is shared; host differences are limited to manifests and instruction files |
 
 ## 3. User stories
 
@@ -82,7 +82,7 @@ Soujo/
 ```
 
 Policies:
-- **All logic lives in `src/`.** SKILL.md only says when to ask `soujo` for what; no judgment or formatting logic in SKILL.md.
+- **The boundary between `src/` and the skills.** Judgment, formatting, and checks that are mechanically determined live in `src/`; dialogue, diagrams the model draws, and review (choosing the diff included) are written in SKILL.md. SKILL.md also says when to ask `soujo` for what.
 - CLAUDE.md / AGENTS.md at the plugin root are not loaded as context by either host. `soujo init` copies them from `templates/` into the target project.
 - SKILL.md frontmatter has only `name` and `description`. `disable-model-invocation` is not used, because Codex's `validate_plugin.py` rejects `true`.
 - Runtime-facing text (CLI output, skills, templates, CLAUDE.md / AGENTS.md) is Japanese. User documentation is English, which is canonical, with Japanese translations.
@@ -142,7 +142,7 @@ Public pure functions of `state.ts` (each has tests):
 
 ## 7. Skills (`skills/`, shared by both hosts)
 
-Common rules: `description` is one sentence with a narrow trigger (Astra truncates descriptions when there are many skills). The body has four sections — "what to read → what to do → what to ask `soujo` → output shape" — with at most 3 lines each. The first "what to read" line says that `soujo` (the command on PATH), git, and `.soujo/` belong to the current project, and that the skill's install location is never `cd`-ed into nor its `.soujo/` or `dist/` used. No "always read X", "run the tests", or "double-check" instructions (both models do that on their own). Values in command examples are single-quoted. `test/skills.test.ts` checks the format and every `soujo` command and option in the skills.
+Common rules: `description` is one sentence with a narrow trigger (Astra truncates descriptions when there are many skills). The body has four sections — "what to read → what to do → what to ask `soujo` → output shape" — with at most 3 lines each. The first "what to read" line says that `soujo` (the command on PATH), git, and `.soujo/` belong to the current project, and that the skill's install location is never `cd`-ed into nor its `.soujo/` or `dist/` used. It ends with whether a missing `soujo` stops the skill, which happens only where the skill runs `soujo`: `review` never stops, and `map` stops only for `plan` and `code`. No "always read X", "run the tests", or "double-check" instructions (both models do that on their own). Values in command examples are single-quoted. `test/skills.test.ts` checks the format and every `soujo` command and option in the skills.
 
 | Skill | Reads | Does | CLI | Output | effort |
 |---|---|---|---|---|---|
@@ -150,8 +150,8 @@ Common rules: `description` is one sentence with a narrow trigger (Astra truncat
 | `plan` | `SPEC.md` and an existing `PLAN.md` | Split what is not implemented into layers of ≤30 minutes, in dependency order, at most 12 unfinished. Adds nothing when nothing is left | `soujo log add 節目` (only when layers were added: how many, what was left out) → `soujo next check` → `soujo next set` (only when that warning names `次:` or `確認:`) → `soujo map plan` | `PLAN.md` and the diagram | high |
 | `go` | `soujo resume` → `NEXT.md` → `SPEC.md` → the layer in PLAN | Follows `再開:` when it is not go, but not its pointer to `soujo brief`. Implement until the completion condition holds. **Write the next `NEXT.md` first (`次: plan` after the last layer), then `layer done`; on the last layer, write the `節目` entry to LOG before `NEXT.md`.** A refused command is re-run from where it failed. Switches to spec/plan when NEXT points there | `soujo resume` → `soujo log add 節目` (last layer only: what the layers delivered, what is open) → `soujo next set` → `soujo layer done` | One-sentence result + changed files | from `NEXT.md` |
 | `resume` | — | Return the CLI output as is; when the `再開:` line ends with `・N日ぶり: 先に soujo brief`, run `soujo brief` after the 4 lines | `soujo resume` → `soujo brief` (only when the `再開:` line ends that way) | 4 lines, then the 5 lines of `brief` when it ran. A failed `resume` returns its one error line and runs no `brief`; a failed `brief` adds its error line after the 4 lines | low |
-| `map` | Only for `diff`: the latest layer's diff and its surroundings | `plan` / `code [dir]` show the CLI diagram verbatim; `diff` is drawn as Before/After by the model | `soujo map` | Diagram + ≤5 lines | medium |
-| `review` | The given range, or the diff from the latest `layer:` commit's parent to the working tree (untracked files included) | **Report every finding** as `# / location / what / why / fix`; starts one `soujo:reviewer` when it can, handing it the range rather than a copy of the diff (the working tree moves on after the hand-over, so the reviewer takes the diff itself when it starts), and shows its table unedited | — | Table | medium |
+| `map` | Only for `diff`: the same diff as `review` and its surroundings | `plan` / `code [dir]` show the CLI diagram verbatim; `diff` is drawn as Before/After by the model | `soujo map` | Diagram + ≤5 lines | medium |
+| `review` | The given range, or the latest layer's diff (untracked files included): from the parent of the oldest `wip: <layer>` or `layer: <layer>` commit of the latest `layer:` commit's layer to the working tree; with no `layer:` commit, from the parent of the oldest `wip:` commit, or else from HEAD; from the start when there is no parent or HEAD. Only commits changing the project count, `wip:` ones included, since `soujo close` commits part of a layer that way | **Report every finding** as `# / location / what / why / fix`; starts one `soujo:reviewer` when it can, handing it the range rather than a copy of the diff (the working tree moves on after the hand-over, so the reviewer takes the diff itself when it starts), and shows its table unedited | — | Table | medium |
 | `close` | — | Pass the one-line note to `--note`, or a line on progress when none is given | `soujo close` | 2 lines | low |
 
 The effort column is a guide for the human or host setting (§8); SKILL.md frontmatter has no place for it.
