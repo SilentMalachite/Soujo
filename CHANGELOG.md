@@ -47,6 +47,12 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - `soujo map code` scans at most 524288 bytes (512 KiB) of a file, reading one more to tell a file at the limit from one beyond it, and counts the files it had to cut, instead of holding whole files in memory: a generated bundle or a large data file no longer decides how much memory the command takes. A cut file is scanned only to its last complete line, since the cut lands where the byte count falls — inside a character (which then reads as U+FFFD) or inside a token, where half of an `import './dependency.js';` would otherwise be drawn as an edge to `dep.ts`.
 - The `review` skill hands `soujo:reviewer` the range to review instead of a copy of its diff, and the reviewer takes the diff itself when it starts, since the working tree moves on after the hand-over and a copy made then can be older than the files it reads.
 
+### Changed
+
+- `test/privacy.test.ts` checks every version of a file and every commit and tag message that a ref reaches (a branch, a tag, a remote-tracking branch, the stash), not only the tracked files and the commit messages on HEAD, and catches links to Codex cloud tasks and to ChatGPT conversations and shared chats. It scans itself too: instead of the whole file, only the made-up values of its own fixtures are let through.
+- `test/docs.test.ts` compares `SPEC.md` with `SPEC.ja.md` as well.
+- `npm test` hands the test files to `node --test` itself (`test/run.ts`) instead of through a glob, which `cmd.exe`, where npm runs scripts on Windows, does not expand and Node 20 does not take.
+
 ## 0.3.1 — 2026-09-15
 
 Release: [v0.3.1](https://github.com/SilentMalachite/Soujo/releases/tag/v0.3.1).

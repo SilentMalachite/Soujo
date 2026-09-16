@@ -1,7 +1,7 @@
 import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { devNull, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +47,14 @@ export function temp(t: TestContext): string {
   const dir = mkdtempSync(join(tmpdir(), 'soujo-test-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+/** The compiled test files in `dir`, in name order: what `npm test` runs (test/run.ts). */
+export function testFiles(dir: string): string[] {
+  return readdirSync(dir)
+    .filter((name) => name.endsWith('.test.js'))
+    .sort()
+    .map((name) => join(dir, name));
 }
 
 /** A temporary git repository with a local identity, unsigned commits, and untracked directories counted once. */

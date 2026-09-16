@@ -211,3 +211,17 @@
 | 18 | SPEC に JSX の読み方がない | SPEC 英日の `map code` の行に、拡張子・本文と属性値・閉じない要素の扱いを足した |
 | 20 | reviewer に渡した diff の写しが作業ツリーより古かった | review スキルは範囲だけを渡し、reviewer は始めるときに自分で `git diff` を取る。SPEC 英日・CHANGELOG 英日・skills.test に反映 |
 - Codex レビュー（1件）: レビュー中にコメントを直したため `dist/map.js` が src とずれた → 再ビルドで解消。
+
+## L30 実装計画（privacy-ci）
+| 指摘 | 作るもの | RED で書くテスト |
+|---|---|---|
+| Codex の URL | `SECRETS` に `chatgpt.com/codex/…tasks/…` と ChatGPT の会話・共有リンク（`/c/` `/s/` `/share/`） | 3形が `Codex のセッション URL` になる |
+| 自身の除外 | `SELF` の丸ごと除外をやめ、`test/privacy.test.ts` の中で一致した字面が `SYNTHETIC`（架空の値）のときだけ除く | 同じ値は他のファイルでは捕まり、`SELF` でも実行時に組んだ本物らしい鍵は捕まる |
+| 履歴の blob | 全 ref から届く blob（`rev-list --objects --all` → `cat-file --batch`）を検査 | 一時リポジトリで消したファイルの漏えいを見つける |
+| 全 ref のメッセージ | `git log --all` | 一時リポジトリの HEAD 以外のブランチ・タグのメッセージを見つける |
+| docs の SPEC | `DOCS` に `SPEC`。英日の差分を直す。CONTRIBUTING(+ja) の列挙にも | 既存の docs テストが SPEC で通る |
+| npm test の glob | `test/run.ts` が `.test-dist/test/*.test.js` を列挙して `node --test` に渡す（引数は前に転送）。列挙は `helpers.ts` の `testFiles` | test スクリプトに `*` `?` がなく、`testFiles` が test/ の全 `*.test.ts` に対応する |
+- D11: Codex の URL の形は公式文書で確認できなかった。既知の `chatgpt.com/codex/tasks/` に途中の段（`cloud/` など）を許し、会話・共有リンクも捕まえる。
+- D12: `SYNTHETIC` は過去版の fixture も通すための字面の許可リストで、`SELF` のパスにだけ効く。新しい fixture も架空の値を足して書く。本物らしい値のテストだけ実行時に組む。
+- D13: 履歴の検査は到達できる blob だけ（`--batch-all-objects` は手元の到達不能なゴミまで読む）。現時点の漏えいは過去版 `privacy.test.ts` の fixture だけ（D8 の停止条件に当たらない）。
+- D14: `run.ts` は main 判定をしない（symlink 越しの起動で判定が外れると0件で成功するため）。列挙は `helpers.ts` に置く。

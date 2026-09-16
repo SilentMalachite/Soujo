@@ -72,7 +72,7 @@ Soujo/
 │   └── commands/     1コマンド1ファイル。複数のコマンドが使う検査と文言は shared.ts
 ├── test/                             # node:test（依存ゼロ）
 ├── dist/                             # tsc 出力。フックが直接呼ぶためコミットする
-├── templates/                        # soujo init が導入先に複製するファイル
+├── templates/                        # `soujo init` が導入先に複製するファイル
 │   ├── CLAUDE.md（Opus 5 版）  AGENTS.md（Astra 版）
 │   └── SPEC.md  PLAN.md  LOG.md  NEXT.md
 ├── CLAUDE.md  AGENTS.md              # このリポジトリ自身の指示（templates の内容＋このリポジトリの節）
@@ -234,7 +234,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 ## 13. 実装
 
-依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。受け入れ後の L13〜L15 は、§14 の未決だったもの（決定へ移した）を実装する：`soujo --help`、`次: spec` / `次: plan` の effort、`soujo log rotate`。L16〜L17 は、何日か離れた後に戻るための `soujo brief` と `節目` エントリを足す。L18 は、ホストのプラグインの置き場所での `soujo` の実行を拒否する。L19 は、`soujo resume` が `soujo brief` を指したときに `resume` スキルがそれも実行するようにする。
+依存順・各30分以内の12層で実装した。一覧と完了条件は `.soujo/PLAN.md`。当初の10フェーズからの変更は、next と resume/close の分割、スキル作成と実機確認の分割、map をスキルより前へ移したこと（`plan` スキルが `soujo map plan` を呼ぶため）。受け入れ後の L13〜L15 は、§14 の未決だったもの（決定へ移した）を実装する：`soujo --help`、`次: spec` / `次: plan` の effort、`soujo log rotate`。L16〜L17 は、何日か離れた後に戻るための `soujo brief` と `節目` エントリを足す。L18 は、ホストのプラグインの置き場所での `soujo` の実行を拒否する。L19 は、`resume` スキルが `soujo brief` も実行するようにする（`soujo resume` がそれを指したとき）。
 
 ## 14. 決定事項と未決事項
 

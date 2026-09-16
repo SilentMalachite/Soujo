@@ -26,10 +26,10 @@ claude --plugin-dir .   # try the plugin from the working tree without installin
 - **No runtime dependencies.** The CLI uses `node:*` only; devDependencies stay `typescript` and `@types/node`.
 - **Logic lives in `src/`.** `state.ts` and `map.ts` are pure functions; file and git access stay in the thin `files.ts` and `git.ts`. `skills/*/SKILL.md` only says when to call `soujo` (`test/skills.test.ts` checks the format).
 - **Tests use `node:test`.** Run `npm run build` and commit `dist/` with the source change.
-- **Documentation is English first.** User documentation (README, CHANGELOG, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT) is English with a Japanese translation of the same blocks (`test/docs.test.ts` compares them). Text read at run time — CLI output, skills, templates, CLAUDE.md, AGENTS.md — is Japanese.
+- **Documentation is English first.** User documentation (README, SPEC, CHANGELOG, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT) is English with a Japanese translation of the same blocks (`test/docs.test.ts` compares them). Text read at run time — CLI output, skills, templates, CLAUDE.md, AGENTS.md — is Japanese.
 - **CLAUDE.md and AGENTS.md differ on purpose.** A rule change edits both, and their copies in `templates/`, which lack only the last section on this repository.
 - **Commit messages** are English: `<type>: <description>` with `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, or `ci`.
-- **No private data.** Credentials, session links, home directory paths, and personal email addresses never enter files or commit messages (`test/privacy.test.ts` checks tracked files and commit messages).
+- **No private data.** Credentials, session links, home directory paths, and personal email addresses never enter files, commit messages, or tag messages (`test/privacy.test.ts` checks the tracked files, and every version of a file and every commit and tag message that a ref reaches).
 
 `.soujo/` holds the maintainer's own Soujo records for this repository; leave it unchanged unless you work with Soujo here.
 

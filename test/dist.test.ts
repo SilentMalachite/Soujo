@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packageDir } from '../src/files.js';
+import { testFiles } from './helpers.js';
 
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
@@ -27,4 +28,14 @@ test('dist/ matches the current src/ (run npm run build when this fails)', () =>
 test('dist/cli.js is executable (run npm run build when this fails)', { skip: process.platform === 'win32' }, () => {
   // Only the owner bit: a restrictive umask checks out 750 or 700, which is still executable.
   assert.equal(statSync(join(packageDir(), 'dist', 'cli.js')).mode & 0o100, 0o100, 'dist/cli.js に実行ビットがない');
+});
+
+// test/run.ts lists the files, since cmd.exe, which npm runs scripts in on Windows, expands no glob and node 20 takes none.
+test('npm test runs every test file without a glob', () => {
+  const { scripts } = JSON.parse(readFileSync(join(packageDir(), 'package.json'), 'utf8')) as { scripts: Record<string, string> };
+  assert.doesNotMatch(scripts.test ?? '', /[*?]/);
+  assert.match(scripts.test ?? '', / && node \.test-dist\/test\/run\.js$/);
+  const compiled = fileURLToPath(new URL('.', import.meta.url));
+  const sources = readdirSync(join(packageDir(), 'test')).filter((name) => name.endsWith('.test.ts'));
+  assert.deepEqual(testFiles(compiled), sources.map((name) => join(compiled, name.replace(/\.ts$/, '.js'))).sort());
 });

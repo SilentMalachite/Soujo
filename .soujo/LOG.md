@@ -367,3 +367,7 @@ reviewer の20件のうち17件を同じ層で直した（誤検出3件を含む
 
 ## 2026-09-16 L29 map-resolve
 query・fragment・%エンコードを解く。大小文字と正規化は FS の流儀に従う。1ファイル512KiBまで、切れたファイルは最後の完全な行まで。
+
+## 2026-09-16 L30 privacy-ci
+privacy テストが全 ref の blob・コミットとタグのメッセージ・Codex と ChatGPT のリンクを検査し、自身は架空値（SYNTHETIC）だけ通す。
+docs テストに SPEC を加え、英日の差2か所を直した。npm test は test/run.ts が列挙して node --test に渡す（D11〜D14）。
