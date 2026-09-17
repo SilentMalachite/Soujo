@@ -14,7 +14,7 @@ The English version is canonical; the Japanese page is a translation. Versions f
 ### Changed
 
 - `templates/SPEC.md` starts with a `## 原則` section, and it and `## 受け入れ基準` show their key forms (`- P1 <名前> — <判定できる1文>`, `- A1 <判定できる1文>`) in one-line HTML comments. The `確認:` of `templates/NEXT.md` names the principles too. `soujo init` still leaves existing files as they are.
-- `soujo resume` takes a `SPEC.md` holding nothing but headings, blank lines, and HTML comments for unwritten and points to `/soujo:spec`, whichever template version it was copied from. Before, only a SPEC equal to the current template was, so a project made before this template would have been sent to `/soujo:plan`.
+- `soujo resume` takes a `SPEC.md` holding nothing but `#` headings, blank lines, and HTML comments for unwritten and points to `/soujo:spec`, whichever template version it was copied from. Blocks are told apart as CommonMark does: a comment indented by four spaces or a tab is code, and text beside a comment is text. A byte order mark is skipped and a lone CR breaks a line; an unreadable SPEC counts as written. Before, only a SPEC equal to the current template was, so a project made before this template would have been sent to `/soujo:plan`.
 - With every layer done and `NEXT.md` missing, unreadable, invalid, or pointing to a finished layer, `soujo resume` points to `/soujo:converge` instead of `/soujo:plan`.
 - `test/cli.test.ts` tests an unreadable current directory made by locking its parent only where that makes it unreadable: Linux answers `getcwd` without checking permissions, which failed CI on Ubuntu since 0.3.1.
 

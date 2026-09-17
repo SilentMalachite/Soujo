@@ -48,6 +48,8 @@ const HEADING = /^ {0,3}(#{1,6})(?=[ \t]|$)/;
 // number, followed by a space, a tab, or the line's end.
 const LIST_MARKER = /^(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)/;
 const SPEC_KEY = /^([PA])[1-9][0-9]*$/;
+// An HTML comment starting a block (CommonMark): indented by at most three spaces, since deeper it is code.
+const COMMENT_START = /^ {0,3}<!--/;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 // Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, the C1 controls
@@ -299,20 +301,36 @@ export function checkMismatch(next, items) {
         return undefined;
     return `NEXT.md の確認が PLAN の層「${next.layer}」の完了条件と違う（PLAN に合わせて soujo next set）`;
 }
-// A line of nothing but HTML comments that open and close on it. Text beside one, or a comment running on, makes it a line
-// of its section. Scanned by position, so that a long line of many comments stays linear.
-function isCommentLine(line) {
-    const trimmed = line.trim();
+/**
+ * A line read as nothing but HTML comments and whitespace, starting inside a comment when open: whether a comment is left
+ * open at its end, or undefined when the line has other text outside comments. Scanned by position, so that a long line of
+ * many comments stays linear.
+ */
+function readComments(line, open) {
     let position = 0;
-    while (trimmed.startsWith('<!--', position)) {
-        const end = trimmed.indexOf('-->', position + '<!--'.length);
-        if (end < 0)
-            return false;
-        position = end + '-->'.length;
-        while (position < trimmed.length && /\s/.test(trimmed.charAt(position)))
+    let inside = open;
+    for (;;) {
+        if (inside) {
+            const end = line.indexOf('-->', position);
+            if (end < 0)
+                return true;
+            position = end + '-->'.length;
+            inside = false;
+        }
+        while (position < line.length && /\s/.test(line.charAt(position)))
             position += 1;
+        if (position === line.length)
+            return false;
+        if (!line.startsWith('<!--', position))
+            return undefined;
+        position += '<!--'.length;
+        inside = true;
     }
-    return position > 0 && position === trimmed.length;
+}
+// A line of nothing but HTML comments that open and close on it. Text beside one, or a comment running on, makes it a line
+// of its section.
+function isCommentLine(line) {
+    return line.trim() !== '' && readComments(line, false) === false;
 }
 /**
  * Problems of SPEC.md's keyed sections (SPEC §5), in line order after the count; empty when valid, and for a SPEC without
@@ -373,29 +391,27 @@ export function validateSpec(text) {
     return problems;
 }
 /**
- * Whether SPEC.md holds nothing but ATX headings, blank lines, and HTML comments, as the template of every version does, so
- * that a SPEC copied from any of them counts as unwritten. A comment may run over lines; the text of one left open counts as
- * written. Scanned by position, so that many comment openers stay linear.
+ * Whether SPEC.md holds nothing but `#` headings, blank lines, and HTML comments, as the template of every version does, so
+ * that a SPEC copied from any of them counts as unwritten. Lines are read as CommonMark reads blocks: a comment starts its
+ * line (indented by at most three spaces, or it is code) and may run over lines, and text beside one on its first or last
+ * line is text. A heading counts whatever it holds, since no comment runs on from it. A comment left open counts as written,
+ * and so does a setext heading, which no template has. A byte order mark is skipped and a lone CR breaks a line, as editors
+ * do, so that neither turns an empty SPEC into a written one or hides a written line in a heading.
  */
 export function specUnwritten(text) {
-    const kept = [];
-    let position = 0;
-    for (;;) {
-        const start = text.indexOf('<!--', position);
-        const end = start < 0 ? -1 : text.indexOf('-->', start + '<!--'.length);
-        if (end < 0)
-            break;
-        kept.push(text.slice(position, start));
-        position = end + '-->'.length;
+    let open = false;
+    for (const line of text.replace(/^﻿/, '').split(/\r\n|\r|\n/)) {
+        if (open || COMMENT_START.test(line)) {
+            const state = readComments(line, open);
+            if (state === undefined)
+                return false;
+            open = state;
+        }
+        else if (line.trim() !== '' && !HEADING.test(line)) {
+            return false;
+        }
     }
-    kept.push(text.slice(position));
-    return kept
-        .join('')
-        .split('\n')
-        .every((raw) => {
-        const line = raw.replace(/\r$/, '');
-        return line.trim() === '' || HEADING.test(line);
-    });
+    return !open;
 }
 /** "[x] <layer>" or "[ ] <layer>", as plan list and map plan show a layer. */
 export function formatItem(item) {

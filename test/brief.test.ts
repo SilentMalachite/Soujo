@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { brief } from '../src/commands/brief.js';
 import { resume } from '../src/commands/resume.js';
+import { readTemplate } from '../src/files.js';
 import { formatDate } from '../src/state.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
@@ -107,6 +108,13 @@ test('brief degrades only the lines of what is missing: no git, no LOG, no PLAN,
 
   const invalid = project(temp(t), { 'NEXT.md': `${NEXT}補足: x\n`, 'PLAN.md': PLAN });
   assert.equal(brief(invalid, NOW)[4], '次: L3 io（PLAN から）確認: io');
+
+  // A SPEC copied from the template of any version is unwritten here too.
+  const old = '# SPEC\n\n## 目的\n\n## やらないこと\n\n## 受け入れ基準\n\n## 技術判断\n';
+  for (const spec of [readTemplate('SPEC.md'), old]) {
+    const empty = project(temp(t), { 'PLAN.md': '# PLAN\n', 'SPEC.md': spec });
+    assert.equal(brief(empty, NOW)[4], '次: なし（SPEC.md が未作成）', spec);
+  }
 });
 
 test('brief degrades per line when files cannot be read', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, (t) => {

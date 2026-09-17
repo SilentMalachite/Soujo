@@ -207,6 +207,12 @@ test('resume points to spec, plan, or converge when PLAN has no layer to do', (t
       JSON.stringify(files),
     );
   }
+  // An unreadable SPEC counts as written, so nothing is guessed from the failure.
+  const noSpec = project(temp(t), { 'PLAN.md': '# PLAN\n' });
+  mkdirSync(join(noSpec, '.soujo', 'SPEC.md'));
+  assert.deepEqual(resume(noSpec)[0], '次: なし（PLAN.md に層がない）');
+  assert.deepEqual(resume(noSpec)[3], '再開: NEXT.md がない → /soujo:plan（Codex は $plan）');
+
   const unreadable = project(temp(t), { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '- [x] L1 — c\n' });
   mkdirSync(join(unreadable, '.soujo', 'NEXT.md'));
   assert.deepEqual(resume(unreadable), [

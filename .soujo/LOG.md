@@ -407,3 +407,7 @@ Codex レビュー L32〜L33 の6件を修正: 原則は字下げなしの - と
 templates/SPEC.md に原則の節とキーの形（1行コメント）、NEXT テンプレートの確認に原則
 specUnwritten（state.ts）: 見出し・空行・HTML コメントだけの SPEC を旧テンプレートも含め未作成とみなし resume が使う
 テスト追加、CHANGELOG(+ja) 記載
+
+## 2026-09-17 codex-fix-l34
+Codex レビュー L34 の8件を修正: specUnwritten を行単位に（コード字下げ・コメント横の文・BOM・CR 改行）、判定は # 見出しに限ると SPEC(+ja)・CHANGELOG に明記
+SPEC §5 の節目の書き手に converge を追加。後続層分（plan 予約名・plugin.json・CLAUDE.md effort 行）は NEXT の注意へ。指摘は REVIEW-FIX.md

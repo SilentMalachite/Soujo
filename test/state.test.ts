@@ -179,6 +179,7 @@ test('long whitespace runs are processed in linear time', () => {
   ];
   validateSpec(spec.join('\n'));
   specUnwritten(`${'<!--'.repeat(100_000)}\n${spaces}#`);
+  specUnwritten(`${'<!-- a -->'.repeat(50_000)}${spaces}\n${spaces}<!--${spaces}-->${spaces}\n#${spaces}x`);
   assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)}ms`);
 });
 
@@ -524,6 +525,11 @@ test('specUnwritten takes a SPEC of nothing but headings, blank lines, and HTML 
     '# SPEC\n\n## 目的\n\n## やらないこと\n\n## 受け入れ基準\n\n## 技術判断\n',
     '# SPEC\r\n\r\n## 原則\r\n<!-- - P1 <名前> — <1文> -->\r\n',
     '# SPEC\n<!-- 複数行の\n\n本文 --> <!-- b -->\n   ### 字下げ3つの見出し\n#\n## 原則 <!-- a -->\n',
+    '   <!-- 字下げ3つ --><!-- c\n    続き -->   <!-- d -->\n',
+    '﻿# SPEC\n\n## 原則\n',
+    '# SPEC\r\r## 目的\r',
+    // A heading is a heading whatever it holds: no comment runs on from it, so the next line is read on its own.
+    '# SPEC <!-- 閉じない\n## 目的\n',
   ];
   for (const text of unwritten) assert.equal(specUnwritten(text), true, JSON.stringify(text));
   const written = [
@@ -531,10 +537,19 @@ test('specUnwritten takes a SPEC of nothing but headings, blank lines, and HTML 
     '## 目的\n- 書いた\n',
     '# SPEC\n<!-- 閉じない\n## 目的\n',
     '# SPEC\n<!-- a --> 本文\n',
+    '<!-- a\n--> 本文\n',
+    '# SPEC<!--\n-->本文\n',
+    '# SPEC\n`<!--` の書き方\n-->\n',
     '#タイトル\n',
     '    # 字下げ4つはコード\n',
+    '    <!-- 字下げ4つはコード -->\n',
+    '\t<!-- タブもコード -->\n',
     '```\n# コメント\n```\n',
     '## 目的\n---\n',
+    // A setext heading, which no template writes.
+    'SPEC\n====\n',
+    '# SPEC\r本文\r',
+    '﻿本文\n',
   ];
   for (const text of written) assert.equal(specUnwritten(text), false, JSON.stringify(text));
 });
