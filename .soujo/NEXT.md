@@ -1,5 +1,5 @@
-次: plan
-前提: L31 skills-docs 完了（review は soujo なしで動き map は plan/code だけ止まる。既定の diff は層の最も古い wip/layer の親から。境界の規約を SPEC・CLAUDE.md・AGENTS.md・CONTRIBUTING で統一。判断 D15 D16）
-確認: SPEC に未実装が残っていない
-注意: なし
-effort: high
+次: L32 phase-converge
+前提: PLAN.md 更新（原則と converge を SPEC(+ja) に記載、L32〜L37 を追加）
+確認: converge が PHASES に入り（全層の後ろ・effort high 固定・層名として拒否）、全層完了で NEXT.md が使えないとき resume が /soujo:converge を示すことがテストで通り、CHANGELOG(+ja) に載る
+注意: skills テストのフェーズ判定（spec/plan）とスキル本文は L35 で直す。dist は npm run build で更新
+effort: medium

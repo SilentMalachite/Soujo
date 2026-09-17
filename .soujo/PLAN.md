@@ -31,4 +31,10 @@
 - [x] L29 map-resolve — query・fragment・%エンコード付きの相対 specifier を解決し、大小文字を区別する FS では補完せず、読み込むバイト数に上限と注記があり、ID と比較順のコメントが実装と合うことがテストで通る（#17 #29 #30 #43 #44）
 - [x] L30 privacy-ci — privacy テストが Codex の URL・履歴の blob・全 ref のメッセージを検査し、自身の除外が合成 fixture に限られ、docs テストが SPEC を含み、npm test がシェルの glob に頼らないことがテストで通る（#20 #21 #33 #34 #35 #36）
 - [x] L31 skills-docs — review と map の soujo 必須条件と layer コミットがないときの差分基準がスキルに書かれ、SKILL と CLI の境界の規約が SPEC(+ja)・CLAUDE.md・AGENTS.md で揃い、skills テストが通る（#19 #31 #32）
+- [ ] L32 phase-converge — converge が PHASES に入り（全層の後ろ・effort high 固定・層名として拒否）、全層完了で NEXT.md が使えないとき resume が /soujo:converge を示すことがテストで通り、CHANGELOG(+ja) に載る
+- [ ] L33 spec-check — validateSpec が原則の7行超・形の違う行・キーのない受け入れ基準・重複キーを行番号付きで返し、next check がそれと SPEC.md を読めないことを警告することがテストで通り、CHANGELOG(+ja) に載る
+- [ ] L34 spec-template — templates/SPEC.md に原則と受け入れ基準のキーの形があり、resume が見出し・空行・HTML コメントだけの SPEC を旧テンプレートも含めて未作成とみなすことがテストで通り、CHANGELOG(+ja) に載る
+- [ ] L35 skill-converge — skills/converge/SKILL.md があり、go が最後の層で 節目 → next set converge → layer done と締めて converge に切り替わり、skills テスト（8スキル・フェーズの effort・節目が next set より前）と README(+ja) の全スキル表記が通り、CHANGELOG(+ja) に載る
+- [ ] L36 skill-principles — spec が原則を1問で決めてキー付きで書き、go が原則に反するときは1問聞き、reviewer と review が原則違反を先に出し、CLAUDE.md・AGENTS.md とそのテンプレートが原則の優先を述べ、skills・hosts テストが通り、README(+ja)・CHANGELOG(+ja) に載る
+- [ ] L37 converge-verify — 既存プロジェクトの複製で両ホストが go → converge（差を層に）→ go → converge（収束）を回し、$converge が組み込みと衝突せず、SPEC(+ja) §12 の基準11・12 が ✓ になる
 

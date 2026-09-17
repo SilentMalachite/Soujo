@@ -384,3 +384,7 @@ review は soujo を呼ばないので止まらず、map は plan/code だけ止
 ## 2026-09-16 release-0.3.2
 0.3.2 をリリース（2026-09-16）: L20〜L31 と Grok 全件調査・Codex レビューの修正（resume のコミット行・close の PLAN 検査・認証ファイルの拒否・暦日など）
 package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.2 にし、CHANGELOG(+ja) を 0.3.2 — 2026-09-16 に。README(+ja)・SECURITY(+ja)・CLAUDE.md(+template) を同期
+
+## 2026-09-17 節目
+PLAN.md に 6層: L32 phase-converge〜L37 converge-verify（Spec-kit の constitution を SPEC の原則に、converge を最後の層の後のフェーズに。SPEC(+ja) §3・§5〜§7・§9〜§14 に記載）
+外したもの: フェーズの記録をコミットするコマンド（§14 未決に残す）・soujo map spec・原則の版番号と同期レポート
