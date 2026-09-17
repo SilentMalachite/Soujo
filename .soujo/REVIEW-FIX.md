@@ -310,3 +310,11 @@
 | 9 | 原則を書かない検査がテンプレートにだけ掛かる（P3） | CLAUDE.md・AGENTS.md の全体にも掛ける |
 - SPEC(+ja) §7 の spec・review 行と §14 のキーの決定を上に合わせた。Codex は読み取り専用で、Serena を MCP として一時的に接続し（`codex exec -c mcp_servers.serena...`）、Graphify は CLI（`query`・`explain`・`path`）で使った。型検査と書き込み不要の39テスト、#6〜#9 の本文の変異で検査の抜けを確認。
 - 修正は Serena（`replace_content`・`replace_in_files`・`search_for_pattern`）と Graphify（`update`・`explain`・`query`）で行った。spec と review の新しい文言の検査（1〜4・6）は修正前の本文で落ち、7〜9 は今の本文を守る検査として、#6〜#9 の変異が修正後のテストで全部落ちることを確認。全414件（413通過・1件スキップ）は手元で通過済み。
+
+## L37 の Codex レビュー（2件・`b2e7c6c` の後の fix コミット `9fcd91b`）
+| # | 指摘 | 直し方 |
+|---|---|---|
+| 1 | Codex の2巡目の converge で、4行の節目の `log add` が拒否された後、再実行より先に `next set --layer plan` を実行した順の崩れが未記録（P3） | L37-VERIFY.md に失敗と復旧の順を追記し、SPEC(+ja) §14 の未決に。1巡目も同じ4行で拒否されたが、直して再実行してから先へ進んだことも記録 |
+| 2 | L37-VERIFY.md の流れ図と手順が実績（4層・L1〜L3 の後に複製・L4/L5 で検証・崩れた SPEC は原則9行）と合わない（P3） | 図と手順4・8を実績に合わせた |
+- 対象は `b2e7c6c` と、その後の converge の未コミット分（L38 の追加）。L38 の差（§12-9 partial: `planLayers` に state.test.ts のテストがない）は妥当、ほかの差・unrequested はなしとの判定。Codex は読み取り専用で、Serena を MCP として一時的に接続し（`find_symbol`・`find_referencing_symbols`・`search_for_pattern`）、Graphify は CLI（`query`・`explain`）で使い、実機の JSON/JSONL と複製の履歴を照合。型検査と書き込み不要の102件を実行。
+- 修正は Serena（`replace_content`）と Graphify（`update`・`query`）で行った。どちらも記録の修正でコードは変えていない。型検査と全414件（413通過・1件スキップ）は手元で通過済み。converge の PLAN・LOG・NEXT は、スキルどおり L38 の `layer done` までコミットしない。
