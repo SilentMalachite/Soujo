@@ -340,19 +340,29 @@ export function checkMismatch(next: Next, items: readonly PlanItem[]): string | 
   return `NEXT.md の確認が PLAN の層「${next.layer}」の完了条件と違う（PLAN に合わせて soujo next set）`;
 }
 
-// A comment that opens and closes on its line; a longer one is lines of its section.
-function isOneLineComment(line: string): boolean {
+// A line of nothing but HTML comments that open and close on it. Text beside one, or a comment running on, makes it a line
+// of its section. Scanned by position, so that a long line of many comments stays linear.
+function isCommentLine(line: string): boolean {
   const trimmed = line.trim();
-  return trimmed.length >= '<!---->'.length && trimmed.startsWith('<!--') && trimmed.endsWith('-->');
+  let position = 0;
+  while (trimmed.startsWith('<!--', position)) {
+    const end = trimmed.indexOf('-->', position + '<!--'.length);
+    if (end < 0) return false;
+    position = end + '-->'.length;
+    while (position < trimmed.length && /\s/.test(trimmed.charAt(position))) position += 1;
+  }
+  return position > 0 && position === trimmed.length;
 }
 
 /**
  * Problems of SPEC.md's keyed sections (SPEC §5), in line order after the count; empty when valid, and for a SPEC without
- * their headings. `## 原則` holds at most PRINCIPLES_MAX_LINES lines, each an item `P<n> <name> — <sentence>`; every item of
- * `## 受け入れ基準` without indentation starts with its `A<n>` key, and other text may stand between them. A section runs to
- * the next heading of level 1 or 2 and takes in every section of its name. Blank lines, one-line HTML comments, and code
- * fences are no lines of a section. Every problem but the count is named by line, since a line out of form cannot be quoted
- * back; a line both out of form and repeating a key gets both, so that one fix does not reveal the other only on the next run.
+ * their headings. `## 原則` holds at most PRINCIPLES_MAX_LINES lines, each `- P<n> <name> — <sentence>` without indentation,
+ * as SPEC writes it; every item of `## 受け入れ基準` without indentation starts with its `A<n>` key, whatever its list marker,
+ * and other text may stand between them. A section runs to the next heading of level 1 or 2 and takes in every section of its
+ * name. Blank lines, lines of one-line HTML comments, and code fences are no lines of a section. Every problem but the count
+ * is named by line, since a line out of form cannot be quoted back. A principle's key counts toward repeats even on a line out
+ * of form (indented, or with another marker), and such a line gets both problems, so that one fix does not reveal the other
+ * only on the next run.
  */
 export function validateSpec(text: string): string[] {
   const problems: string[] = [];
@@ -366,19 +376,21 @@ export function validateSpec(text: string): string[] {
       letter = level === 2 ? SPEC_SECTIONS.get(line.slice(heading[0].length).trim()) : undefined;
       return;
     }
-    if (letter === undefined || line.trim() === '' || isOneLineComment(line)) return;
+    if (letter === undefined || line.trim() === '' || isCommentLine(line)) return;
     const at = `SPEC.md の${index + 1}行目`;
-    const marker = LIST_MARKER.exec(line);
-    const rest = marker === null ? '' : line.slice(marker[0].length).trim();
+    // A criterion is an item only without indentation (an indented one belongs to the item above); a principle's key is read
+    // through indentation too, since the section holds nothing but principles.
+    const item = letter === 'P' ? line.trimStart() : line;
+    const marker = LIST_MARKER.exec(item);
+    const rest = marker === null ? '' : item.slice(marker[0].length).trim();
     const words = rest === '' ? [] : rest.split(/\s+/);
     const key = SPEC_KEY.exec(words[0] ?? '')?.[1] === letter ? words[0] : undefined;
     if (letter === 'P') {
       principles += 1;
-      // The name is at least one word before the first separator, and the sentence at least one after it.
-      const separator = words.findIndex((word, position) => position > 0 && PLAN_SEPARATORS.has(word));
-      if (marker === null || key === undefined || separator < 2 || separator === words.length - 1) {
-        problems.push(`${at}が原則の形（- P<n> <名前> — <1文>）でない`);
-      }
+      // The name is at least one word before the first "—", and the sentence at least one after it.
+      const separator = words.indexOf('—', 1);
+      const formed = item === line && marker?.[0] === '-' && key !== undefined && separator >= 2 && separator < words.length - 1;
+      if (!formed) problems.push(`${at}が原則の形（- P<n> <名前> — <1文>）でない`);
     } else if (marker === null) {
       return;
     } else if (key === undefined) {

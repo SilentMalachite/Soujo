@@ -168,6 +168,15 @@ test('long whitespace runs are processed in linear time', () => {
   validateNext(`a${spaces}b${spaces}`);
   parsePlan(`- [ ] L1${spaces}x${spaces}y\n`);
   appendLog(`a${spaces}b${spaces}`, { date: '2026-09-13', layer: 'L1', lines: [] });
+  const spec = [
+    `##${spaces}原則${spaces}`,
+    `- P${'1'.repeat(200_000)}x 名前 — 文`,
+    `-${spaces}P1${spaces}名前${spaces}—${spaces}文`,
+    '<!-- a -->'.repeat(50_000),
+    `<!--${spaces}`,
+    `${spaces}- A1`,
+  ];
+  validateSpec(spec.join('\n'));
   assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)}ms`);
 });
 
@@ -399,7 +408,8 @@ const SPEC = [
   '<!-- 7行まで -->',
   '- P1 テスト先行 — 実装より先にテストを書く',
   '',
-  '* P2 依存ゼロ -- node:* だけを使う',
+  '- P2 依存ゼロ — node:* だけを使う',
+  '<!-- a --> <!-- b -->',
   '```',
   '- 例: フェンスの中は行に数えない',
   '```',
@@ -446,15 +456,25 @@ test('validateSpec names each principle out of form by its line', () => {
     '### 小見出し',
     '<!-- 2行の',
     'コメント -->',
+    '1. P11 番号 — 文',
+    '* P12 別の記号 — 文',
+    '- P13 別の区切り -- 文',
+    '- P14 名前 - 文',
+    '<!-- a --> 本文 <!-- b -->',
+    '<!-- a --> <!-- 閉じない',
     '- P10 区切りの後の — は文の一部 — 文',
   ];
-  assert.deepEqual(
-    validateSpec(lines.join('\n')),
-    [
-      'SPEC.md の原則が7行を超えている（15行）',
-      ...[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((line) => `SPEC.md の${line}行目が原則の形（- P<n> <名前> — <1文>）でない`),
-    ],
-  );
+  const outOfForm = (line: number) => `SPEC.md の${line}行目が原則の形（- P<n> <名前> — <1文>）でない`;
+  assert.deepEqual(validateSpec(lines.join('\n')), [
+    'SPEC.md の原則が7行を超えている（21行）',
+    ...Array.from({ length: 19 }, (_, index) => outOfForm(index + 3)),
+  ]);
+  // Text beside a comment is a line, so that it neither hides a principle out of form nor escapes the count.
+  const seven = Array.from({ length: 7 }, (_, index) => `- P${index + 1} 名前 — 文`);
+  assert.deepEqual(validateSpec(['## 原則', ...seven, '<!-- a --> 本文'].join('\n')), [
+    'SPEC.md の原則が7行を超えている（8行）',
+    outOfForm(9),
+  ]);
 });
 
 test('validateSpec names unkeyed criteria and repeated keys by their line', () => {
@@ -466,24 +486,31 @@ test('validateSpec names unkeyed criteria and repeated keys by their line', () =
     '2) A1 重複',
     '-',
     '- A1',
+    '  - A1 字下げした項目は数えない',
     '## 原則',
     '- P1 名前 — 文',
     '- P1 名前 — 重複',
     '- P1 形が違っても重複',
+    '  - P1 字下げしても重複',
+    '* P2 記号が違う',
     '## 受け入れ基準',
     '- A2 同じ名前の節は続き',
     '- A2 重複',
   ];
+  const outOfForm = (line: number) => `SPEC.md の${line}行目が原則の形（- P<n> <名前> — <1文>）でない`;
   assert.deepEqual(validateSpec(lines.join('\n')), [
     'SPEC.md の3行目の受け入れ基準にキー（A<n>）がない',
     'SPEC.md の4行目の受け入れ基準にキー（A<n>）がない',
     'SPEC.md の5行目のキー「A1」が重複',
     'SPEC.md の6行目の受け入れ基準にキー（A<n>）がない',
     'SPEC.md の7行目のキー「A1」が重複',
-    'SPEC.md の10行目のキー「P1」が重複',
-    'SPEC.md の11行目が原則の形（- P<n> <名前> — <1文>）でない',
     'SPEC.md の11行目のキー「P1」が重複',
-    'SPEC.md の14行目のキー「A2」が重複',
+    outOfForm(12),
+    'SPEC.md の12行目のキー「P1」が重複',
+    outOfForm(13),
+    'SPEC.md の13行目のキー「P1」が重複',
+    outOfForm(14),
+    'SPEC.md の17行目のキー「A2」が重複',
   ]);
 });
 

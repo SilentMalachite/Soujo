@@ -118,7 +118,7 @@ test('close refuses a missing, invalid, or finished NEXT.md and writes nothing',
 
 test('close refuses a PLAN that layer done refuses, and a NEXT.md value with a control character, and writes nothing', (t) => {
   const dir = workingProject(t);
-  for (const plan of [`${PLAN}- [ ] L7 resume-close — again\n`, `${PLAN}- [ ] a\tb — x\n`, `\`\`\`\n${PLAN}`, `${PLAN}- [ ] plan — p\n`]) {
+  for (const plan of [`${PLAN}- [ ] L7 resume-close — again\n`, `${PLAN}- [ ] a\tb — x\n`, `\`\`\`\n${PLAN}`, `${PLAN}- [ ] plan — p\n`, `${PLAN}- [ ] converge — p\n`]) {
     writeFileSync(join(dir, '.soujo', 'PLAN.md'), plan);
     for (const note of [undefined, 'x']) assert.throws(() => close(dir, note, NOW), /^Error: PLAN\.md の.+（PLAN\.md を直してから）$/, JSON.stringify(plan));
     assert.equal(read(dir, 'LOG.md'), LOG);
@@ -293,13 +293,15 @@ test('closed between next set and layer done, the wip commit and 中断 entry na
   assert.match(read(dir, 'LOG.md'), /中断: テスト途中\n\n## 2026-09-13 L7 resume-close\ndone\n$/);
 });
 
-test('stopped between next set --layer plan and layer done of the last layer, close names that layer', (t) => {
-  const dir = project(repo(t), { ...STATE, 'PLAN.md': '- [x] L6 layer-done — d\n- [ ] L7 resume-close — c\n' });
-  commitAll(dir, 'layer: L6 layer-done');
-  writeNext(dir, 'plan');
-  writeFileSync(join(dir, 'resume.ts'), '');
-  assert.match(close(dir, 'テスト途中', NOW)[0] ?? '', /wip: L7 resume-close$/);
-  assert.equal(read(dir, 'LOG.md'), `${LOG}${ENTRY}中断: テスト途中\n`);
+test('stopped between next set --layer plan or converge and layer done of the last layer, close names that layer', (t) => {
+  for (const phase of ['plan', 'converge']) {
+    const dir = project(repo(t), { ...STATE, 'PLAN.md': '- [x] L6 layer-done — d\n- [ ] L7 resume-close — c\n' });
+    commitAll(dir, 'layer: L6 layer-done');
+    writeNext(dir, phase);
+    writeFileSync(join(dir, 'resume.ts'), '');
+    assert.match(close(dir, 'テスト途中', NOW)[0] ?? '', /wip: L7 resume-close$/, phase);
+    assert.equal(read(dir, 'LOG.md'), `${LOG}${ENTRY}中断: テスト途中\n`, phase);
+  }
 });
 
 test('close keeps CRLF in LOG.md, flattens control characters, and removes leftover temporary files', (t) => {

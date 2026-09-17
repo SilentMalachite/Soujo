@@ -196,6 +196,14 @@ test('resume points to spec, plan, or converge when PLAN has no layer to do', (t
       JSON.stringify(files),
     );
   }
+  const unreadable = project(temp(t), { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '- [x] L1 — c\n' });
+  mkdirSync(join(unreadable, '.soujo', 'NEXT.md'));
+  assert.deepEqual(resume(unreadable), [
+    '次: なし（PLAN は全層完了）',
+    '前回: LOG.md に記録なし',
+    'コミット: git リポジトリではない',
+    '再開: NEXT.md を読めない → /soujo:converge（Codex は $converge）',
+  ]);
 });
 
 test('resume names the unclosed layer when NEXT.md was moved on before layer done', (t) => {
