@@ -411,3 +411,8 @@ specUnwritten（state.ts）: 見出し・空行・HTML コメントだけの SPE
 ## 2026-09-17 codex-fix-l34
 Codex レビュー L34 の8件を修正: specUnwritten を行単位に（コード字下げ・コメント横の文・BOM・CR 改行）、判定は # 見出しに限ると SPEC(+ja)・CHANGELOG に明記
 SPEC §5 の節目の書き手に converge を追加。後続層分（plan 予約名・plugin.json・CLAUDE.md effort 行）は NEXT の注意へ。指摘は REVIEW-FIX.md
+
+## 2026-09-17 L35 skill-converge
+skills/converge/SKILL.md を追加（SPEC §7。差が残れば層を追加・なければ収束して次: plan）
+go は最後の層で 節目 → next set converge → layer done → converge。plan の予約名に converge
+skills・hosts テスト、README(+ja)・plugin.json・CLAUDE/AGENTS(+tpl)・SPEC(+ja) §7・CHANGELOG(+ja) 同期

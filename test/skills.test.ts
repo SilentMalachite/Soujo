@@ -6,7 +6,9 @@ import { resume } from '../src/commands/resume.js';
 import { packageDir, readTemplate } from '../src/files.js';
 import { assertKnownCommand, commands, commitAll, project, repo, temp } from './helpers.js';
 
-const SKILLS = ['close', 'go', 'map', 'plan', 'resume', 'review', 'spec'];
+const SKILLS = ['close', 'converge', 'go', 'map', 'plan', 'resume', 'review', 'spec'];
+// The steps outside PLAN's layers, as the CLI names them (SPEC §6).
+const PHASES = ['spec', 'plan', 'converge'];
 const SECTIONS = ['読むもの', 'やること', 'soujo に頼むこと', '出力の形'];
 // SPEC §7: no "always read", "run the tests", or "double-check" instructions.
 const FORBIDDEN = ['必ず', 'テストし', 'テストを実行', '再確認', '検証し'];
@@ -59,7 +61,7 @@ function sections(body: string): Map<string, string[]> {
   return found;
 }
 
-test('skills/ has exactly the seven skills and agents/ only reviewer.md', () => {
+test('skills/ has exactly the eight skills and agents/ only reviewer.md', () => {
   assert.deepEqual(entries('skills', true), SKILLS);
   assert.deepEqual(entries('agents', false), ['reviewer.md']);
 });
@@ -169,18 +171,31 @@ function option(argv: string[], name: string): string | undefined {
   return argv.find((token) => token.startsWith(`${name}=`))?.slice(name.length + 1);
 }
 
-// Whether argv is next set to spec or plan (trimmed, as the CLI compares), and whether it passes --effort.
+function isNextSet(argv: string[]): boolean {
+  return argv[0] === 'next' && argv[1] === 'set';
+}
+
+function isMilestone(argv: string[]): boolean {
+  return argv[0] === 'log' && argv[1] === 'add' && argv[2] === '節目';
+}
+
+// Whether argv is next set to a phase (trimmed, as the CLI compares), and whether it passes --effort.
 function phaseSet(argv: string[]): { phase: boolean; effort: boolean } {
-  const layer = option(argv, '--layer')?.trim();
-  const phase = argv[0] === 'next' && argv[1] === 'set' && (layer === 'spec' || layer === 'plan');
+  const phase = isNextSet(argv) && PHASES.includes(option(argv, '--layer')?.trim() ?? '');
   return { phase, effort: argv.some((token) => token === '--effort' || token.startsWith('--effort=')) };
 }
 
-// SPEC §6: next set fixes the effort of spec and plan, so a skill passing one would be refused.
-test('next set for spec or plan in the skills passes no --effort; spec and go each have one to plan', () => {
+function body(name: string): string {
+  return split(join(packageDir(), 'skills', name, 'SKILL.md')).body;
+}
+
+// SPEC §6: next set fixes the effort of the phases, so a skill passing one would be refused.
+test('next set for a phase in the skills passes no --effort; spec, go, and converge each have one', () => {
   const cases: [string[], { phase: boolean; effort: boolean }][] = [
     [['next', 'set', '--layer=plan', '--effort', 'low'], { phase: true, effort: true }],
     [['next', 'set', '--layer', ' spec ', '--effort=low'], { phase: true, effort: true }],
+    [['next', 'set', '--layer', 'converge'], { phase: true, effort: false }],
+    [['next', 'set', '--layer', 'Converge'], { phase: false, effort: false }],
     [['next', 'set', '--layer', 'L1', '--effort', 'low'], { phase: false, effort: true }],
   ];
   for (const [argv, expected] of cases) assert.deepEqual(phaseSet(argv), expected, argv.join(' '));
@@ -194,23 +209,82 @@ test('next set for spec or plan in the skills passes no --effort; spec and go ea
       assert.ok(!effort, `${name}: soujo ${argv.join(' ')}`);
     }
   }
-  assert.deepEqual([...withPhase].sort(), ['go', 'spec']);
+  assert.deepEqual([...withPhase].sort(), ['converge', 'go', 'spec']);
 });
 
-// SPEC §7: spec, plan, and go leave a 節目 entry at their phase boundary, which soujo brief shows.
-test('spec, plan, and go write a 節目 entry, spec and go before next set to plan, and plan forbids 節目 as a layer name', () => {
-  const body = (name: string) => split(join(packageDir(), 'skills', name, 'SKILL.md')).body;
-  for (const name of ['spec', 'plan', 'go']) {
+// The phase each skill points NEXT.md to when it ends (SPEC §7): spec and converge to plan, go (after the last layer) to converge.
+const PHASE_AFTER: Record<string, string> = { spec: 'plan', go: 'converge', converge: 'plan' };
+
+// SPEC §7: spec, plan, go, and converge leave a 節目 entry at their phase boundary, which soujo brief shows.
+test('spec, plan, go, and converge write a two-line 節目 entry before any next set, and point NEXT.md to their phase', () => {
+  for (const name of ['spec', 'plan', 'go', 'converge']) {
     const argvs = commands(body(name));
-    const milestone = argvs.findIndex((argv) => argv[0] === 'log' && argv[1] === 'add' && argv[2] === '節目');
-    assert.ok(milestone !== -1, `${name}: soujo log add '節目'`);
-    assert.equal(argvs[milestone]?.filter((token) => token === '--line').length, 2, `${name}: 節目は2行`);
-    if (name === 'plan') continue;
-    const toPlan = argvs.findIndex((argv) => phaseSet(argv).phase && option(argv, '--layer')?.trim() === 'plan');
-    assert.ok(toPlan > milestone, `${name}: log add '節目' が next set --layer 'plan' より前`);
+    const milestones = argvs.flatMap((argv, index) => (isMilestone(argv) ? [index] : []));
+    assert.ok(milestones.length > 0, `${name}: soujo log add '節目'`);
+    for (const index of milestones) assert.equal(argvs[index]?.filter((token) => token === '--line').length, 2, `${name}: 節目は2行`);
+    const first = milestones[0] ?? -1;
+    argvs.forEach((argv, index) => assert.ok(!isNextSet(argv) || index > first, `${name}: next set より前に節目`));
+    const phases = argvs.filter((argv) => phaseSet(argv).phase).map((argv) => option(argv, '--layer')?.trim());
+    assert.deepEqual(phases, name === 'plan' ? [] : [PHASE_AFTER[name]], `${name}: next set するフェーズ`);
   }
-  const naming = sections(body('plan')).get('やること')?.find((line) => line.startsWith('- 層名は')) ?? '';
-  for (const word of ['`spec`', '`plan`', '`節目`', 'CLI が拒否する']) assert.ok(naming.includes(word), `plan の層名の行に ${word}`);
+  // converge ends one of two ways, a layer added or converged, and each leaves its own 節目 before its own next set.
+  const ways = commands(body('converge')).flatMap((argv) => (isMilestone(argv) ? ['節目'] : isNextSet(argv) ? ['next set'] : []));
+  assert.deepEqual(ways, ['節目', 'next set', '節目', 'next set']);
+});
+
+// SPEC §14: a layer named like a phase or 節目 is refused, so the skills that add layers say so.
+test('plan and converge name every phase and 節目 as layer names the CLI refuses', () => {
+  for (const name of ['plan', 'converge']) {
+    const naming = sections(body(name)).get('やること')?.find((line) => line.includes('層名は')) ?? '';
+    for (const word of [...PHASES.map((phase) => `\`${phase}\``), '`節目`', 'CLI が拒否する']) {
+      assert.ok(naming.includes(word), `${name} の層名の行に ${word}`);
+    }
+  }
+});
+
+// SPEC §7: the last layer closes as 節目 → next set converge → layer done, and go goes on with converge.
+test('go closes the last layer with 節目, next set converge, and layer done, then switches to converge', () => {
+  const found = sections(body('go'));
+  const tasks = found.get('やること') ?? [];
+  assert.ok((tasks[0] ?? '').includes('`次:` が `spec` / `plan` / `converge` ならそのスキルに切り替える。'), 'go は次のフェーズへ切り替える');
+  assert.equal(tasks.filter((line) => line.includes('最後の層なら 節目 → NEXT.md（`次: converge`）→ layer done で、締めたら converge スキルに切り替える。')).length, 1);
+  const argvs = commands(found.get('soujo に頼むこと')?.join('\n') ?? '');
+  const milestone = argvs.findIndex(isMilestone);
+  const converge = argvs.findIndex((argv) => phaseSet(argv).phase);
+  const done = argvs.findIndex((argv) => argv[0] === 'layer' && argv[1] === 'done');
+  assert.ok(milestone !== -1 && milestone < converge && converge < done, `go: 節目 → next set converge → layer done（${[milestone, converge, done]}）`);
+});
+
+// SPEC §7: what converge reads, how it classifies, what it writes, and what it shows.
+test('converge reads keyed lines and the layers\' code, classifies every gap, appends keyed layers only, and shows a table', () => {
+  const found = sections(body('converge'));
+  const text = (section: string) => found.get(section)?.join('\n') ?? '';
+  const expected: [string, string[]][] = [
+    ['読むもの', ['`A<n>`・`P<n>` の行', '`layer:` コミットが変えたファイル', '基準の語で検索して見つかる箇所', 'それより先は読まない']],
+    [
+      'やること',
+      [
+        '`met`・`missing`・`partial`・`contradicts`',
+        '`path:line`',
+        '`unrequested`',
+        'SPEC とコードは変えない',
+        '同じキーを持つ未完了の層がないもの',
+        '既存の行はそのままに PLAN の末尾へ',
+        '`- [ ] <層名> — <完了条件>（<キー> <種類>）`',
+        '原則の違反を先に',
+        '未完了の層は最大12',
+        '上限を超えた差は層にせず、節目の未決の行に書く',
+      ],
+    ],
+    ['出力の形', ['差の表 `キー / 種類 / 根拠 / 残り`', '`soujo map plan` の図をそのまま', '`収束: <照らしたキー>` の1行']],
+  ];
+  for (const [section, phrases] of expected) {
+    for (const phrase of phrases) assert.ok(text(section).includes(phrase), `converge の${section}: ${phrase}`);
+  }
+  // With a layer added, next check decides whether NEXT.md moves to it, and the plan is drawn last.
+  const added = commands(found.get('soujo に頼むこと')?.[0] ?? '').map((argv) => argv.slice(0, 2).join(' '));
+  assert.deepEqual(added, ['log add', 'next check', 'next set', 'map plan']);
+  assert.deepEqual(commands(found.get('soujo に頼むこと')?.[1] ?? '').map((argv) => argv.slice(0, 2).join(' ')), ['log add', 'next set']);
 });
 
 // The end of 再開: after 3 days away as the skills and CLAUDE.md / AGENTS.md quote it: the number of days varies, so it is left out.

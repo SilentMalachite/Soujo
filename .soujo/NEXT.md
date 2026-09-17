@@ -1,5 +1,5 @@
-次: L35 skill-converge
-前提: L34 済: SPEC テンプレートに原則とキーの形、resume は見出し・空行・コメントだけの SPEC を未作成とみなす
-確認: skills/converge/SKILL.md があり、go が最後の層で 節目 → next set converge → layer done と締めて converge に切り替わり、skills テスト（8スキル・フェーズの effort・節目が next set より前）と README(+ja) の全スキル表記が通り、CHANGELOG(+ja) に載る
-注意: SKILL.md は SPEC §7 に従う。skills.test に converge。同期: plan の予約名・plugin.json の紹介文・CLAUDE.md(+tpl)の effort 行
+次: L36 skill-principles
+前提: L35 済: converge スキル、go は最後の層で 節目 → next set converge → layer done → converge
+確認: spec が原則を1問で決めてキー付きで書き、go が原則に反するときは1問聞き、reviewer と review が原則違反を先に出し、CLAUDE.md・AGENTS.md とそのテンプレートが原則の優先を述べ、skills・hosts テストが通り、README(+ja)・CHANGELOG(+ja) に載る
+注意: spec は原則を含む5節で終える。README の SPEC.md 行に原則。CLAUDE/AGENTS は原則の優先だけ書き、原則自体は SPEC だけ
 effort: high

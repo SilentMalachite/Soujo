@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { packageDir } from '../src/files.js';
 import { commitAll, project, repo, temp } from './helpers.js';
@@ -13,6 +13,7 @@ interface Manifest {
   license: string;
   skills?: string;
   hooks?: unknown;
+  interface?: { longDescription?: string };
 }
 
 interface ClaudeMarketplace {
@@ -72,6 +73,14 @@ test('neither manifest declares hooks, and the Codex one names skills/', () => {
     assert.ok(!Object.hasOwn(read<Manifest>(path), 'hooks'), `${path} に hooks を書かない`);
   }
   assert.equal(read<Manifest>('.codex-plugin/plugin.json').skills, './skills/');
+});
+
+// The Codex install page lists the skills in its long description, so a skill added to skills/ is added there too.
+test('the Codex manifest names every skill in its long description', () => {
+  const skills = readdirSync(join(packageDir(), 'skills')).filter((entry) => !entry.startsWith('.'));
+  const text = read<Manifest>('.codex-plugin/plugin.json').interface?.longDescription ?? '';
+  const listed = /Skills: ([^.]+)\./.exec(text)?.[1]?.split(', ') ?? [];
+  assert.deepEqual([...listed].sort(), skills.map((skill) => `$${skill}`).sort());
 });
 
 // The category is the same word in each host's casing: lower case in Claude Code marketplaces, capitalized in Codex.

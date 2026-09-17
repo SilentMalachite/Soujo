@@ -21,15 +21,18 @@ Design and decisions: [SPEC.md](SPEC.md).
 ## How it works
 
 ```
-/soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:plan (when layers run out)
-                                 ↑ /soujo:resume after a break (with soujo brief after days or weeks away) · /soujo:close before stopping
+/soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:converge (after the last layer)
+                                 ↑                          │ gaps: added as layers
+                                 └──────────────────────────┘ none: converged, /soujo:plan once SPEC changes
+/soujo:resume after a break (with soujo brief after days or weeks away) · /soujo:close before stopping
 ```
 
 | Skill | Claude Code | Codex | Result |
 |---|---|---|---|
 | spec | `/soujo:spec` | `$spec` | One question at a time (at most 7) → `.soujo/SPEC.md`, then a `節目` entry in `LOG.md` |
 | plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added |
-| go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>` |
+| go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>`; after the last layer, goes on with converge |
+| converge | `/soujo:converge` | `$converge` | Checks the code against the keyed acceptance criteria and principles of `SPEC.md` and appends each gap to `PLAN.md` as a layer (`（A3 partial）`), or records that the code has converged; a `節目` entry either way. Changes neither SPEC nor code |
 | resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume; from 3 days away, followed by the five lines of `soujo brief` |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
@@ -39,7 +42,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 |---|---|---|
 | `SPEC.md` | Goals, non-goals, acceptance criteria, technical decisions | ~100 lines |
 | `PLAN.md` | `- [ ] <layer> — <completion condition>` | 1 line per layer |
-| `LOG.md` | Journal that commands append to; only `soujo log rotate` moves entries out. `節目` entries, written by spec / plan / go at phase boundaries, say what ended and what is open, and `soujo brief` shows the last one | 3 lines per entry |
+| `LOG.md` | Journal that commands append to; only `soujo log rotate` moves entries out. `節目` entries, written by spec / plan / go / converge at phase boundaries, say what ended and what is open, and `soujo brief` shows the last one | 3 lines per entry |
 | `LOG-YYYY-MM.md` | Past months of `LOG.md`, moved by `soujo log rotate` | — (entries as `LOG.md` had them) |
 | `NEXT.md` | The next step — all you need to resume | 5 lines |
 
@@ -113,7 +116,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo --help` / `soujo next set --help` | Usage lines of every command / of one command, or of the commands starting with `next`, `plan`, `log`, `layer`, or `map` when given only that word; runs nothing else |
 | `soujo init` | Creates `.soujo/` (and CLAUDE.md / AGENTS.md) without overwriting |
 | `soujo next show [--hook]` | Prints `NEXT.md`, with one line naming its problems when it is invalid; `--hook` is for the SessionStart hook |
-| `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md`; `spec` / `plan` always get effort `high` |
+| `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md`; `spec` / `plan` / `converge` always get effort `high` |
 | `soujo next check [--hook]` | Warns when the project is not resumable; always exits 0; `--hook` is for the Stop hook |
 | `soujo plan list` / `soujo plan next` | Layers with their state / the next layer |
 | `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md`; nothing when `LOG.md` already ends with the same uncommitted entry |

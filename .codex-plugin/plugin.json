@@ -14,7 +14,7 @@
   "interface": {
     "displayName": "Soujo",
     "shortDescription": "Resumable spec → plan → layer workflow",
-    "longDescription": "Keeps the spec, the plan of 30-minute layers, the journal, and the next step in .soujo/, so work resumes after any interruption and continues across Claude Code and Codex. Skills: $spec, $plan, $go, $resume, $map, $review, $close.",
+    "longDescription": "Keeps the spec, the plan of 30-minute layers, the journal, and the next step in .soujo/, so work resumes after any interruption and continues across Claude Code and Codex. Skills: $spec, $plan, $go, $converge, $resume, $map, $review, $close.",
     "developerName": "Silent Malachite",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],

@@ -21,15 +21,18 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 ## 仕組み
 
 ```
-/soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:plan（層が尽きたら）
-                                 ↑ 中断後は /soujo:resume（何日・何週間も空いたら soujo brief も）・ 止まる前に /soujo:close
+/soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:converge（最後の層の後）
+                                 ↑                          │ 差あり: 層として追加
+                                 └──────────────────────────┘ 差なし: 収束。SPEC が変わったら /soujo:plan
+中断後は /soujo:resume（何日・何週間も空いたら soujo brief も）・ 止まる前に /soujo:close
 ```
 
 | スキル | Claude Code | Codex | 結果 |
 |---|---|---|---|
 | spec | `/soujo:spec` | `$spec` | 1問ずつ（最大7問）→ `.soujo/SPEC.md`、続けて `LOG.md` に `節目` エントリ |
 | plan | `/soujo:plan` | `$plan` | 30分以内の層、各1行の完了条件 → `.soujo/PLAN.md`、層を足したら `節目` エントリ |
-| go | `/soujo:go` | `$go` | 次の層を実装し、次の `NEXT.md` を書いて（最後の層はその前に `節目` エントリ）`layer: <層>` でコミット |
+| go | `/soujo:go` | `$go` | 次の層を実装し、次の `NEXT.md` を書いて（最後の層はその前に `節目` エントリ）`layer: <層>` でコミット。最後の層の後は converge へ続ける |
+| converge | `/soujo:converge` | `$converge` | コードを `SPEC.md` のキー付きの受け入れ基準と原則に照らし、差を1つずつ層として `PLAN.md` に足す（`（A3 partial）`）か、収束を記録する。どちらも `節目` エントリを残す。SPEC もコードも変えない |
 | resume | `/soujo:resume` | `$resume` | 4行：次の層・前回のログ・最新コミット・再開方法。3日以上空いていれば続けて `soujo brief` の5行 |
 | close | `/soujo:close` | `$close` | `中断: …` をログに残し `wip: <層>` でコミット |
 | map | `/soujo:map` | `$map` | 計画の図、import のグラフ、直近の層の Before/After |
@@ -39,7 +42,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 |---|---|---|
 | `SPEC.md` | 目的・非目標・受け入れ基準・技術判断 | 約100行 |
 | `PLAN.md` | `- [ ] <層> — <完了条件>` | 1層1行 |
-| `LOG.md` | コマンドが追記する作業日誌。エントリを外へ移すのは `soujo log rotate` だけ。`節目` エントリは spec / plan / go がフェーズの区切りに書き、何が終わり何が未決かを残す。最後のものを `soujo brief` が示す | 1エントリ3行 |
+| `LOG.md` | コマンドが追記する作業日誌。エントリを外へ移すのは `soujo log rotate` だけ。`節目` エントリは spec / plan / go / converge がフェーズの区切りに書き、何が終わり何が未決かを残す。最後のものを `soujo brief` が示す | 1エントリ3行 |
 | `LOG-YYYY-MM.md` | `soujo log rotate` が移した `LOG.md` の過去の月 | —（`LOG.md` にあった形のまま） |
 | `NEXT.md` | 次の一手。再開にはこれだけ読めばよい | 5行 |
 
@@ -113,7 +116,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo --help` / `soujo next set --help` | 全コマンド / 1コマンドの使い方の行。`next`・`plan`・`log`・`layer`・`map` の1語だけに付けるとその語で始まるコマンドの行。ほかは何も実行しない |
 | `soujo init` | `.soujo/`（と CLAUDE.md / AGENTS.md）を上書きせずに作る |
 | `soujo next show [--hook]` | `NEXT.md` を出す。無効ならその問題を挙げる1行も。`--hook` は SessionStart フック用 |
-| `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える。`spec` / `plan` の effort は常に `high` |
+| `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える。`spec` / `plan` / `converge` の effort は常に `high` |
 | `soujo next check [--hook]` | 再開できない状態を警告する。終了コードは常に0。`--hook` は Stop フック用 |
 | `soujo plan list` / `soujo plan next` | 層と状態 / 次の層 |
 | `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記。`LOG.md` が同じ未コミットのエントリで終わっていれば足さない |

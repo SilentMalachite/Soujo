@@ -10,11 +10,14 @@
 
 - `converge` を `spec`・`plan` と同じフェーズにする：`soujo next set --layer converge` は `effort: high` を書き、ほかの effort を拒否する。`next check`・`resume`・`close` は `次: plan` と同じく `次: converge` を全層の後ろとみなす。`converge` という名前の PLAN の層は、`next set`・`layer done`・`close` が拒否し、`next check` が警告する。
 - `soujo next check` は `SPEC.md` のキー付きの節を検査して警告する：`## 原則` が7行を超える、そこに `- P<n> <名前> — <1文>` でない行がある、`## 受け入れ基準` の字下げのない項目が `A<n>` のキーで始まらない、キーが節の中で重複する。空行・1行の HTML コメント・コードフェンスはこれらの節の行に数えず、行数以外は行番号で示し、この見出しのない SPEC は検査しない。読めない `SPEC.md` は、ほかの警告と並べて警告する。
+- `converge` スキル（`/soujo:converge`・`$converge`）を追加。最後の層の後に動く。`SPEC.md` のキー付きの行・`PLAN.md`・層のコミットが変えたコードと基準の語で検索して見つかるコードだけを読み、受け入れ基準と原則を1つずつ `met`・`missing`・`partial`・`contradicts` に分けて `path:line` の根拠を示し、何も求めていないコードを `unrequested` とする。未完了の層が扱っていない差は、完了条件の末尾にキーと種類（`（A3 partial）`）を付けた層として `PLAN.md` に足す（原則の違反を先に、未完了は最大12）。差がなければ収束を記録して `NEXT.md` を `plan` に向ける。SPEC もコードも変えず、どちらでも `節目` エントリを残し、`unrequested` と上限を超えた差はその未決の行に書く。
 
 ### 変更
 
 - `templates/SPEC.md` の先頭に `## 原則` の節を置き、それと `## 受け入れ基準` にキーの形（`- P1 <名前> — <判定できる1文>`・`- A1 <判定できる1文>`）を1行の HTML コメントで示す。`templates/NEXT.md` の `確認:` にも原則を挙げる。`soujo init` は引き続き既存のファイルに手を付けない。
 - `soujo resume` は、`#` の見出し・空行・HTML コメントだけの `SPEC.md` を、どの版のテンプレートから複製したものでも未作成とみなし、`/soujo:spec` を案内する。ブロックは CommonMark と同じく見分け、4スペースかタブで字下げしたコメントはコード、コメントの横の文は本文とする。先頭の BOM は読み飛ばし、CR だけの改行も行の区切りとし、読めない SPEC は作成済みとみなす。これまでは今のテンプレートと同じ SPEC だけを未作成とみなしていたので、このテンプレートより前に作ったプロジェクトは `/soujo:plan` へ案内されるところだった。
+- `go` スキルは最後の層を `節目` エントリ → `soujo next set --layer 'converge'` → `layer done` で締め、そのまま `converge` に進む。`次:` が `converge` のときもそれに切り替える。これまでは `NEXT.md` を `plan` に向けていた。`plan` スキルは CLI が拒否する層名に `converge` を挙げる。
+- README（英日）・Codex のマニフェスト・CLAUDE.md / AGENTS.md とそのテンプレートで、ほかのスキルやフェーズと並べて `converge` を挙げる：流れ・スキル表・`節目` エントリを書くもの・effort が `high` になるフェーズ。
 - 全層完了で `NEXT.md` がない・読めない・無効・完了済みの層を指すとき、`soujo resume` は `/soujo:plan` ではなく `/soujo:converge` を案内する。
 - `test/cli.test.ts` は、親ディレクトリを閉じて読めなくした現在のディレクトリを、それで読めなくなる環境でだけ試す。Linux は権限を見ずに `getcwd` に答えるので、0.3.1 以降 Ubuntu の CI が落ちていた。
 
