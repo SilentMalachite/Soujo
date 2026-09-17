@@ -22,7 +22,7 @@
 - `go` スキルはテストに触れなくなった（SPEC §7 はスキルにそれを書かない。規約は CLAUDE.md にある）。`test/skills.test.ts` は動詞の形だけでなくどんな言い回しでも拒否する：「テストが落ちたまま締めない」がすり抜けていた。
 - `agents/reviewer.md` は、作業ツリーからの相対 `path:line` を求め、絶対パスを書かないと示す（`review` スキルは reviewer の表を加工せずそのまま出すため）。
 - SPEC が、認証情報のファイル名に鍵の `.pub` も挙げる。実装・privacy テスト・`.gitignore` はすでに含めていた。
-- CI は Ubuntu・macOS に加えて Windows でもテストを走らせる。パスの比較・symlink・別名の `.git`・プラグインディレクトリ・`headState` のテストは Windows では自分を skip するので、そのために書かれた環境で一度も走っていなかった。
+- CI は Ubuntu・macOS に加えて Windows でもテストを走らせる。パスの比較・symlink・別名の `.git`・プラグインディレクトリ・`headState` のテストは Windows では自分を skip するので、そのために書かれた環境で一度も走っていなかった。そこで3つを直した：`.gitattributes` で作業ツリーを LF に保つ（CRLF で checkout されると、コミット済みの `dist/` が tsc の出力と食い違い、SKILL.md の frontmatter を読むテストが全部落ちる）。テストは `GIT_CONFIG_GLOBAL` を null デバイスではなく空のファイルに向ける（git は `\\.\nul` を設定ファイルとして開けない）。末尾が空白のディレクトリ名のテストは自分を skip する（Windows はその名前を保持しない）。
 
 ## 0.4.0 — 2026-09-18
 

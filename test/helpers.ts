@@ -2,8 +2,8 @@ import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRunning, type StateFile } from '../src/files.js';
 import { REPOSITORY_ENV } from '../src/git.js';
@@ -13,7 +13,12 @@ const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 
 // Git in tests, and the soujo runs they start, read no user or system configuration (core.hooksPath, signing, filters) and no
 // variable pointing at another repository, so the results do not depend on the machine.
-process.env.GIT_CONFIG_GLOBAL = devNull;
+// An empty file rather than the null device: git cannot open Windows's `\\.\nul` as a configuration file, which would fail
+// every git call with "unable to access". The file lives for the run of the process that made it.
+const emptyConfig = join(mkdtempSync(join(tmpdir(), 'soujo-config-')), 'gitconfig');
+writeFileSync(emptyConfig, '');
+process.on('exit', () => rmSync(dirname(emptyConfig), { recursive: true, force: true }));
+process.env.GIT_CONFIG_GLOBAL = emptyConfig;
 process.env.GIT_CONFIG_NOSYSTEM = '1';
 for (const name of REPOSITORY_ENV) delete process.env[name];
 

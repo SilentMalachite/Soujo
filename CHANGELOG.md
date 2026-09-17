@@ -22,7 +22,7 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - The `go` skill no longer names the tests, which SPEC §7 keeps out of the skills; the rule lives in CLAUDE.md. `test/skills.test.ts` now refuses the word in any wording, not only as a verb, since "do not close while a test fails" had slipped past it.
 - `agents/reviewer.md` asks for a `path:line` relative to the working tree and says not to write absolute paths, since the `review` skill shows the reviewer's table unedited.
 - SPEC names the `.pub` of the key names among the credential file names, which the implementation, the privacy test, and `.gitignore` already covered.
-- CI runs the suite on Windows as well as Ubuntu and macOS, where the tests for path comparison, symlinks, `.git` under its other names, the plugin directory, and `headState` skip themselves and so were never run on the platform they are written for.
+- CI runs the suite on Windows as well as Ubuntu and macOS, where the tests for path comparison, symlinks, `.git` under its other names, the plugin directory, and `headState` skip themselves and so were never run on the platform they are written for. Three things stood in the way there: `.gitattributes` now keeps LF in the working tree, since a CRLF checkout made the committed `dist/` differ from what tsc writes and broke every reader of SKILL.md frontmatter; the tests point `GIT_CONFIG_GLOBAL` at an empty file rather than the null device, which git cannot open as `\\.\nul`; and the test for a directory name ending in a space skips itself, since Windows keeps no such name.
 
 ## 0.4.0 — 2026-09-18
 

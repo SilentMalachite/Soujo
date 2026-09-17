@@ -52,7 +52,9 @@ test('gitToplevel is undefined only outside a repository; other git failures thr
   assert.throws(() => gitToplevel(outside), /^Error: git rev-parse に失敗: [^\n]+$/);
 });
 
-test('paths from git keep the spaces at the ends of directory names', (t) => {
+// Skipped on Windows, which keeps no name ending in a space: the directory would be made under another name and git would
+// have no working directory to start in.
+test('paths from git keep the spaces at the ends of directory names', { skip: process.platform === 'win32' }, (t) => {
   const dir = join(temp(t), 'proj ');
   const app = join(dir, ' app');
   mkdirSync(app, { recursive: true });

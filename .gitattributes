@@ -1,0 +1,4 @@
+# Every text file keeps LF in the working tree, Windows included. A CRLF checkout would make `dist/` differ from what tsc
+# writes (test/dist.test.ts compares them byte for byte) and would break the tests that read SKILL.md frontmatter and the
+# templates as they are written. Files git detects as binary — the ones holding control characters on purpose — are untouched.
+* text=auto eol=lf
