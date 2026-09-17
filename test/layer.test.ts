@@ -9,7 +9,7 @@ import { foldsCase } from '../src/files.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
 import { parseLog } from '../src/state.js';
 import { markDone } from '../src/state.js';
-import { commitAll, deadPid, project, repo, temp } from './helpers.js';
+import { commitAll, deadPid, livePid, project, repo, temp } from './helpers.js';
 
 const NOW = new Date(2026, 8, 13, 12, 0);
 const PLAN = '# PLAN\n\n- [x] L1 scaffold — build\n- [ ] L2 state — test\n- [ ] L10 later — c\n';
@@ -325,6 +325,18 @@ test('leftover temporary files from a killed write are removed, not committed', 
   assert.match(line ?? '', /（追加: state\.ts）$/);
   assert.equal(existsSync(leftover), false);
   assert.deepEqual(gitStatus(dir), []);
+});
+
+// init writes CLAUDE.md / AGENTS.md in the project root, so a killed one leaves its temporary file where git add -A finds it.
+test('a killed init leaves no temporary CLAUDE.md or AGENTS.md for the layer commit to take in', (t) => {
+  const dir = workingProject(t);
+  const leftovers = [join(dir, `.CLAUDE.md.${deadPid()}.tmp`), join(dir, `.AGENTS.md.${deadPid()}.tmp`)];
+  const running = join(dir, `.CLAUDE.md.${livePid(t)}.tmp`);
+  for (const path of [...leftovers, running]) writeFileSync(path, 'half');
+  layerDone(dir, 'L2 state', undefined, NOW);
+  assert.deepEqual(leftovers.map((path) => existsSync(path)), [false, false]);
+  // One a running process may still be writing is left alone, as in .soujo/, and goes into the commit.
+  assert.equal(existsSync(running), true);
 });
 
 test('a failure while listing added files still reports the successful commit', { skip: process.platform === 'win32' }, (t) => {

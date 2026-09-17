@@ -25,8 +25,9 @@ interface Scan {
 }
 
 export function mapPlan(cwd: string): string[] {
-  const items = readPlan(cwd);
-  return items.length === 0 ? [NO_LAYERS] : planDiagram(items);
+  const { items, problem } = readPlan(cwd);
+  const lines = items.length === 0 ? [NO_LAYERS] : planDiagram(items);
+  return problem === undefined ? lines : [problem, ...lines];
 }
 
 function reason(error: unknown): string {

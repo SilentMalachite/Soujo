@@ -124,8 +124,9 @@ function lineEnd(text, from) {
     return -1;
 }
 /**
- * Whether a "{" opens a block (a statement) rather than an object literal or a type, judged from the token before it. Known
- * misjudgement, harmless unless a "/" follows the matching "}": a block after a label or a "case" is read as an object literal.
+ * Whether a "{" opens a block (a statement) rather than an object literal or a type, judged from the token before it. The ":"
+ * of a label or of a "case" / "default" clause ends a statement's head, so a "{" after it opens a block; every other ":"
+ * (an object literal's, a type annotation's, a conditional's) has a value after it.
  */
 function opensBlock(tokens) {
     const previous = tokens.at(-1);
@@ -138,7 +139,30 @@ function opensBlock(tokens) {
     // After ")", ";", and "{" a statement can start; "]" and ">" end a return type or a type parameter list, "=>" a signature.
     if (previous.value === '}')
         return previous.block === true;
+    if (previous.value === ':')
+        return previous.label === true;
     return ';{)]>'.includes(previous.value);
+}
+/**
+ * Whether a statement can start here, which is narrower than where a "{" opens a block: only after the end of a statement or
+ * of a statement's head, so that an object literal's property name is not taken for a label. Used to tell a label and a
+ * "case" clause, which stand where a statement does, from a ":" of any other kind.
+ */
+function startsStatement(tokens) {
+    const previous = tokens.at(-1);
+    if (previous === undefined)
+        return true;
+    if (previous.kind === 'word')
+        return BLOCK_AFTER.has(previous.value);
+    if (previous.kind !== 'punct')
+        return false;
+    if (previous.value === '{' || previous.value === '}')
+        return previous.block === true;
+    if (previous.value === ')')
+        return previous.condition === true;
+    if (previous.value === ':')
+        return previous.label === true;
+    return previous.value === ';';
 }
 // A token that ends an operand, so that "++" or "--" after it is postfix.
 function endsOperand(token) {
@@ -397,6 +421,10 @@ function scriptTokens(text, jsx) {
     const conditions = []; // for each open "(", whether it opens a statement's condition
     const bodies = []; // for each "function" or "class" awaiting its body, whether it stands where a statement can
     const elements = []; // for each JSX element being read, innermost last
+    // The "case" whose ":" is still to come, and where a word that a ":" right after it would make a label sits in tokens
+    // ("default:" and "outer:" alike). Both are read only at the ":" itself, so a stale one says nothing.
+    let clause;
+    let labelled;
     // Text read again after a "<" turned out not to open a tag, bounded so that the whole scan stays linear in the text length.
     const scan = { rejected: new Set(), spent: 0, budget: text.length, off: false };
     let index = 0;
@@ -519,20 +547,57 @@ function scriptTokens(text, jsx) {
             const value = text.slice(index, end);
             if (BODY_BEFORE.has(value))
                 bodies.push(opensBlock(tokens));
-            tokens.push({ kind: 'word', value });
+            const word = { kind: 'word', value };
+            // The token itself, not its place: text read again (see reopen) drops tokens, and another one would take that place.
+            if (startsStatement(tokens)) {
+                labelled = word;
+                if (value === 'case')
+                    clause = { blocks: blocks.length, conditions: conditions.length, conditionals: 0 };
+            }
+            tokens.push(word);
             index = end;
         }
         else {
             const token = { kind: 'punct', value: char };
             // Only a condition or a body opened since the innermost "${" or JSX "{" can be closed or taken from inside it.
             const brace = braces.at(-1);
+            // The ":" of the clause sits where its "case" did: one inside brackets, parentheses, braces, or a conditional is
+            // another ":". Brackets are not counted, since a "?" inside them is counted like any other.
+            const clausal = clause !== undefined && blocks.length === clause.blocks && conditions.length === clause.conditions;
             // A function or class body is a block only where its keyword could start a statement: the "}" of one written as an
             // expression (const f = function () {}) ends an operand, so a "/" after it divides.
-            if (char === '{')
-                blocks.push(opensBlock(tokens) && (bodies.length > (brace?.bodies ?? 0) ? (bodies.pop() ?? true) : true));
+            if (char === '{') {
+                const opens = opensBlock(tokens) && (bodies.length > (brace?.bodies ?? 0) ? (bodies.pop() ?? true) : true);
+                blocks.push(opens);
+                token.block = opens;
+            }
             else if (char === '}') {
                 // A "}" with no "{" of its own closes a block the scanned text does not hold, so that "/" after it is not division.
                 token.block = blocks.pop() ?? true;
+                if (clause !== undefined && blocks.length < clause.blocks)
+                    clause = undefined;
+            }
+            else if (char === ':') {
+                // A label's ":" comes right after its name; a clause's, after the expression of its "case".
+                if (labelled !== undefined && tokens.at(-1) === labelled)
+                    token.label = true;
+                else if (clausal && clause !== undefined) {
+                    if (clause.conditionals > 0)
+                        clause.conditionals -= 1;
+                    else {
+                        token.label = true;
+                        clause = undefined;
+                    }
+                }
+            }
+            else if (char === '?') {
+                // Neither "?." nor "??" opens a conditional whose ":" would come later.
+                if (clausal && clause !== undefined && following !== '.' && following !== '?' && text[index - 1] !== '?')
+                    clause.conditionals += 1;
+            }
+            else if (char === ';') {
+                if (clausal)
+                    clause = undefined;
             }
             else if (char === '(') {
                 // "for await (" opens a condition like "for (".
@@ -540,8 +605,11 @@ function scriptTokens(text, jsx) {
                 const keyword = tokens.at(at);
                 conditions.push(keyword?.kind === 'word' && CONDITION_BEFORE.has(keyword.value) && !isPunct(tokens.at(at - 1), '.'));
             }
-            else if (char === ')')
+            else if (char === ')') {
                 token.condition = conditions.length > (brace?.conditions ?? 0) && conditions.pop() === true;
+                if (clause !== undefined && conditions.length < clause.conditions)
+                    clause = undefined;
+            }
             tokens.push(token);
             index += 1;
         }

@@ -12,8 +12,10 @@ const SKILLS = ['close', 'converge', 'go', 'map', 'plan', 'resume', 'review', 's
 // The steps outside PLAN's layers, as the CLI names them (SPEC §6).
 const PHASES = ['spec', 'plan', 'converge'];
 const SECTIONS = ['読むもの', 'やること', 'soujo に頼むこと', '出力の形'];
-// SPEC §7: no "always read", "run the tests", or "double-check" instructions.
-const FORBIDDEN = ['必ず', 'テストし', 'テストを実行', '再確認', '検証し'];
+// SPEC §7: no "always read", "run the tests", or "double-check" instructions. "テスト" is refused wherever it appears: the
+// rule is about the tests being mentioned at all, and "テストが落ちたまま締めない" read as a completion condition slipped
+// past a list of verbs.
+const FORBIDDEN = ['必ず', 'テスト', '再確認', '検証し'];
 
 // Directory entries that hosts load: validate_plugin.py also skips dot-entries and plain files.
 function entries(dir: string, directories: boolean): string[] {
@@ -261,7 +263,7 @@ test('go closes the last layer with 節目, next set converge, and layer done, t
 test('go asks one question only when the completion condition cannot hold without breaking a principle', () => {
   const line = sections(body('go')).get('やること')?.find((task) => task.includes('原則')) ?? '';
   for (const phrase of [
-    '確認を挟まず、満たすまで続ける',
+    '確認を挟まず、完了条件が満たされるまで続ける',
     'SPEC の原則は完了条件と既存のコードより優先する',
     '原則に反さずには完了条件を満たせないときだけ',
     'どの原則とどう食い違うかを番号付きの候補で1問聞く',

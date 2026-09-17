@@ -1,8 +1,8 @@
 // Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 import { join, posix } from 'node:path';
-import { STATE_DIR, STATE_FILES, MAX_SYMLINKS, foldsCase, isSymlink, readState, requireState, requireStateDir, stateIdentities, stateTarget, statePath, symlinkTargetParts, trackedStatePath, } from '../files.js';
+import { STATE_DIR, STATE_FILES, MAX_SYMLINKS, foldsCase, isSymlink, readState, removeRootTemps, requireState, requireStateDir, stateIdentities, stateTarget, statePath, symlinkTargetParts, trackedStatePath, } from '../files.js';
 import { gitAddAll, gitCommit, gitHasCommits, gitHasStagedChanges, gitHeadEntry, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, gitUntracked, } from '../git.js';
-import { parseLog, parseNext, parsePlan, validateNext } from '../state.js';
+import { parseLog, parseNext, parsePlan, validateNext, validatePlan } from '../state.js';
 const CLIP = 60;
 // The records a layer or wip commit must carry as written. SPEC.md is one too: the skills write it, and a layer's commit
 // would otherwise leave its change behind without a word.
@@ -54,9 +54,24 @@ export function committedHash(root) {
     const commit = attempt(() => gitLastCommit(root));
     return commit instanceof Error ? '?' : (commit?.hash ?? '?');
 }
-/** The layers of PLAN.md in the project above cwd; throws outside Soujo projects or without PLAN.md. */
+// How many problems a line names before counting the rest, as the warning of next check does.
+const SHOWN_PROBLEMS = 4;
+/** "PLAN.md が無効: A、B" for a read-only view, or undefined when nothing makes PLAN.md unusable. */
+export function describeInvalidPlan(text) {
+    const found = validatePlan(text);
+    if (found.length === 0)
+        return undefined;
+    const shown = found.length > SHOWN_PROBLEMS ? [...found.slice(0, SHOWN_PROBLEMS), `ほか${found.length - SHOWN_PROBLEMS}件`] : found;
+    return `PLAN.md が無効: ${shown.join('、')}`;
+}
+/**
+ * The layers of PLAN.md in the project above cwd, with what makes the file unusable; throws outside Soujo projects or without
+ * PLAN.md. A read-only view names the problem rather than dropping the layers it hides without a word: a code fence left open
+ * swallows every layer after it, which next check and layer done refuse over.
+ */
 export function readPlan(cwd) {
-    return parsePlan(requireState(requireStateDir(cwd), 'PLAN.md'));
+    const text = requireState(requireStateDir(cwd), 'PLAN.md');
+    return { items: parsePlan(text), problem: describeInvalidPlan(text) };
 }
 /** A skill as typed in Claude Code, with the Codex spelling. */
 export function skill(name) {
@@ -119,9 +134,10 @@ function listPaths(paths) {
  * target included) inside the project, outside .git, and not another state file or archive, no unfinished
  * merge/rebase/cherry-pick/revert anywhere in the repository, no unmerged files in the project, no state file or symlink
  * target ignored by git, and no untracked credential file (see isCredential) that staging everything would take in. One
- * added with `git add` first is tracked, and is committed as the user chose.
+ * added with `git add` first is tracked, and is committed as the user chose. The untracked files are read to a byte limit
+ * (maxUntracked, git.ts's default; given only by tests), past which none of them was seen and committing is refused.
  */
-export function requireCommittable(root) {
+export function requireCommittable(root, maxUntracked) {
     const toplevel = gitToplevel(root);
     if (toplevel === undefined)
         throw new Error('git リポジトリではないのでコミットできない');
@@ -136,9 +152,14 @@ export function requireCommittable(root) {
     if (unmerged > 0)
         throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
     requireNotIgnored(root, STATE_FILES);
-    const credentials = gitUntracked(root).filter((path) => isCredential(root, path));
+    const untracked = gitUntracked(root, maxUntracked);
+    const credentials = untracked.paths.filter((path) => isCredential(root, path));
     if (credentials.length > 0) {
         throw new Error(`${listPaths(credentials)} は認証情報のファイル名なのでコミットしない（.gitignore に足すか、コミットするなら先に git add する）`);
+    }
+    // Past the limit the rest was never read, so a credential file name among them would be staged unseen.
+    if (untracked.truncated) {
+        throw new Error(`未追跡のファイルが多すぎて認証情報のファイル名を確認できないのでコミットしない（不要なものを .gitignore に足すか消してから）`);
     }
 }
 /**
@@ -236,6 +257,9 @@ export function headState(root, file) {
  * written (skip-worktree): the commit would lack its records, and a re-run of layer done could not add them afterwards.
  */
 export function commitRecords(root, subject, extra = []) {
+    // The state files' leftovers are cleared by the command that writes them; the root's CLAUDE.md / AGENTS.md are written only
+    // by init, so a killed one leaves its temporary file for this commit to take in.
+    removeRootTemps(root);
     gitAddAll(root);
     const paths = [...RECORDS, ...extra].flatMap((file) => [statePath(file), trackedStatePath(root, file)]);
     const unstaged = gitNotStaged(root, [...new Set(paths)]);

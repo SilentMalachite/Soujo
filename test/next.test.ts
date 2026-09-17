@@ -283,6 +283,22 @@ test('next check counts untracked files even when git hides them from status', (
   assert.deepEqual(nextCheck(dir, false), ['soujo 警告: 未コミットの変更 1件']);
 });
 
+// SPEC §14: spec, plan, and converge write records and commit nothing, so the Stop hook would warn about them from the phase
+// until the next layer done, with nothing to do about it.
+test('next check leaves .soujo/ out of the uncommitted count while 次: is a phase, and counts everything else', (t) => {
+  const phase = '次: plan\n前提: converge で収束\n確認: SPEC に未実装が残っていない\n注意: なし\neffort: high\n';
+  const dir = project(repo(t), { 'NEXT.md': phase, 'PLAN.md': '- [x] L1 scaffold — build\n' });
+  commitAll(dir);
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), '## 2026-09-18 節目\nx\n');
+  assert.deepEqual(nextCheck(dir, false), []);
+  // A change outside .soujo/ is still uncommitted work, and only those are counted.
+  writeFileSync(join(dir, 'new.ts'), '');
+  assert.deepEqual(nextCheck(dir, false), ['soujo 警告: 未コミットの変更 1件']);
+  // While 次: is a layer, the records count as before.
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT);
+  assert.deepEqual(nextCheck(dir, false), ['soujo 警告: 未コミットの変更 3件']);
+});
+
 test('next check suggests log rotate once it would move entries of two past months', (t) => {
   const now = new Date(2026, 8, 15, 10, 0);
   const warning = 'soujo 警告: LOG.md に移せる過去2か月分のエントリ（soujo log rotate）';

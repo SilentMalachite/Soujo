@@ -589,6 +589,17 @@ export function removeTempsOf(target: string): void {
   for (const path of tempsOf(target)) rmSync(path, { force: true });
 }
 
+/** The files soujo init creates in the project root beside .soujo/, which have temporary files of their own there. */
+export const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'] as const;
+
+/**
+ * Deletes the temporary files a killed init left beside the project root's CLAUDE.md / AGENTS.md, so that a commit staging
+ * everything does not take a half-written one in. As for the state files, one named after a process still running is kept.
+ */
+export function removeRootTemps(root: string): void {
+  for (const file of ROOT_FILES) removeTempsOf(join(root, file));
+}
+
 // The leftovers of the four state files, and of archives that exist or whose temporary file is in .soujo/; none next to a
 // target outside the project or inside .git. A target that is another state file is still inside the project, so its leftovers
 // are deleted as before; leaving them would let `git add -A` commit them.

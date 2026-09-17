@@ -262,13 +262,25 @@ test('TS/JS imports read again from after a "<" that no tag follows, and from an
 test('TS/JS imports keep their known misjudgements as documented, and only those', () => {
   // In .ts "<T>" is a type, so a generic function type opens no element there.
   assert.deepEqual(imports("type X = <T>(a: T) => T;\nimport('./after-type.js');", 'src/a.ts'), ['./after-type.js']);
-  // A block after a label or a "case" is read as an object literal (see opensBlock): a "/" after its "}" divides, so a quote
-  // in the regex that follows opens a string, and the import after it is lost.
-  assert.deepEqual(imports("L: {}\n/'/.test(s); import('./lost.js');", 'src/a.ts'), []);
-  assert.deepEqual(imports("switch (x) { case 1: {} /'/.test(s); import('./lost-case.js'); }", 'src/a.ts'), []);
-  // Harmless without such a quote, and a block where a statement starts is read as one.
-  assert.deepEqual(imports("L: {}\n/x/.test(s); import('./harmless.js');", 'src/a.ts'), ['./harmless.js']);
+  // A block where a statement starts is read as one, after a label and a "case" too (see opensBlock), so a "/" after its "}"
+  // starts a regular expression and a quote inside it opens no string.
+  assert.deepEqual(imports("L: {}\n/'/.test(s); import('./kept-label.js');", 'src/a.ts'), ['./kept-label.js']);
+  assert.deepEqual(imports("switch (x) { case 1: {} /'/.test(s); import('./kept-case.js'); }", 'src/a.ts'), ['./kept-case.js']);
   assert.deepEqual(imports("{}\n/'/.test(s); import('./kept.js');", 'src/a.ts'), ['./kept.js']);
+});
+
+// SPEC §6: a "{" at the start of a statement is a block, and every other ":" still has a value after it.
+test('TS/JS imports read a block after a label, a case, and a default, and an object after any other ":"', () => {
+  // The ":" of a "case" is found past the conditionals and the optional chaining of its expression.
+  assert.deepEqual(imports("switch (x) { case a ? 1 : 2: {} /'/.test(s); import('./after-conditional.js'); }", 'src/a.ts'), ['./after-conditional.js']);
+  assert.deepEqual(imports("switch (x) { case a?.b: {} /'/.test(s); import('./after-optional.js'); }", 'src/a.ts'), ['./after-optional.js']);
+  assert.deepEqual(imports("switch (x) { case f(a ? 1 : 2): {} /'/.test(s); import('./after-call.js'); }", 'src/a.ts'), ['./after-call.js']);
+  assert.deepEqual(imports("switch (x) { default: {} /'/.test(s); import('./after-default.js'); }", 'src/a.ts'), ['./after-default.js']);
+  // A ":" of an object literal, of a conditional, and of a type annotation leaves an operand, so the "/" after the "}"
+  // divides, the quote after it opens a string, and the import inside that string is not read.
+  assert.deepEqual(imports("const a = {b: {c: 1}} /'/; import('./divided-object.js');", 'src/a.ts'), []);
+  assert.deepEqual(imports("const b = x ? {c: 1} : {d: 2} /'/; import('./divided-conditional.js');", 'src/a.ts'), []);
+  assert.deepEqual(imports("const c: {d: number} = {d: 1} /'/; import('./divided-annotation.js');", 'src/a.ts'), []);
 });
 
 test('TS/JS imports keep a template substitution and a JSX brace in the order they were opened', () => {
@@ -580,6 +592,14 @@ test('map plan draws PLAN.md from a subdirectory and reports an empty plan in on
   assert.deepEqual(mapPlan(project(temp(t), { 'PLAN.md': '# PLAN\n' })), ['PLAN.md に層がない']);
   assert.throws(() => mapPlan(project(temp(t))), /PLAN\.md がない/);
   assert.throws(() => mapPlan(temp(t)), /\.soujo\/ が見つからない/);
+});
+
+// The diagram is still drawn, with one line before it saying which layers it cannot hold.
+test('map plan names what makes PLAN.md invalid before the diagram', (t) => {
+  const broken = project(temp(t), { 'PLAN.md': `${PLAN}\n\`\`\`\n- [ ] LX example — x\n` });
+  const lines = mapPlan(broken);
+  assert.match(lines[0] ?? '', /^PLAN\.md が無効: PLAN\.md の\d+行目のコードフェンスが閉じていない/);
+  assert.deepEqual(lines.slice(1), planDiagram(parsePlan(PLAN)));
 });
 
 test('map code scans the project root by default, skipping output directories, dot-entries, and symlinks', (t) => {

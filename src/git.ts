@@ -6,9 +6,12 @@ import { join, posix } from 'node:path';
 
 // spawnSync fails beyond 1 MB by default; `git log` in a long history can exceed that.
 const MAX_OUTPUT = 256 * 1024 * 1024;
-// Counting changes stops reading here, so that a huge working tree's listing is not held in memory: past it the count is a
-// lower bound.
+// Counting changes and listing untracked files stop reading here, so that a huge working tree's listing is not held in
+// memory: past it the count is a lower bound and the list is only part of them.
 const COUNT_OUTPUT = 16 * 1024 * 1024;
+// How long one git call may take before it is killed, so that a `commit.gpgSign` pinentry with nothing to read from, or a
+// hook that never returns, fails in one line instead of holding the session that called soujo (SPEC §14).
+const TIMEOUT = 120 * 1000;
 const COMMIT_FORMAT = '--format=%h%x09%ct%x09%s';
 
 export interface Commit {
@@ -61,7 +64,15 @@ function run(
   maxBuffer: number = MAX_OUTPUT,
 ): SpawnSyncReturns<string> {
   const stdin = input === undefined ? 'ignore' : 'pipe';
-  return spawnSync('git', args, { cwd, encoding: 'utf8', input, stdio: [stdin, 'pipe', 'pipe'], maxBuffer, env: environment(extra) });
+  return spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    input,
+    stdio: [stdin, 'pipe', 'pipe'],
+    maxBuffer,
+    timeout: TIMEOUT,
+    env: environment(extra),
+  });
 }
 
 // A path printed by git on one line: only the line break is dropped, since a directory name may start or end with a space.
@@ -71,6 +82,8 @@ function pathLine(output: string): string {
 
 function failure(args: string[], result: SpawnSyncReturns<string>): Error {
   const reason =
+    // A killed call left its own message ("spawnSync git ETIMEDOUT"), which says nothing about the wait it stands for.
+    ((result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' ? `${TIMEOUT / 1000}秒で時間切れ` : undefined) ??
     firstLine(result.error?.message, 'first') ??
     firstLine(result.stderr, 'first') ??
     firstLine(result.stdout, 'last') ??
@@ -115,40 +128,76 @@ export function gitHasCommits(cwd: string): boolean {
 // repository never sweeps up changes outside it.
 const HERE = ['--', '.'];
 
+// `git status --porcelain -z`: every record is NUL-terminated and its path is unquoted, so that a file name holding a line
+// break, a quotation mark, or a backslash is one record like any other. A rename or a copy prints the path it came from as a
+// record of its own right after, which is part of that change rather than another one.
+const STATUS = ['status', '--porcelain', '-z', '--untracked-files=normal', ...HERE];
+
+/** The records among complete (NUL-terminated) fields, the second field of a rename or copy left out. Exported for its tests. */
+export function statusRecords(fields: readonly string[]): string[] {
+  const records: string[] = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const record = fields[index] ?? '';
+    if (record === '') continue;
+    records.push(record);
+    // "R" or "C" in either column of the status: the next field is the path the file was renamed or copied from.
+    const status = record.slice(0, 2);
+    if (status.includes('R') || status.includes('C')) index += 1;
+  }
+  return records;
+}
+
 /**
- * `git status --porcelain` lines for cwd and below; empty when clean. Untracked files are included, an untracked directory
- * as one line, whatever status.showUntrackedFiles says.
+ * The complete fields of a NUL-terminated output: the text after the last NUL is no field, and after a cut it may be half of
+ * one. Exported for its tests.
+ */
+export function completeFields(output: string): { fields: string[]; fragment: string } {
+  const fields = output.split('\0');
+  return { fields, fragment: fields.pop() ?? '' };
+}
+
+/** The number of changes in an output of gitChangeCount's arguments, read as it reads them. Exported for its tests. */
+export function countRecords(output: string, truncated: boolean): number {
+  const { fields, fragment } = completeFields(output);
+  const count = statusRecords(fields).length;
+  // A cut that left not one whole record still read part of a change: "0件以上" would be read as a clean tree.
+  return truncated && count === 0 && fragment !== '' ? 1 : count;
+}
+
+/**
+ * `git status --porcelain` records for cwd and below; empty when clean. Untracked files are included, an untracked directory
+ * as one record, whatever status.showUntrackedFiles says.
  */
 export function gitStatus(cwd: string): string[] {
-  return git(cwd, ['status', '--porcelain', '--untracked-files=normal', ...HERE]).split('\n').filter((line) => line !== '');
+  return statusRecords(completeFields(git(cwd, STATUS)).fields);
 }
 
 export interface ChangeCount {
-  /** The number of gitStatus lines, or of those read before the output limit. */
+  /** The number of gitStatus records, or of those read before the output limit. */
   count: number;
   /** Whether git printed more than was read, so that count is a lower bound. */
   truncated: boolean;
 }
 
-/** The number of gitStatus lines, reading at most maxBytes of git's output (see COUNT_OUTPUT). */
-export function gitChangeCount(cwd: string, maxBytes: number = COUNT_OUTPUT): ChangeCount {
-  const args = ['status', '--porcelain', '--untracked-files=normal', ...HERE];
+/**
+ * The number of gitStatus records, reading at most maxBytes of git's output (see COUNT_OUTPUT), leaving out the given paths
+ * (relative to cwd, taken literally) and, where one names a directory, everything under it.
+ */
+export function gitChangeCount(cwd: string, maxBytes: number = COUNT_OUTPUT, excluded: readonly string[] = []): ChangeCount {
+  const args = [...STATUS, ...excluded.map((path) => `:(exclude,literal)${path}`)];
   const result = run(cwd, args, {}, undefined, maxBytes);
   const truncated = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS';
   if (!truncated && (result.error !== undefined || result.status !== 0)) throw failure(args, result);
-  const lines = result.stdout.split('\n');
-  // The last line is complete only when the output ended with its line break; cut short, it may be half a line.
-  lines.pop();
-  return { count: lines.filter((line) => line !== '').length, truncated };
+  return { count: countRecords(result.stdout, truncated), truncated };
 }
 
 /**
- * `git status --porcelain` lines for cwd and below, leaving out the given paths (relative to cwd, taken literally). An untracked
+ * `git status --porcelain` records for cwd and below, leaving out the given paths (relative to cwd, taken literally). An untracked
  * directory counts once, as in gitStatus.
  */
 export function gitStatusExcluding(cwd: string, excluded: readonly string[]): string[] {
   const pathspecs = excluded.map((path) => `:(exclude,literal)${path}`);
-  return git(cwd, ['status', '--porcelain', '--untracked-files=normal', ...HERE, ...pathspecs]).split('\n').filter((line) => line !== '');
+  return statusRecords(completeFields(git(cwd, [...STATUS, ...pathspecs])).fields);
 }
 
 /** The given paths (relative to cwd, taken literally) with uncommitted changes, untracked and deleted files included, in the given order. */
@@ -183,9 +232,24 @@ export function gitAddAll(cwd: string): void {
   git(cwd, ['add', '-A', ...HERE]);
 }
 
-/** The untracked files in cwd and below that git does not ignore, each one listed, relative to cwd. */
-export function gitUntracked(cwd: string): string[] {
-  return git(cwd, ['ls-files', '-z', '--others', '--exclude-standard', ...HERE]).split('\0').filter((path) => path !== '');
+export interface Untracked {
+  /** The untracked files read, relative to cwd. */
+  paths: string[];
+  /** Whether git printed more than was read, so that paths holds only some of them. */
+  truncated: boolean;
+}
+
+/**
+ * The untracked files in cwd and below that git does not ignore, each one listed, relative to cwd, reading at most maxBytes
+ * of git's output (see COUNT_OUTPUT) so that a huge untracked tree is not held in memory.
+ */
+export function gitUntracked(cwd: string, maxBytes: number = COUNT_OUTPUT): Untracked {
+  const args = ['ls-files', '-z', '--others', '--exclude-standard', ...HERE];
+  const result = run(cwd, args, {}, undefined, maxBytes);
+  const truncated = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS';
+  if (!truncated && (result.error !== undefined || result.status !== 0)) throw failure(args, result);
+  const { fields } = completeFields(result.stdout);
+  return { paths: fields.filter((path) => path !== ''), truncated };
 }
 
 /**
@@ -226,11 +290,14 @@ export function gitNotStaged(cwd: string, paths: readonly string[]): string[] {
 
 /** The paths (relative to cwd) that git ignores. Tracked files are never reported. */
 export function gitIgnored(cwd: string, paths: readonly string[]): string[] {
-  const args = ['check-ignore', '--', ...paths];
-  const result = run(cwd, args);
+  if (paths.length === 0) return [];
+  // -z, so that a path holding a line break is one record rather than two; git takes it only with --stdin, which reads the
+  // paths the same way.
+  const args = ['check-ignore', '-z', '--stdin'];
+  const result = run(cwd, args, {}, paths.map((path) => `${path}\0`).join(''));
   if (result.error === undefined && result.status === 1) return [];
   if (result.error !== undefined || result.status !== 0) throw failure(args, result);
-  return result.stdout.split('\n').filter((line) => line !== '');
+  return completeFields(result.stdout).fields.filter((path) => path !== '');
 }
 
 const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
@@ -240,7 +307,8 @@ const UNMERGED = /^(DD|AU|UD|UA|DU|AA|UU) /;
  * unmerged (after a conflicting `git stash pop`, say), so only the project's own conflicts stand in its way.
  */
 export function gitUnmergedCount(cwd: string): number {
-  return git(cwd, ['status', '--porcelain', ...HERE]).split('\n').filter((line) => UNMERGED.test(line)).length;
+  const records = statusRecords(completeFields(git(cwd, ['status', '--porcelain', '-z', ...HERE])).fields);
+  return records.filter((record) => UNMERGED.test(record)).length;
 }
 
 function parseCommit(line: string): Commit | undefined {

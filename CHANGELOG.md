@@ -4,6 +4,26 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- `soujo next check` leaves `.soujo/` out of its uncommitted count while `次:` is `spec`, `plan`, or `converge`. Those phases write records and commit nothing, so the Stop hook warned about them from the phase until the next `soujo layer done` — after a `converge` that found no gap, until SPEC changed and a layer was closed — with nothing to do about it. A change anywhere else still warns, and only those are counted.
+
+### Fixed
+
+- A commit no longer takes in the temporary CLAUDE.md / AGENTS.md a killed `soujo init` left in the project root: `soujo layer done`, `soujo close`, and `soujo log rotate` remove them before staging everything, as they already did the ones in `.soujo/`. One named after a process still running is kept, as before.
+- `soujo layer done`, `soujo close`, and `soujo log rotate` read at most 16 MiB of git's listing of untracked files for the credential-name check, the limit the uncommitted count already had, and refuse past it. Before, a huge untracked tree was held in memory whole; now the rest is known not to have been seen, so committing is refused instead of staging a credential file nobody looked at.
+- `soujo plan list`, `soujo plan next`, and `soujo map plan` name what makes `PLAN.md` unusable in one line before their output. Before, a code fence left open hid every layer after it from these read-only views without a word, while `soujo next check` and `soujo layer done` refused over it.
+- Git's file lists are read NUL-separated (`-z`): `git status` for the uncommitted count, the check for other changes, and the conflict count, and `git check-ignore` for the state files. A file name holding a line break was quoted and split in two, so those counts disagreed with the credential check, which already read them that way. The path a rename came from is printed as a record of its own and is no longer counted as a second change.
+- The uncommitted count says `1件以上` rather than `0件以上` when the byte limit cut git's output before its first whole record.
+- Every git call is given 120 seconds, after which it is killed and reported like any other git failure, in one line. A `commit.gpgSign` pinentry with nothing to read from, or a hook that never returns, held `soujo layer done` and `soujo close` — and the session that ran them — with nothing to say.
+- `soujo map code` reads a `{` at the start of a statement as a block, after a label and a `case` / `default` clause too, so a `/` after the matching `}` starts a regular expression rather than dividing. Before, an import after such a block could be lost or invented. Every other `:` — an object literal's, a conditional's, a type annotation's — still leaves an operand.
+- The `go` skill no longer names the tests, which SPEC §7 keeps out of the skills; the rule lives in CLAUDE.md. `test/skills.test.ts` now refuses the word in any wording, not only as a verb, since "do not close while a test fails" had slipped past it.
+- `agents/reviewer.md` asks for a `path:line` relative to the working tree and says not to write absolute paths, since the `review` skill shows the reviewer's table unedited.
+- SPEC names the `.pub` of the key names among the credential file names, which the implementation, the privacy test, and `.gitignore` already covered.
+- CI runs the suite on Windows as well as Ubuntu and macOS, where the tests for path comparison, symlinks, `.git` under its other names, the plugin directory, and `headState` skip themselves and so were never run on the platform they are written for.
+
 ## 0.4.0 — 2026-09-18
 
 Release: [v0.4.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.4.0).

@@ -2,20 +2,19 @@
 
 import { join, resolve } from 'node:path';
 import {
+  ROOT_FILES,
   STATE_DIR,
   STATE_FILES,
   createFile,
   ensureStateDir,
   readTemplate,
   removeLeftoverTemps,
-  removeTempsOf,
+  removeRootTemps,
   stateIdentities,
   stateTarget,
   statePath,
 } from '../files.js';
 import { gitToplevel } from '../git.js';
-
-const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'];
 
 export function init(cwd: string): string[] {
   const toplevel = gitToplevel(cwd);
@@ -31,7 +30,7 @@ export function init(cwd: string): string[] {
     if (problem?.elsewhere === true || problem?.whenWritten === true) throw new Error(`${statePath(file)} の${problem.text}なので init しない`);
   }
   removeLeftoverTemps(dir);
-  for (const file of ROOT_FILES) removeTempsOf(join(root, file));
+  removeRootTemps(root);
 
   const targets = [
     ...STATE_FILES.map((file) => ({ template: file, path: `${STATE_DIR}/${file}` })),

@@ -147,6 +147,18 @@ test('requireCommittable refuses each unsafe state',{ skip: process.platform ===
   );
 });
 
+// The credential check reads every untracked file name; past the limit the rest was never seen, so staging everything is refused.
+test('requireCommittable refuses when it could not read every untracked file name', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT });
+  const name = 'x'.repeat(200);
+  for (let index = 0; index < 400; index += 1) writeFileSync(join(dir, `${name}${index}`), '');
+  assert.doesNotThrow(() => requireCommittable(dir));
+  assert.throws(() => requireCommittable(dir, 1024), /^Error: 未追跡のファイルが多すぎて認証情報のファイル名を確認できないのでコミットしない/);
+  // A credential name among the ones that were read is the more useful of the two, so it is reported first.
+  writeFileSync(join(dir, '.env'), '');
+  assert.throws(() => requireCommittable(dir, 1024), /^Error: \.env は認証情報のファイル名なのでコミットしない/);
+});
+
 test('headState reads the committed file, following a symlinked state file', { skip: process.platform === 'win32' }, (t) => {
   const dir = project(repo(t), { 'PLAN.md': 'committed\n' });
   assert.equal(headState(dir, 'PLAN.md'), undefined);

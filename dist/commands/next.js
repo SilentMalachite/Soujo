@@ -1,6 +1,6 @@
 // soujo next show / set / check: the one file needed to resume.
 import { dirname } from 'node:path';
-import { findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
+import { STATE_DIR, findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitChangeCount, gitToplevel } from '../git.js';
 import { PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, validateSpec, } from '../state.js';
 // How many problems a warning names before counting the rest, so that the line stays readable where a hook shows it.
@@ -136,15 +136,20 @@ function problems(dir, now) {
     found.push(...plan.problems);
     found.push(...specProblems(dir));
     found.push(...logProblems(dir, now));
-    found.push(...changeProblems(dirname(dir)));
+    found.push(...changeProblems(dirname(dir), next.next !== undefined && PHASES.includes(next.next.layer)));
     return found;
 }
-// Kept apart like the state files, so that a git failure does not hide the other warnings.
-function changeProblems(root) {
+/**
+ * Kept apart like the state files, so that a git failure does not hide the other warnings. While `次:` is a phase, the
+ * records `.soujo/` holds are left out of the count: spec, plan, and converge write them and commit nothing, so a warning
+ * about them would stand from the phase until the next layer done, with nothing to do about it. A change anywhere else
+ * still warns.
+ */
+function changeProblems(root, phase) {
     try {
         if (gitToplevel(root) === undefined)
             return [];
-        const { count, truncated } = gitChangeCount(root);
+        const { count, truncated } = gitChangeCount(root, undefined, phase ? [STATE_DIR] : []);
         return count > 0 || truncated ? [`未コミットの変更 ${count}件${truncated ? '以上' : ''}`] : [];
     }
     catch (error) {

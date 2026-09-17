@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import * as gitApi from '../src/git.js';
 import {
   REPOSITORY_ENV,
+  completeFields,
+  countRecords,
   gitAddAll,
   gitAddedFiles,
   gitChangeCount,
@@ -26,6 +28,7 @@ import {
   gitToplevel,
   gitUnmergedCount,
   gitUntracked,
+  statusRecords,
 } from '../src/git.js';
 import { commitAll, repo, temp } from './helpers.js';
 
@@ -104,6 +107,29 @@ test('gitStatus handles output larger than 1 MB', (t) => {
   const name = 'x'.repeat(200);
   for (let index = 0; index < 6000; index++) writeFileSync(join(dir, `${name}${index}`), '');
   assert.equal(gitStatus(dir).length, 6000);
+});
+
+// A file name may hold a line break, which the line-based output would have quoted and split in two.
+test('a file name with a line break is one record in gitStatus and one path in gitIgnored and gitUntracked', { skip: process.platform === 'win32' }, (t) => {
+  const dir = repo(t);
+  writeFileSync(join(dir, 'a\nb.txt'), '');
+  writeFileSync(join(dir, 'c\nd.log'), '');
+  writeFileSync(join(dir, '.gitignore'), '*.log\n');
+  assert.deepEqual(gitStatus(dir), ['?? .gitignore', '?? a\nb.txt']);
+  assert.deepEqual(gitChangeCount(dir), { count: 2, truncated: false });
+  assert.deepEqual(gitUntracked(dir), { paths: ['.gitignore', 'a\nb.txt'], truncated: false });
+  assert.deepEqual(gitIgnored(dir, ['c\nd.log', 'a\nb.txt']), ['c\nd.log']);
+});
+
+// A rename prints the path it came from as a record of its own, which is part of that one change.
+test('gitStatus and gitChangeCount count a rename once', (t) => {
+  const dir = repo(t);
+  writeFileSync(join(dir, 'a.txt'), 'a\n');
+  commitAll(dir, 'base');
+  execFileSync('git', ['mv', 'a.txt', 'b.txt'], { cwd: dir });
+  assert.deepEqual(gitStatus(dir), ['R  b.txt']);
+  assert.deepEqual(gitChangeCount(dir), { count: 1, truncated: false });
+  assert.deepEqual(gitStatusExcluding(dir, ['nothing.txt']), ['R  b.txt']);
 });
 
 test('gitStatus counts untracked files once per untracked directory whatever status.showUntrackedFiles says', (t) => {
@@ -324,7 +350,33 @@ test('gitUntracked lists each untracked file in cwd and below that git does not 
   writeFileSync(join(top, 'app', 'ignored.key'), '');
   writeFileSync(join(top, 'app', '.gitignore'), '*.key\n');
   writeFileSync(join(top, 'outside.env'), '');
-  assert.deepEqual(gitUntracked(join(top, 'app')), ['.gitignore', 'new/.env']);
+  assert.deepEqual(gitUntracked(join(top, 'app')), { paths: ['.gitignore', 'new/.env'], truncated: false });
+});
+
+test('gitUntracked says so when git printed more than the byte limit read, and reports only whole paths', (t) => {
+  const top = repo(t);
+  // Long enough names that git's output passes the 64 KiB a read takes, which is where a cut can fall inside a path.
+  const name = 'x'.repeat(200);
+  for (let index = 0; index < 400; index += 1) writeFileSync(join(top, `${name}${index}`), '');
+  const all = gitUntracked(top);
+  assert.deepEqual([all.paths.length, all.truncated], [400, false]);
+  const cut = gitUntracked(top, 1024);
+  assert.equal(cut.truncated, true);
+  assert.ok(cut.paths.length > 0 && cut.paths.length < 400, `${cut.paths.length}件`);
+  // The path the cut fell inside is left out rather than reported as a shortened name.
+  for (const path of cut.paths) assert.match(path, /^x{200}\d+$/);
+});
+
+// SPEC §14: the count is a lower bound past the limit, so a cut that left no whole record still says 1件以上, not 0件以上.
+test('countRecords reads whole records, pairs a rename with the path it came from, and counts a cut one', () => {
+  assert.deepEqual(statusRecords(['R  b.txt', 'a.txt', '?? c.txt']), ['R  b.txt', '?? c.txt']);
+  assert.deepEqual(statusRecords(['C  b.txt', 'a.txt', 'RD d.txt', 'c.txt']), ['C  b.txt', 'RD d.txt']);
+  assert.deepEqual(completeFields('?? a\0?? b'), { fields: ['?? a'], fragment: '?? b' });
+  assert.equal(countRecords('?? a\0?? b\0', false), 2);
+  assert.equal(countRecords('?? a\0?? b', true), 1);
+  assert.equal(countRecords('?? half-a-rec', true), 1);
+  assert.equal(countRecords('', true), 0);
+  assert.equal(countRecords('', false), 0);
 });
 
 test('gitAddedFiles lists files added by HEAD, including the root commit', (t) => {

@@ -5,8 +5,9 @@ import { findStateDir, foldsCase, pathKey } from '../files.js';
 import { MAP_LIMITS, directoryTree, importGraph, mainLanguage, planDiagram, scanNotes, skipEntry, } from '../map.js';
 import { NO_LAYERS, attempt, readPlan } from './shared.js';
 export function mapPlan(cwd) {
-    const items = readPlan(cwd);
-    return items.length === 0 ? [NO_LAYERS] : planDiagram(items);
+    const { items, problem } = readPlan(cwd);
+    const lines = items.length === 0 ? [NO_LAYERS] : planDiagram(items);
+    return problem === undefined ? lines : [problem, ...lines];
 }
 function reason(error) {
     return error.code ?? error.message;
