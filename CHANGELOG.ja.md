@@ -4,7 +4,9 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
-## 未リリース
+## 0.4.0 — 2026-09-18
+
+リリース：[v0.4.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.4.0)。
 
 ### 追加
 
