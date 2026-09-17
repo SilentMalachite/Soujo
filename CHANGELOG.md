@@ -9,6 +9,7 @@ The English version is canonical; the Japanese page is a translation. Versions f
 ### Added
 
 - `converge` is a phase, like `spec` and `plan`: `soujo next set --layer converge` writes `effort: high` and refuses any other effort, and `next check`, `resume`, and `close` put `次: converge` after every layer, as they do `次: plan`. A PLAN layer named `converge` is refused by `next set`, `layer done`, and `close`, and warned about by `next check`.
+- `soujo next check` warns about the keyed sections of `SPEC.md`: more than 7 lines under `## 原則`, a line there that is not `- P<n> <name> — <sentence>`, an item without indentation under `## 受け入れ基準` that does not start with an `A<n>` key, and a key repeated within its section. Blank lines, one-line HTML comments, and code fences are not lines of these sections, every problem but the count is named by its line, and a SPEC without these headings is not checked. A `SPEC.md` that cannot be read is warned about with the other warnings.
 
 ### Changed
 

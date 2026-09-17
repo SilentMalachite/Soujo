@@ -30,6 +30,7 @@ import {
   rotateLog,
   validateNext,
   validatePlan,
+  validateSpec,
   type Next,
 } from '../src/state.js';
 
@@ -388,6 +389,101 @@ test('validatePlan reports repeated layer names and layers named like a phase or
     'PLAN.md の層名「spec」がフェーズ名と同じ',
     'PLAN.md の層名「converge」がフェーズ名と同じ',
     'PLAN.md の層名「節目」が LOG の節目と同じ',
+  ]);
+});
+
+const SPEC = [
+  '# SPEC',
+  '',
+  '## 原則',
+  '<!-- 7行まで -->',
+  '- P1 テスト先行 — 実装より先にテストを書く',
+  '',
+  '* P2 依存ゼロ -- node:* だけを使う',
+  '```',
+  '- 例: フェンスの中は行に数えない',
+  '```',
+  '## 目的',
+  '自由な文。',
+  '## 受け入れ基準',
+  '前置きの文。',
+  '- A1 `soujo resume` が4行を出す',
+  '  - 字下げした項目はキーを持たなくてよい',
+  '  続きの行',
+  '1. A2 番号付きの項目',
+  '### 小見出し',
+  '- A3 小見出しの後も同じ節',
+  '# 別の文書',
+  '- 見出しの外',
+  '',
+].join('\n');
+
+test('validateSpec accepts keyed principles and criteria, and a SPEC without their headings', () => {
+  assert.deepEqual(validateSpec(SPEC), []);
+  assert.deepEqual(validateSpec(SPEC.replace(/\n/g, '\r\n')), []);
+  assert.deepEqual(validateSpec(''), []);
+  // Headings of another name or level, in a code fence, or in English are not the keyed sections.
+  const unchecked = ['## Principles', '- x', '### 原則', '- x', '# 原則', '- x', '```', '## 原則', '- x', '```', '## 原則について', '- x'];
+  assert.deepEqual(validateSpec(unchecked.join('\n')), []);
+  const principles = Array.from({ length: 7 }, (_, index) => `- P${index + 1} 名前 — 文`);
+  assert.deepEqual(validateSpec(['##  原則  ', ...principles, '<!-- a -->', ''].join('\n')), []);
+});
+
+test('validateSpec names each principle out of form by its line', () => {
+  const lines = [
+    '## 原則',
+    '- P1 名前 — 文',
+    '- P2 名前のみ',
+    '- P3 — 名前がない',
+    '- P4 文がない —',
+    '- A5 別の節のキー — 文',
+    '- P0 ゼロ — 文',
+    '- P06 先頭の0 — 文',
+    '- 名前 — キーがない',
+    '  - P8 字下げ — 文',
+    '-P9 空白がない — 文',
+    '自由な文',
+    '### 小見出し',
+    '<!-- 2行の',
+    'コメント -->',
+    '- P10 区切りの後の — は文の一部 — 文',
+  ];
+  assert.deepEqual(
+    validateSpec(lines.join('\n')),
+    [
+      'SPEC.md の原則が7行を超えている（15行）',
+      ...[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((line) => `SPEC.md の${line}行目が原則の形（- P<n> <名前> — <1文>）でない`),
+    ],
+  );
+});
+
+test('validateSpec names unkeyed criteria and repeated keys by their line', () => {
+  const lines = [
+    '## 受け入れ基準',
+    '- A1 基準',
+    '- キーがない',
+    '+ P1 原則のキー',
+    '2) A1 重複',
+    '-',
+    '- A1',
+    '## 原則',
+    '- P1 名前 — 文',
+    '- P1 名前 — 重複',
+    '- P1 形が違っても重複',
+    '## 受け入れ基準',
+    '- A2 同じ名前の節は続き',
+    '- A2 重複',
+  ];
+  assert.deepEqual(validateSpec(lines.join('\n')), [
+    'SPEC.md の3行目の受け入れ基準にキー（A<n>）がない',
+    'SPEC.md の4行目の受け入れ基準にキー（A<n>）がない',
+    'SPEC.md の5行目のキー「A1」が重複',
+    'SPEC.md の6行目の受け入れ基準にキー（A<n>）がない',
+    'SPEC.md の7行目のキー「A1」が重複',
+    'SPEC.md の10行目のキー「P1」が重複',
+    'SPEC.md の11行目が原則の形（- P<n> <名前> — <1文>）でない',
+    'SPEC.md の11行目のキー「P1」が重複',
+    'SPEC.md の14行目のキー「A2」が重複',
   ]);
 });
 

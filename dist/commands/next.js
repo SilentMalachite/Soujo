@@ -2,7 +2,7 @@
 import { dirname } from 'node:path';
 import { findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitChangeCount, gitToplevel } from '../git.js';
-import { PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, } from '../state.js';
+import { PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, validateSpec, } from '../state.js';
 // How many problems a warning names before counting the rest, so that the line stays readable where a hook shows it.
 const SHOWN_PROBLEMS = 4;
 // The one line that names problems: the first SHOWN_PROBLEMS of them, then how many are left. Problems named by line are one
@@ -94,6 +94,16 @@ function planState(dir) {
         return { problems: [reason(error)] };
     }
 }
+// A warning, not a refusal, like missingConditions: an existing SPEC out of form still resumes. A missing SPEC is no problem
+// here; resume points to the spec skill for it.
+function specProblems(dir) {
+    try {
+        return validateSpec(readState(dir, 'SPEC.md') ?? '');
+    }
+    catch (error) {
+        return [reason(error)];
+    }
+}
 function logProblems(dir, now) {
     try {
         const { moved } = rotateLog(readState(dir, 'LOG.md') ?? '', formatDate(now).slice(0, 7));
@@ -124,6 +134,7 @@ function problems(dir, now) {
         }
     }
     found.push(...plan.problems);
+    found.push(...specProblems(dir));
     found.push(...logProblems(dir, now));
     found.push(...changeProblems(dirname(dir)));
     return found;

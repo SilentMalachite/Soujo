@@ -9,6 +9,7 @@
 ### 追加
 
 - `converge` を `spec`・`plan` と同じフェーズにする：`soujo next set --layer converge` は `effort: high` を書き、ほかの effort を拒否する。`next check`・`resume`・`close` は `次: plan` と同じく `次: converge` を全層の後ろとみなす。`converge` という名前の PLAN の層は、`next set`・`layer done`・`close` が拒否し、`next check` が警告する。
+- `soujo next check` は `SPEC.md` のキー付きの節を検査して警告する：`## 原則` が7行を超える、そこに `- P<n> <名前> — <1文>` でない行がある、`## 受け入れ基準` の字下げのない項目が `A<n>` のキーで始まらない、キーが節の中で重複する。空行・1行の HTML コメント・コードフェンスはこれらの節の行に数えず、行数以外は行番号で示し、この見出しのない SPEC は検査しない。読めない `SPEC.md` は、ほかの警告と並べて警告する。
 
 ### 変更
 

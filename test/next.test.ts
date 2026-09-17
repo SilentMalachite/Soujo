@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nextCheck, nextSet, nextShow } from '../src/commands/next.js';
+import { packageDir, readTemplate } from '../src/files.js';
 import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 
 const NEXT = '次: L2 state\n前提: L1 完了\n確認: npm test が通る\n注意: なし\neffort: medium\n';
@@ -310,6 +311,32 @@ test('next check reports an unreadable LOG.md together with the other warnings',
   assert.deepEqual(nextCheck(shared, false), [
     'soujo 警告: NEXT.md がない / PLAN.md を読まない: 実体（symlink の先）が LOG.md と同じ / LOG.md を読まない: 実体が PLAN.md（symlink）の先と同じ',
   ]);
+});
+
+test('next check warns about SPEC.md lines out of the keyed form, after PLAN and before the uncommitted changes', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': `${PLAN}- [ ] L3 io\n`, 'SPEC.md': '## 原則\n- P1 名前だけ\n' });
+  assert.deepEqual(nextCheck(dir, false), [
+    'soujo 警告: PLAN.md の3行目の層「L3 io」に完了条件がない / SPEC.md の2行目が原則の形（- P<n> <名前> — <1文>）でない / 未コミットの変更 1件',
+  ]);
+
+  const spec = `# SPEC\n\n## 原則\n${'- P1 名前 — 文\n'.repeat(8)}\n## 受け入れ基準\n- キーがない\n`;
+  const many = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'SPEC.md': spec });
+  assert.deepEqual(nextCheck(many, false), [
+    'soujo 警告: SPEC.md の原則が7行を超えている（8行） / SPEC.md の5行目のキー「P1」が重複 / SPEC.md の6行目のキー「P1」が重複 / SPEC.md の7行目のキー「P1」が重複 / ほか5件',
+  ]);
+
+  // The template, a SPEC without the keyed headings (this repository's English one), and a missing SPEC are not warned about.
+  for (const text of [readTemplate('SPEC.md'), readFileSync(join(packageDir(), 'SPEC.md'), 'utf8'), undefined]) {
+    const clean = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'SPEC.md': text });
+    assert.deepEqual(nextCheck(clean, false), [], text?.slice(0, 20));
+  }
+});
+
+test('next check reports an unreadable SPEC.md together with the other warnings', (t) => {
+  const dir = project(temp(t), { 'PLAN.md': PLAN });
+  mkdirSync(join(dir, '.soujo', 'SPEC.md'));
+  const [line] = nextCheck(dir, false);
+  assert.match(line ?? '', /^soujo 警告: NEXT\.md がない \/ SPEC\.md を読めない: .+$/);
 });
 
 test('next check reports an unreadable PLAN.md together with the warnings about NEXT.md', (t) => {

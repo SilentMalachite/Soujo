@@ -18,6 +18,7 @@ import {
   printable,
   validateNext,
   validatePlan,
+  validateSpec,
   type Effort,
   type Next,
   type NextInput,
@@ -116,6 +117,16 @@ function planState(dir: string): { problems: string[]; items?: PlanItem[] } {
   }
 }
 
+// A warning, not a refusal, like missingConditions: an existing SPEC out of form still resumes. A missing SPEC is no problem
+// here; resume points to the spec skill for it.
+function specProblems(dir: string): string[] {
+  try {
+    return validateSpec(readState(dir, 'SPEC.md') ?? '');
+  } catch (error) {
+    return [reason(error)];
+  }
+}
+
 function logProblems(dir: string, now: Date): string[] {
   try {
     const { moved } = rotateLog(readState(dir, 'LOG.md') ?? '', formatDate(now).slice(0, 7));
@@ -143,6 +154,7 @@ function problems(dir: string, now: Date): string[] {
     }
   }
   found.push(...plan.problems);
+  found.push(...specProblems(dir));
   found.push(...logProblems(dir, now));
   found.push(...changeProblems(dirname(dir)));
   return found;

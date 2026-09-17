@@ -1,5 +1,5 @@
-次: L33 spec-check
-前提: L32 済: converge が PHASES に入り、全層完了時の resume は /soujo:converge を示す
-確認: validateSpec が原則の7行超・形の違う行・キーのない受け入れ基準・重複キーを行番号付きで返し、next check がそれと SPEC.md を読めないことを警告することがテストで通り、CHANGELOG(+ja) に載る
-注意: validateSpec は state.ts の純粋関数に。見出しのない SPEC（この repo の英語 SPEC）は検査しない。dist は npm run build で更新
-effort: high
+次: L34 spec-template
+前提: L33 済: validateSpec（state.ts）と next check の SPEC 警告・読めない SPEC の警告
+確認: templates/SPEC.md に原則と受け入れ基準のキーの形があり、resume が見出し・空行・HTML コメントだけの SPEC を旧テンプレートも含めて未作成とみなすことがテストで通り、CHANGELOG(+ja) に載る
+注意: 新テンプレートでも next check が無警告であること（next.test に既存テストあり）。resume の specUnwritten を置き換える。dist は npm run build で更新
+effort: medium

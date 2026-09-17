@@ -5,6 +5,7 @@ export type Effort = (typeof EFFORTS)[number];
 
 export const NEXT_MAX_LINES = 5;
 export const LOG_MAX_LINES = 3;
+export const PRINCIPLES_MAX_LINES = 7;
 
 /**
  * Steps outside PLAN's layers, matched exactly after trimming: spec and plan before the first layer, converge after the last,
@@ -72,6 +73,17 @@ const PLAN_SEPARATORS = new Set(['—', '–', '--', '-']);
 // dotAll as in PLAN_ITEM: a layer name written by hand with a line separator in it is still read as a heading, instead of its
 // lines being taken for the entry before it.
 const LOG_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s+(.+)$/s;
+// The keyed sections of SPEC.md by their literal headings (SPEC §5), each with the letter of its keys.
+const SPEC_SECTIONS = new Map([
+  ['原則', 'P'],
+  ['受け入れ基準', 'A'],
+]);
+// An ATX heading's marker: one to six "#" indented by at most three spaces, followed by a space, a tab, or the line's end.
+const HEADING = /^ {0,3}(#{1,6})(?=[ \t]|$)/;
+// A list item's marker at the very start of the line (SPEC §5 counts only items without indentation): a bullet or an ordered
+// number, followed by a space, a tab, or the line's end.
+const LIST_MARKER = /^(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)/;
+const SPEC_KEY = /^([PA])[1-9][0-9]*$/;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 // Characters that move the cursor or break lines on a terminal: C0 controls (tab, CR, LF included), DEL, the C1 controls
@@ -208,17 +220,15 @@ function fenceOf(line: string): { marker: string; info: string } | undefined {
 }
 
 /**
- * PLAN.md read as a checklist. Lines that are not items are ignored, and so is everything inside a code fence: an item there
- * is an example of the format, not a layer, and neither markDone nor validatePlan may touch it. A fence closes on the same
- * character, at least as long, with nothing but spaces after; one left open runs to the end of the file, which validatePlan
- * reports, since the layers it swallows would otherwise go missing without a word.
+ * Calls visit with each line outside a code fence (its CR dropped) and the line's 0-based index, and returns the 1-based line
+ * of a fence never closed, or undefined when every fence closed. A fence closes on the same character, at least as long, with
+ * nothing but spaces after; one left open runs to the end of the text.
  */
-function planItems(text: string): PlanScan {
-  const items: PlanScan['items'] = [];
-  const lines = text.split('\n');
+function eachOutsideFences(lines: readonly string[], visit: (line: string, index: number) => void): number | undefined {
   let open: { marker: string; line: number } | undefined;
   lines.forEach((raw, index) => {
-    const fence = fenceOf(raw.replace(/\r$/, ''));
+    const line = raw.replace(/\r$/, '');
+    const fence = fenceOf(line);
     if (open !== undefined) {
       const closes = fence !== undefined && fence.marker[0] === open.marker[0] && fence.marker.length >= open.marker.length;
       if (closes && FENCE_BLANK.test(fence.info)) open = undefined;
@@ -228,10 +238,24 @@ function planItems(text: string): PlanScan {
       open = { marker: fence.marker, line: index + 1 };
       return;
     }
-    const match = matchItem(raw.replace(/\r$/, ''));
+    visit(line, index);
+  });
+  return open?.line;
+}
+
+/**
+ * PLAN.md read as a checklist. Lines that are not items are ignored, and so is everything inside a code fence: an item there
+ * is an example of the format, not a layer, and neither markDone nor validatePlan may touch it. A fence left open runs to the
+ * end of the file, which validatePlan reports, since the layers it swallows would otherwise go missing without a word.
+ */
+function planItems(text: string): PlanScan {
+  const items: PlanScan['items'] = [];
+  const lines = text.split('\n');
+  const unclosed = eachOutsideFences(lines, (line, index) => {
+    const match = matchItem(line);
     if (match) items.push({ item: { ...splitItem(match[2] ?? ''), done: match[1] !== ' ' }, line: index + 1 });
   });
-  return open === undefined ? { items, lines } : { items, lines, unclosed: open.line };
+  return unclosed === undefined ? { items, lines } : { items, lines, unclosed };
 }
 
 /** Checklist items of PLAN.md with the 1-based line each is on; other lines and code fences are ignored (see planItems). */
@@ -314,6 +338,60 @@ export function checkMismatch(next: Next, items: readonly PlanItem[]): string | 
   if (matches.length !== 1 || item === undefined || item.condition === '') return undefined;
   if (sameWords(next.check, item.condition)) return undefined;
   return `NEXT.md の確認が PLAN の層「${next.layer}」の完了条件と違う（PLAN に合わせて soujo next set）`;
+}
+
+// A comment that opens and closes on its line; a longer one is lines of its section.
+function isOneLineComment(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.length >= '<!---->'.length && trimmed.startsWith('<!--') && trimmed.endsWith('-->');
+}
+
+/**
+ * Problems of SPEC.md's keyed sections (SPEC §5), in line order after the count; empty when valid, and for a SPEC without
+ * their headings. `## 原則` holds at most PRINCIPLES_MAX_LINES lines, each an item `P<n> <name> — <sentence>`; every item of
+ * `## 受け入れ基準` without indentation starts with its `A<n>` key, and other text may stand between them. A section runs to
+ * the next heading of level 1 or 2 and takes in every section of its name. Blank lines, one-line HTML comments, and code
+ * fences are no lines of a section. Every problem but the count is named by line, since a line out of form cannot be quoted
+ * back; a line both out of form and repeating a key gets both, so that one fix does not reveal the other only on the next run.
+ */
+export function validateSpec(text: string): string[] {
+  const problems: string[] = [];
+  const keys = new Set<string>();
+  let letter: string | undefined;
+  let principles = 0;
+  eachOutsideFences(text.split('\n'), (line, index) => {
+    const heading = HEADING.exec(line);
+    const level = heading?.[1]?.length ?? 0;
+    if (heading !== null && level <= 2) {
+      letter = level === 2 ? SPEC_SECTIONS.get(line.slice(heading[0].length).trim()) : undefined;
+      return;
+    }
+    if (letter === undefined || line.trim() === '' || isOneLineComment(line)) return;
+    const at = `SPEC.md の${index + 1}行目`;
+    const marker = LIST_MARKER.exec(line);
+    const rest = marker === null ? '' : line.slice(marker[0].length).trim();
+    const words = rest === '' ? [] : rest.split(/\s+/);
+    const key = SPEC_KEY.exec(words[0] ?? '')?.[1] === letter ? words[0] : undefined;
+    if (letter === 'P') {
+      principles += 1;
+      // The name is at least one word before the first separator, and the sentence at least one after it.
+      const separator = words.findIndex((word, position) => position > 0 && PLAN_SEPARATORS.has(word));
+      if (marker === null || key === undefined || separator < 2 || separator === words.length - 1) {
+        problems.push(`${at}が原則の形（- P<n> <名前> — <1文>）でない`);
+      }
+    } else if (marker === null) {
+      return;
+    } else if (key === undefined) {
+      problems.push(`${at}の受け入れ基準にキー（A<n>）がない`);
+    }
+    if (key === undefined) return;
+    if (keys.has(key)) problems.push(`${at}のキー「${key}」が重複`);
+    else keys.add(key);
+  });
+  if (principles > PRINCIPLES_MAX_LINES) {
+    problems.unshift(`SPEC.md の原則が${PRINCIPLES_MAX_LINES}行を超えている（${principles}行）`);
+  }
+  return problems;
 }
 
 /** "[x] <layer>" or "[ ] <layer>", as plan list and map plan show a layer. */

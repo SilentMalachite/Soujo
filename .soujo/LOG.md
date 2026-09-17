@@ -393,3 +393,8 @@ PLAN.md に 6層: L32 phase-converge〜L37 converge-verify（Spec-kit の consti
 converge を PHASES に追加（全層の後ろ・effort high・層名で拒否）
 全層完了で NEXT.md が使えないとき resume は /soujo:converge を示す
 state/next/resume/layer テスト追加、CHANGELOG(+ja) 記載
+
+## 2026-09-17 L33 spec-check
+validateSpec: 原則7行超・形の違う行・キーのない基準・重複キーを行番号付きで返す
+next check が SPEC の問題と読めない SPEC.md を警告（PLAN の後ろ）
+コードフェンス走査を eachOutsideFences に共通化、CHANGELOG(+ja) 記載
