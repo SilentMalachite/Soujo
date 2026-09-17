@@ -35,4 +35,4 @@ claude --plugin-dir .   # 導入せずに作業ツリーのプラグインを試
 
 ## プルリクエスト
 
-1つのプルリクエストに1つの話題。変更前後の動作と、どう確かめたかを書く。CI はプルリクエストと `main` への push のたびに、Ubuntu の Node 20・22・24・26 と macOS の Node 24 で `npm test` を実行する。通ることが条件。Dependabot は固定したアクションと devDependencies の更新を毎月提案する。TypeScript の更新は、そのブランチで `npm run build` して `dist/` をコミットしてから CI が通る。利用者に見える変更は、リリース時にメンテナーが [CHANGELOG.ja.md](CHANGELOG.ja.md) に載せる。それより前に載せる変更は `## 未リリース` の下で待ち、`package.json` の版はリリースまで直前のリリースのままにする。
+1つのプルリクエストに1つの話題。変更前後の動作と、どう確かめたかを書く。CI はプルリクエストと `main` への push のたびに、Ubuntu の Node 20・22・24・26 と、macOS・Windows の Node 24 で `npm test` を実行する。通ることが条件。Dependabot は固定したアクションと devDependencies の更新を毎月提案する。TypeScript の更新は、そのブランチで `npm run build` して `dist/` をコミットしてから CI が通る。利用者に見える変更は、リリース時にメンテナーが [CHANGELOG.ja.md](CHANGELOG.ja.md) に載せる。それより前に載せる変更は `## 未リリース` の下で待ち、`package.json` の版はリリースまで直前のリリースのままにする。

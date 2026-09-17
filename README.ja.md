@@ -96,13 +96,13 @@ Claude Code のプラグインは `version` を書いていないので、新し
 
 git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init` が `.soujo/` と、なければ `CLAUDE.md`・`AGENTS.md` を作る。既存のファイルは上書きしない。
 
-`spec`・`plan`・`converge` はコミットしないので、次の `/soujo:go` が層を締めるまで Claude Code の Stop フックが未コミットの変更を警告する。差のなかった `converge` の後は、SPEC が変わって層が締まるまで続く。
+`spec`・`plan`・`converge` はコミットしない。それらが変えた `.soujo/` は、次の `/soujo:go` が層を締めるまで（差のなかった `converge` の後は SPEC が変わって層が締まるまで）未コミットのまま待つ。`NEXT.md` がこの3つのどれかを指す間、Claude Code の Stop フックは未コミット件数から `.soujo/` を外すので、フェーズがコミットしないつもりの記録については黙る。それ以外の場所の変更は今までどおり警告する。
 
 ## ホストごとの注意
 
 | | Claude Code | Codex |
 |---|---|---|
-| フック | SessionStart で `NEXT.md` を文脈に入れ、Stop で `NEXT.md` がない・無効・PLAN と食い違う、未コミットの変更がある、または `soujo log rotate` が2か月分以上のエントリを移せるときに警告する（止めない） | 頼らない。止まる前に `$close`。Codex は信頼した後だけ `hooks/hooks.json` を実行するが、未確認なので信頼しないでおく |
+| フック | SessionStart で `NEXT.md` を文脈に入れ、Stop で `NEXT.md` がない・無効・PLAN と食い違う、未コミットの変更がある（`次:` がフェーズの間は `.soujo/` を除く）、または `soujo log rotate` が2か月分以上のエントリを移せるときに警告する（止めない） | 頼らない。止まる前に `$close`。Codex は信頼した後だけ `hooks/hooks.json` を実行するが、未確認なので信頼しないでおく |
 | effort | `/soujo:go` の前に、`NEXT.md` の `effort:` を見て会話で自分で設定 | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` か `~/.codex/config.toml` の `model_reasoning_effort` |
 | コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`soujo layer done` / `soujo close` の昇格を承認する（`codex exec` は `--add-dir "$PWD/.git"`）。再実行はコミットだけをやり直す |
 | サブエージェント | `review` が `soujo:reviewer` を1体だけ起動。`export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` で並列数を抑える | 使わない |
@@ -118,14 +118,14 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo next show [--hook]` | `NEXT.md` を出す。無効ならその問題を挙げる1行も。`--hook` は SessionStart フック用 |
 | `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える。`spec` / `plan` / `converge` の effort は常に `high` |
 | `soujo next check [--hook]` | 再開できない状態を警告する。終了コードは常に0。`--hook` は Stop フック用 |
-| `soujo plan list` / `soujo plan next` | 層と状態 / 次の層 |
+| `soujo plan list` / `soujo plan next` | 層と状態 / 次の層。その前に `PLAN.md` 自体を使えなくしているものを1行で示す |
 | `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記。`LOG.md` が同じ未コミットのエントリで終わっていれば足さない |
 | `soujo log rotate [--before <YYYY-MM>]` | 今月（か `--before`）より前の月のエントリをそのままの形で `LOG-YYYY-MM.md` へ移し（最後のエントリと最後の `節目` エントリは残す）、`log: rotate <月>` でコミット。ほかの未コミットの変更があれば拒否し、失敗後の再実行は同じ移動を仕上げる |
 | `soujo layer done '<層>' [--note '<メモ>']` | PLAN の層にチェック → LOG に追記 → `layer: <層>` でコミット。git に無視されていない未追跡ファイルが認証情報のファイル名（`.env`・`.npmrc`・SSH の鍵・`*.pem` など）なら拒否する |
 | `soujo resume` | 4行の現在地。最終コミットから暦日で3日以上なら `再開:` が `soujo brief` を指す |
 | `soujo brief` | 何日も・何週間も離れた後に戻るための5行：PLAN の進捗と最後の層、その後のコミット、最後の `節目` エントリ、最終コミットからの日数（暦日）、次の一手。何も書かない |
 | `soujo close [--note '<メモ>']` | 中断を記録 → `wip: <層>` でコミット。`layer done` がコミット前に拒否するものは拒否する |
-| `soujo map plan` / `soujo map code [<ディレクトリ>]` | 計画の ASCII 図 / import の Mermaid 図かディレクトリ木。`<ディレクトリ>` がプロジェクトの外なら注記する |
+| `soujo map plan` / `soujo map code [<ディレクトリ>]` | 計画の ASCII 図（`PLAN.md` が使えないときは同じ1行を前に置く） / import の Mermaid 図かディレクトリ木。`<ディレクトリ>` がプロジェクトの外なら注記する |
 
 ## 開発
 

@@ -96,13 +96,13 @@ If `codex plugin marketplace upgrade soujo` fails with `` marketplace `soujo` is
 
 In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, which creates `.soujo/` and, when missing, `CLAUDE.md` and `AGENTS.md`. Existing files are never overwritten.
 
-`spec`, `plan`, and `converge` do not commit, so the Claude Code Stop hook warns about uncommitted changes until the next `/soujo:go` closes a layer; after a `converge` that found no gap, until SPEC changes and a layer is closed.
+`spec`, `plan`, and `converge` do not commit; their `.soujo/` changes wait for the next `/soujo:go` to close a layer, and after a `converge` that found no gap, for SPEC to change and a layer to be closed. While `NEXT.md` points at one of the three, the Claude Code Stop hook leaves `.soujo/` out of its count of uncommitted changes, so it is quiet about records the phase is not meant to commit; a change anywhere else still warns.
 
 ## Host notes
 
 | | Claude Code | Codex |
 |---|---|---|
-| Hooks | SessionStart adds `NEXT.md` to the context; Stop warns (never blocks) when `NEXT.md` is missing, invalid, or out of step with PLAN, changes are uncommitted, or `soujo log rotate` would move entries of two or more months | Not relied on: use `$close` before stopping. Codex runs `hooks/hooks.json` only after you trust it; that is unverified, so leave it untrusted |
+| Hooks | SessionStart adds `NEXT.md` to the context; Stop warns (never blocks) when `NEXT.md` is missing, invalid, or out of step with PLAN, changes are uncommitted (`.soujo/` left out while `次:` is a phase), or `soujo log rotate` would move entries of two or more months | Not relied on: use `$close` before stopping. Codex runs `hooks/hooks.json` only after you trust it; that is unverified, so leave it untrusted |
 | Effort | Set it yourself in the conversation before `/soujo:go`, from `effort:` in `NEXT.md` | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` or `model_reasoning_effort` in `~/.codex/config.toml` |
 | Commits | Normal permissions | The `workspace-write` sandbox cannot write `.git`: approve the escalation for `soujo layer done` / `soujo close` (`codex exec`: `--add-dir "$PWD/.git"`). Re-running retries only the commit |
 | Subagents | `review` starts one `soujo:reviewer`. `export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` caps parallel subagents | Not used |
@@ -118,14 +118,14 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo next show [--hook]` | Prints `NEXT.md`, with one line naming its problems when it is invalid; `--hook` is for the SessionStart hook |
 | `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md`; `spec` / `plan` / `converge` always get effort `high` |
 | `soujo next check [--hook]` | Warns when the project is not resumable; always exits 0; `--hook` is for the Stop hook |
-| `soujo plan list` / `soujo plan next` | Layers with their state / the next layer |
+| `soujo plan list` / `soujo plan next` | Layers with their state / the next layer, after one line naming what makes `PLAN.md` itself unusable |
 | `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md`; nothing when `LOG.md` already ends with the same uncommitted entry |
 | `soujo log rotate [--before <YYYY-MM>]` | Moves entries of months before the current one (or `--before`) into `LOG-YYYY-MM.md` as they are, keeping the last entry and the last `節目` entry, and commits `log: rotate <months>`; refuses other uncommitted changes, and a re-run after a failure finishes the same rotation |
 | `soujo layer done '<layer>' [--note '<note>']` | Checks the layer in PLAN → appends LOG → commits `layer: <layer>`; refuses while an untracked file that git does not ignore is named like a credential file (`.env`, `.npmrc`, SSH keys, `*.pem`, …) |
 | `soujo resume` | Four-line status; from 3 calendar days after the last commit, `再開:` points to `soujo brief` |
 | `soujo brief` | Five lines for returning after days or weeks away: PLAN progress and the last layer, commits since it, the last `節目` entry, calendar days since the last commit, the next step; writes nothing |
 | `soujo close [--note '<note>']` | Logs the interruption → commits `wip: <layer>`; refuses what `layer done` refuses before committing |
-| `soujo map plan` / `soujo map code [<dir>]` | ASCII plan diagram / Mermaid import graph or directory tree, with a note when `<dir>` is outside the project |
+| `soujo map plan` / `soujo map code [<dir>]` | ASCII plan diagram, after the same line when `PLAN.md` is unusable / Mermaid import graph or directory tree, with a note when `<dir>` is outside the project |
 
 ## Development
 

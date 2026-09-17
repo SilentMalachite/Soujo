@@ -454,3 +454,7 @@ converge: 収束（§2-1〜7・§12-1〜12）
 ## 2026-09-18 release-0.4.0
 0.4.0 をリリース（2026-09-18）: L32〜L38 の原則（キー付き SPEC・next check の警告）と converge フェーズ・スキル
 package.json・package-lock.json・.codex-plugin/plugin.json を 0.4.0 にし、CHANGELOG(+ja) を 0.4.0 — 2026-09-18 に
+
+## 2026-09-18 release-0.5.0
+0.5.0 をリリース（2026-09-18）: 外部レビューの指摘12件の修正と、フェーズ中の Stop フックの静粛化、Windows の CI
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.5.0 にし、CHANGELOG(+ja) を 0.5.0 — 2026-09-18 に
