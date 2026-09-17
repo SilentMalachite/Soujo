@@ -322,3 +322,7 @@
 ## L38 の Codex レビュー（0件・`4c6c50d`）
 - 指摘なし。対象は `4c6c50d` と、その後の converge の未コミット分（収束の節目・`次: plan`）。planLayers のテスト（行番号・フェンス内除外・CRLF・閉じないフェンス）、公開関数すべてのテスト参照、収束の判定と記録の形式を確認。Codex は読み取り専用で、Serena を MCP として一時的に接続し（`find_symbol`・`find_referencing_symbols`・`search_for_pattern`・`get_symbols_overview`）、Graphify は CLI（`update` 後に `query`・`explain`・`path`）で使った。型検査と書き込み不要の state テスト57件を実行。
 - 修正なし。全415件（414通過・1件スキップ）は手元で通過済み。converge の LOG・NEXT は、スキルどおり次の `layer done` までコミットしない。
+
+## SPEC の公開関数一覧の Codex レビュー（0件・`fdc472a`）
+- 指摘なし。§6 の一覧と `state.ts` の公開32関数（`contentLines`・`specUnwritten` を含む）の過不足、日英の一致、並び、ほかの文書の直し漏れ、コミット規約を確認。Codex は読み取り専用で、Serena を MCP として一時的に接続し（`activate_project`・`get_symbols_overview`・`find_symbol`・`find_referencing_symbols`・`search_for_pattern`）、Graphify は CLI（`update` 後に `explain`・`query`）で使った。型検査を実行。
+- 1回目は Serena の起動が間に合わずツールが見つからなかったため、「見つからなければ待って探し直す」を依頼文に足して再実行した。修正なし。全415件（414通過・1件スキップ）は手元で通過済み。
