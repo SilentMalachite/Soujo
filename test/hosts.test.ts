@@ -89,6 +89,13 @@ const OWN_SECTION: Record<string, string> = {
   'AGENTS.md': '\n## Soujo 本体（このリポジトリだけ）\n',
 };
 
+// When each host asks about a principle, in its own wording: Opus 5 goes on without confirmations otherwise, and Astra is
+// told what it may do rather than where to stop.
+const ASK: Record<string, string> = {
+  'CLAUDE.md': '原則に反さずには完了条件を満たせないときだけ、1問聞く。',
+  'AGENTS.md': '原則を守ると完了条件を満たせないときは、その食い違いを1問聞いてよい（依存しない部分は続けてよい）。',
+};
+
 // SPEC §14: CLAUDE.md / AGENTS.md and their templates say only that the principles outrank the rest; the principles are in SPEC.
 test('CLAUDE.md and AGENTS.md are their templates plus their own section, and say once that the principles outrank the rest', () => {
   for (const [file, own] of Object.entries(OWN_SECTION)) {
@@ -97,12 +104,14 @@ test('CLAUDE.md and AGENTS.md are their templates plus their own section, and sa
     const index = text.indexOf(own);
     assert.ok(index !== -1, `${file} に本体の節`);
     assert.equal(text.slice(0, index), template, `${file} の本体の節より上は templates/${file} と同一`);
-    const lines = template.split('\n').filter((line) => line.includes('原則'));
-    assert.equal(lines.length, 1, `templates/${file} で原則に触れるのは1行`);
-    for (const word of ['`.soujo/SPEC.md`', '`## 原則`', 'SPEC のほかの節・PLAN の完了条件・既存のコードより優先する', '1問聞']) {
-      assert.ok(lines[0]?.includes(word), `templates/${file} の原則の行に ${word}`);
+    for (const [label, whole] of [[`templates/${file}`, template], [file, text]] as const) {
+      const lines = whole.split('\n').filter((line) => line.includes('原則'));
+      assert.equal(lines.length, 1, `${label} で原則に触れるのは1行`);
+      for (const word of ['`.soujo/SPEC.md`', '`## 原則`', 'SPEC のほかの節・PLAN の完了条件・既存のコードより優先する', ASK[file] ?? '']) {
+        assert.ok(lines[0]?.includes(word), `${label} の原則の行に ${word}`);
+      }
+      assert.doesNotMatch(whole, /\bP\d+\b|P<n>/, `${label} に原則そのものを書かない`);
     }
-    assert.doesNotMatch(template, /\bP\d+\b|P<n>/, `templates/${file} に原則そのものを書かない`);
   }
 });
 

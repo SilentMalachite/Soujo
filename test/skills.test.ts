@@ -290,12 +290,12 @@ test('spec settles the principles in one question and writes keyed principles an
         `該当節（${headings.join('・')}）`,
         '7行まで',
         'キーは再利用も振り直しもせず',
-        '意味を変えずにキーだけ足す',
+        '既存の SPEC のキーのない原則・基準は、意味を変えずにこの形へ直す（原則には名前と `—` も補う）',
         `${headings.length}節が埋まるか7問に達したら終える`,
-        '原則の節には書かず空のまま',
+        '埋まらない節は「未定」と書く。ただし原則が決まらなければ、原則の節は「未定」と書かず空のままにする',
       ],
     ],
-    ['soujo に頼むこと', ['（原則を変えたら 原則: <変えたキーと何を>）']],
+    ['soujo に頼むこと', ['（原則を変えたら 原則: <変えたキーと何を>）', "--line '未決: <「未定」の節と、決まらず空のままの原則。なければ なし>'"]],
     ['出力の形', ['原則はキーと名前']],
   ];
   assert.equal(headings[0], '原則', 'テンプレートの最初の節は原則');
@@ -314,6 +314,9 @@ test('spec settles the principles in one question and writes keyed principles an
   // 未定 is text beside the criteria, but a line that is not a principle under 原則, which is why that section stays empty.
   assert.deepEqual(validateSpec('## 原則\n\n## 受け入れ基準\n未定\n'), []);
   assert.deepEqual(validateSpec('## 原則\n未定\n'), ['SPEC.md の2行目が原則の形（- P<n> <名前> — <1文>）でない']);
+  // A principle of an older SPEC needs a name and "—" besides its key, which is why the skill supplies them.
+  assert.deepEqual(validateSpec('## 原則\n- P1 実行時依存を増やさない。\n'), ['SPEC.md の2行目が原則の形（- P<n> <名前> — <1文>）でない']);
+  assert.deepEqual(validateSpec('## 原則\n- P1 依存ゼロ — 実行時依存を増やさない。\n'), []);
 });
 
 // SPEC §7: what converge reads, how it classifies, what it writes, and what it shows.
@@ -468,9 +471,11 @@ test('the review skill hands the reviewer a range, and the reviewer takes the di
 test('review and the reviewer read the principles and put their violations first, keyed', () => {
   const READS = '`.soujo/SPEC.md` の原則（`P<n>` の行。キーがなければ原則の節）';
   const OUTRANK = '原則はほかの SPEC の節・完了条件・既存のコードより優先する';
-  const FIRST = '原則の違反は先頭の行にまとめ、「何が」をキー（`P<n>`）で始める。';
+  // One row per violation, keyed; a SPEC without keys has its section and number stand in, as in converge.
+  const FIRST = '原則の違反は1件1行で表の先頭から並べ、「何が」をそのキー（`P<n>`。キーのない SPEC では節と番号）で始める。';
   const review = sections(body('review'));
   assert.ok((review.get('読むもの') ?? []).some((line) => line.includes(READS)), 'review は原則を読む');
+  assert.ok((review.get('やること')?.[0] ?? '').includes('返った表を加工せずに出す'), 'review は reviewer の表を加工しない');
   assert.ok((review.get('やること') ?? []).some((line) => line.includes('原則の違反は先に並べる') && line.includes(OUTRANK)), 'review は原則の違反を先に');
   assert.ok((review.get('出力の形')?.[0] ?? '').includes(FIRST), 'review の表の並び');
 
