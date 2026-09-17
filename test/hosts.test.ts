@@ -43,7 +43,9 @@ const HOOKS: Record<string, string> = {
 
 // Runs a hook command the way Claude Code does: through the shell, from the session directory, with CLAUDE_PLUGIN_ROOT set.
 function runHook(event: string, cwd: string): { status: number | null; stdout: string } {
-  const result = spawnSync(HOOKS[event] ?? '', {
+  // The host substitutes ${CLAUDE_PLUGIN_ROOT} itself before running the command; cmd.exe would leave it as written.
+  const command = (HOOKS[event] ?? '').split('${CLAUDE_PLUGIN_ROOT}').join(packageDir());
+  const result = spawnSync(command, {
     shell: true,
     cwd,
     env: { ...process.env, CLAUDE_PLUGIN_ROOT: packageDir() },

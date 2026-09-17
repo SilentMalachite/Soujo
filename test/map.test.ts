@@ -760,7 +760,8 @@ test('map code cuts a large scan with a note', (t) => {
   ]);
 });
 
-test('map code skips unreadable directories and files with a note', { skip: asRoot }, (t) => {
+// Skipped on Windows, where chmod moves no permission a read has to obey, so nothing would be unreadable.
+test('map code skips unreadable directories and files with a note', { skip: asRoot || process.platform === 'win32' }, (t) => {
   const dir = write(temp(t), { 'a.ts': "import './b.js';", 'b.ts': '', 'secret/c.ts': '' });
   chmodSync(join(dir, 'secret'), 0o000);
   chmodSync(join(dir, 'b.ts'), 0o000);

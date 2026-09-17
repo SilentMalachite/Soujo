@@ -205,7 +205,8 @@ test('Object.prototype names are unknown commands, also with --help', () => {
   }
 });
 
-test('an error message with a long whitespace run is flattened quickly', () => {
+// Skipped on Windows, whose command line holds about 32 000 characters: the argument would never reach the CLI.
+test('an error message with a long whitespace run is flattened quickly', { skip: process.platform === 'win32' }, () => {
   const started = performance.now();
   const result = soujo(`a${' '.repeat(100_000)}b`);
   assert.equal(result.status, 1);

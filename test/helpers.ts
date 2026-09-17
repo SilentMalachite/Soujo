@@ -1,9 +1,9 @@
 import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRunning, type StateFile } from '../src/files.js';
 import { REPOSITORY_ENV } from '../src/git.js';
@@ -45,6 +45,14 @@ export function livePid(t: TestContext): number {
   const { pid } = child;
   if (pid === undefined || pid <= 0) throw new Error('livePid: 子プロセスを起動できない');
   return pid;
+}
+
+/**
+ * A path as one spelling, so that a comparison does not turn on how the name was written: the separators and, on Windows, the
+ * 8.3 short name that `os.tmpdir()` hands back where git prints the long one.
+ */
+export function samePath(path: string): string {
+  return resolve(realpathSync.native(path));
 }
 
 /** A temporary directory removed after the test. */

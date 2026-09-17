@@ -30,12 +30,12 @@ import {
   gitUntracked,
   statusRecords,
 } from '../src/git.js';
-import { commitAll, repo, temp } from './helpers.js';
+import { commitAll, repo, samePath, temp } from './helpers.js';
 
 test('gitToplevel finds the repository root from a subdirectory, or undefined outside', (t) => {
   const dir = repo(t);
   mkdirSync(join(dir, 'sub'));
-  assert.equal(gitToplevel(join(dir, 'sub')), realpathSync(dir));
+  assert.equal(samePath(gitToplevel(join(dir, 'sub')) ?? ''), samePath(dir));
   assert.equal(gitToplevel(temp(t)), undefined);
 });
 
@@ -73,7 +73,7 @@ test('git calls ignore the variables that point git at another repository', (t) 
     for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete process.env[name];
   });
   Object.assign(process.env, { GIT_DIR: join(other, '.git'), GIT_WORK_TREE: other, GIT_INDEX_FILE: join(other, '.git', 'index') });
-  assert.equal(gitToplevel(dir), realpathSync(dir));
+  assert.equal(samePath(gitToplevel(dir) ?? ''), samePath(dir));
   writeFileSync(join(dir, 'a.txt'), 'a\n');
   assert.deepEqual(gitStatus(dir), ['?? a.txt']);
   gitAddAll(dir);
@@ -234,7 +234,8 @@ test('status, staging, and commits are limited to cwd and below', (t) => {
   assert.equal(gitHasStagedChanges(app), false);
 });
 
-test('gitStatusExcluding leaves out the given paths literally, and gitChangedPaths tells which given paths changed', (t) => {
+// Skipped on Windows, which keeps no name holding "?": the pathspec taken literally is what the test is about.
+test('gitStatusExcluding leaves out the given paths literally, and gitChangedPaths tells which given paths changed', { skip: process.platform === 'win32' }, (t) => {
   const top = repo(t);
   const app = join(top, 'app');
   mkdirSync(join(app, '.soujo'), { recursive: true });
