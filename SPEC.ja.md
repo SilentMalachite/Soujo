@@ -227,10 +227,11 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 
 ## 12. 受け入れ基準
 
-基準1〜10 は 2026-09-13 に L12 で確認した。`soujo` は `npm link`、プラグインは両ホストに導入（`claude plugin install`・`codex plugin add`）。対象は既存の Python プロジェクト（AgentReview 0.4.0、テストは `unittest`）の複製で、元から独自の `AGENTS.md` があったため `soujo init` は `CLAUDE.md` だけを足し、Codex はそのプロジェクトの `AGENTS.md` のもとで動いた。`spec`・`plan`・L1 を Claude Code、L2 を Codex、L3 を Claude Code で進めた。要約は `.soujo/LOG.md`。基準11・12 は原則と `converge`（L32〜L37）に伴うもので、L37 で同じやり方で確認する。
+基準1〜10 は 2026-09-13 に L12 で確認した。`soujo` は `npm link`、プラグインは両ホストに導入（`claude plugin install`・`codex plugin add`）。対象は既存の Python プロジェクト（AgentReview 0.4.0、テストは `unittest`）の複製で、元から独自の `AGENTS.md` があったため `soujo init` は `CLAUDE.md` だけを足し、Codex はそのプロジェクトの `AGENTS.md` のもとで動いた。`spec`・`plan`・L1 を Claude Code、L2 を Codex、L3 を Claude Code で進めた。要約は `.soujo/LOG.md`。基準11・12 は原則と `converge`（L32〜L37）に伴うもので、2026-09-18 に L37 で同じやり方で確認した。`soujo` を `npm link` し直し、両ホストのプラグインを GitHub からそのコミットに更新した後（§8）。AgentReview 0.4.0 の新しい複製で、`spec`・`plan`（4層）・L1〜L3 を Claude Code で進め、その SPEC に基準 A6 を手で足し、その複製2つで最後の層から先をホストごとに進めた。
 
 - Claude Code：`claude -p` に `--permission-mode acceptEdits` と、`soujo`・`git`・`python3` とファイル操作ツールの許可リスト。`spec` は1セッションを `--resume` で4往復、`plan`・L1・`resume`・L3・`review`・Stop フックの確認はそれぞれ新しいセッション。
 - Codex：`codex exec`（`workspace-write`、`--add-dir .git`）で `$resume` と L2 の `$go` を別セッションで実行。Soujo のフックは信頼しないまま。
+- L37：各ホストで `resume`、`go`（最後の層 L4 と、切り替わった先の `converge`）、`go`（足された層と、再びの `converge`）を、それぞれ新しいセッションで実行。足された層の前に、新しい基準が原則に反するため両ホストの `go` が1問聞き、答えを受けて続けた（`claude -p --resume`・`codex exec … resume`）。収束した Codex のプロジェクトの複製で `$converge` を名指しで実行し、形の崩れた SPEC を置いた複製で `soujo next check` を実行した。
 - 基準5・7・9・10 は `soujo close` / `soujo next check`・`validate_plugin.py`・`npm test`・`readlink "$(command -v soujo)"` を直接実行して確認。
 
 | # | 基準 | 状態 |
@@ -245,8 +246,8 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 | 8 | `review` の出力が表形式で、件数を絞っていない | ✓ Claude Code のみ：`soujo:reviewer` の8件を順に全部。ただし加工あり（§14） |
 | 9 | `npm test` が通る。`state.ts` の公開関数それぞれに1つ以上のテストがある | ✓ L12 時点で171テスト |
 | 10 | CLI は実行時依存ゼロで、`npm i -g` または `npm link` 後に `soujo` が PATH から呼べる | ✓ `soujo` はこのリポジトリの `dist/cli.js` を指す |
-| 11 | `spec` が7行以内の原則とキー付きの受け入れ基準を書き、その形から外れた `SPEC.md` を `soujo next check` が警告する | —（L37） |
-| 12 | 最後の層の後、両ホストで `resume` → `go` が `converge` を走らせる：差があればキー付きの層を足し、次の `go` がそれを締め、その後の `converge` が収束を記録して `NEXT.md` を `plan` に向ける | —（L37） |
+| 11 | `spec` が7行以内の原則とキー付きの受け入れ基準を書き、その形から外れた `SPEC.md` を `soujo next check` が警告する | ✓ `spec` は7問を1つずつ聞き、形どおりの原則4行と A1〜A5 を書いた（`next check` の警告なし）。原則9行（うち1行は形の崩れ）・重複キー・キーのない基準を持つ SPEC では、`next check` が警告して終了0 |
+| 12 | 最後の層の後、両ホストで `resume` → `go` が `converge` を走らせる：差があればキー付きの層を足し、次の `go` がそれを締め、その後の `converge` が収束を記録して `NEXT.md` を `plan` に向ける | ✓ 両ホストで：`go` が L4 を締めて `converge` に切り替わり、`（A6 missing）` で終わる層を足した。次の `go` がそれを締め、その後の `converge` が `converge: 収束` を記録し、PLAN を変えずに `次: plan` にした |
 
 ## 13. 実装
 
@@ -295,14 +296,17 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - Spec-kit の constitution は、5つ目の状態ファイルではなく `SPEC.md` の `原則` の節にする（L32〜L37）：`- P<n> <名前> — <1文>` を7行まで。ほかの節・完了条件・既存のコードより優先する。こうすると規則は `go` が再開時にもともと読むファイルにあり、判定できる7行なら関門の工程なしに毎層で当てはめられる：`go` は原則に反さないと完了条件を満たせないとき1問だけ聞き、`reviewer` は原則を最初に見て、`converge` は違反を先頭に置く。Spec-kit の semver と同期レポートは持たない：原則を変えるのは `spec` の対話だけで、何を変えたかは `brief` が示すその `節目` エントリに書く。CLAUDE.md / AGENTS.md とそのテンプレートは「原則がほかより優先する」とだけ書き、原則そのものは SPEC の1か所にだけ書く。
 - 原則と受け入れ基準はキー（`P<n>`・`A<n>`）を持ち、再利用も振り直しもしない。`converge` が足す層が何を閉じるかを名指し（`（A3 partial）`）、後の `converge` が計画済みの差を見分けられるようにするため。`next check` は、形の違う原則の行・7行を超える原則・キーのない字下げなしの基準・重複したキーを警告し、拒否はしない。既存の SPEC でも再開できるように。欠けたキー（原則なら名前も）は `spec` スキルが意味を変えずに付ける。読むのはテンプレートの日本語の見出しだけ（§5）。CLI が `NEXT.md` のキーを字面で読むのと同じ。それを持たない SPEC（このリポジトリの英語の SPEC など）は検査せず、`converge` は節ごとに読む。
 - Spec-kit の converge は、最後の層の後のフェーズ `次: converge` にする（L32〜L37）。各層は自分の完了条件で確かめられ、その総和を SPEC に照らすのはここだけなので、§2 が外した検証の工程ではない。`plan` が読まないコードを読み、費用も大きいので、`plan` のモードではなく独立したフェーズにする。書くのは PLAN・LOG・NEXT だけ：層を追記するだけなら、チェック済みの行とその `layer:` コミットの意味は変わらず、SPEC とコードを変えるのは `spec` と `go` だけのままになる。`unrequested` の実装は層にしない。残す（SPEC を変える）か消すかは利用者が決めることだから。全層が完了して `NEXT.md` が使えないとき、`resume` は `converge` を示す。SPEC にあって PLAN が受け取らなかったものも `converge` が見つける。`SPEC.md` のテンプレートは原則とともに変わるので、`resume` は`#` の見出し・空行・HTML コメントしか持たない SPEC を、どの版のテンプレートから複製されたものでも未作成とみなす。
+- `$converge` は Codex の組み込みと衝突しない（L37）：Codex のシステムスキルは `imagegen`・`openai-docs`・`plugin-creator`・`review-agent`・`skill-creator`・`skill-installer` で、`$converge` は `soujo:converge` を読み込んだ。
 
 未決：
 - Codex 0.154 はユーザーが信頼すると `hooks/hooks.json` を実行する（`~/.codex/config.toml` の `[hooks.state]`）。そこで `${CLAUDE_PLUGIN_ROOT}` が展開されるか、`systemMessage` が表示されるかは未確認。
 - `spec` スキルが、回答ごとではなく最後にまとめて `SPEC.md` を書きがち（L12 では再現せず）。
 - `spec` / `plan` / `converge` はコミットしない。次の `layer done` までは、それらが変えた `.soujo/` が未コミットで、Stop フックが毎回警告する。差のなかった `converge` の後は、SPEC が変わって層が締まるまでそれが続く。フェーズの記録をコミットするコマンドがあれば、3つとも解消する。
-- `$converge` が Codex の組み込みと衝突しないか、`converge` 1回の文脈量は L37 で確かめる。
+- `converge` の文脈量（L37）：Codex では `$converge` 単独で入力48.8万トークン（キャッシュ44.3万）、`converge` を続けた `$go` で69.1万（キャッシュ64.1万）。Claude Code では `converge` を続けた `go` が35ターンでキャッシュから123万トークンを読んだ（ターンの合計）。
+- `converge` の判定は毎回同じとは限らない（L37）：収束した Codex の複製でもう一度 `$converge` を実行すると、コピー設置から `agent-review --version` を起動すると `.pyc` が書かれることを見つけ、前回はテストが書き込みを抑えていたため met とした原則（ファイルを書かない）に反するとして層を足した。収束の後の `converge` が層を足すことがある。
+- Claude Code の `converge` は、`soujo init` が足した `CLAUDE.md` を `unrequested` に挙げた（L37）。Codex は挙げなかった。スキルは `unrequested` をコードについて定めている。
 - Codex の文脈量：`$go` 1回で入力約30万〜69万トークン（大半キャッシュ。主に Codex 全体の文脈）。L12 では無関係なグローバルスキルも読み、Codex のメモリファイルを検索した。
 - Claude Code の `review` は `soujo:reviewer` の指摘を順に全部残したが、返った表を加工せずに出さなかった（§7）：パスを短くし、セルを言い換え、句をいくつか落とし、前置きの1文を足した。
 - `soujo:reviewer` は場所の列に絶対パスを書く。`agents/reviewer.md` は `path:line` としか指定していない。
-- Bash の許可リストのもとで、`spec` の最初のコマンド（`command -v soujo && soujo init; ls; …`）が1回拒否され、モデルは単独のコマンドでやり直した。
+- Bash の許可リストのもとで、`spec` の最初のコマンド（`command -v soujo && soujo init; ls; …`）が1回拒否され、モデルは単独のコマンドでやり直した（L37 でも同じ）。
 - `go`（L3）は、既存のテストが求めたため、導入先 SPEC の範囲外の `CHANGELOG.ja.md` も変えた。報告はしたが SPEC は直さなかった。

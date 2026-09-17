@@ -425,3 +425,12 @@ plan は追記だけ。skills テストに本文の条件と CLI の終わり方
 spec は原則を1問で決め P/A キー付きで5節を書き、原則の節は空のままにする。go は原則に反するときだけ1問聞く
 review と reviewer は原則を読み、違反を P<n> で始めて先に並べる。CLAUDE/AGENTS とテンプレートは原則の優先だけを述べる
 skills・hosts テストに原則の検査を足し、README(+ja)・CHANGELOG(+ja) に載せた
+
+## 2026-09-18 節目
+PLAN の全層完了: 原則（キー付き SPEC・next check の警告）と converge を両ホストで実地確認し、SPEC §12 の基準1〜12 が ✓
+未決: converge の判定が回ごとに揺れる・unrequested に soujo init の CLAUDE.md・converge の文脈量（SPEC §14）
+
+## 2026-09-18 L37 converge-verify
+両ホストで AgentReview の複製を go → converge（A6 missing を層に）→ go → converge（収束・次: plan）と回し、$converge は soujo:converge に解決。
+SPEC(+ja) §12 の基準11・12 を ✓、§14 に converge の文脈量・判定の揺れ・unrequested の CLAUDE.md を追加。手順と結果は .soujo/L37-VERIFY.md。
+main を push して両ホストのプラグインを d582448 に更新し、PATH の soujo を npm link し直した。
