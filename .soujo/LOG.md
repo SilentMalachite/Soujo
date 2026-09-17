@@ -446,3 +446,7 @@ PLAN の全層完了: planLayers の直接テストが加わり、state.ts の�
 ## 2026-09-18 L38 plan-layers-test
 test/state.test.ts に planLayers の直接テストを追加（行番号・フェンス内除外・CRLF・閉じないフェンス）
 state.ts の公開関数すべてが state.test.ts に現れる
+
+## 2026-09-18 節目
+converge: 収束（§2-1〜7・§12-1〜12）
+未決: SPEC にキーがない（§2 の原則を §2-1〜7、§12 の基準を §12-1〜12 と呼んだ）。unrequested なし
