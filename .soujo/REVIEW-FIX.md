@@ -318,3 +318,7 @@
 | 2 | L37-VERIFY.md の流れ図と手順が実績（4層・L1〜L3 の後に複製・L4/L5 で検証・崩れた SPEC は原則9行）と合わない（P3） | 図と手順4・8を実績に合わせた |
 - 対象は `b2e7c6c` と、その後の converge の未コミット分（L38 の追加）。L38 の差（§12-9 partial: `planLayers` に state.test.ts のテストがない）は妥当、ほかの差・unrequested はなしとの判定。Codex は読み取り専用で、Serena を MCP として一時的に接続し（`find_symbol`・`find_referencing_symbols`・`search_for_pattern`）、Graphify は CLI（`query`・`explain`）で使い、実機の JSON/JSONL と複製の履歴を照合。型検査と書き込み不要の102件を実行。
 - 修正は Serena（`replace_content`）と Graphify（`update`・`query`）で行った。どちらも記録の修正でコードは変えていない。型検査と全414件（413通過・1件スキップ）は手元で通過済み。converge の PLAN・LOG・NEXT は、スキルどおり L38 の `layer done` までコミットしない。
+
+## L38 の Codex レビュー（0件・`4c6c50d`）
+- 指摘なし。対象は `4c6c50d` と、その後の converge の未コミット分（収束の節目・`次: plan`）。planLayers のテスト（行番号・フェンス内除外・CRLF・閉じないフェンス）、公開関数すべてのテスト参照、収束の判定と記録の形式を確認。Codex は読み取り専用で、Serena を MCP として一時的に接続し（`find_symbol`・`find_referencing_symbols`・`search_for_pattern`・`get_symbols_overview`）、Graphify は CLI（`update` 後に `query`・`explain`・`path`）で使った。型検査と書き込み不要の state テスト57件を実行。
+- 修正なし。全415件（414通過・1件スキップ）は手元で通過済み。converge の LOG・NEXT は、スキルどおり次の `layer done` までコミットしない。
