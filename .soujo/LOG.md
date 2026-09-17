@@ -434,3 +434,15 @@ PLAN の全層完了: 原則（キー付き SPEC・next check の警告）と co
 両ホストで AgentReview の複製を go → converge（A6 missing を層に）→ go → converge（収束・次: plan）と回し、$converge は soujo:converge に解決。
 SPEC(+ja) §12 の基準11・12 を ✓、§14 に converge の文脈量・判定の揺れ・unrequested の CLAUDE.md を追加。手順と結果は .soujo/L37-VERIFY.md。
 main を push して両ホストのプラグインを d582448 に更新し、PATH の soujo を npm link し直した。
+
+## 2026-09-18 節目
+converge: 差 §12-9・PLAN.md に 1層を追加
+未決: SPEC にキーがない（§2 の原則を §2-1〜7、§12 の基準を §12-1〜12 と呼んだ）。unrequested なし
+
+## 2026-09-18 節目
+PLAN の全層完了: planLayers の直接テストが加わり、state.ts の公開関数すべてが state.test.ts に現れる
+未決: なし
+
+## 2026-09-18 L38 plan-layers-test
+test/state.test.ts に planLayers の直接テストを追加（行番号・フェンス内除外・CRLF・閉じないフェンス）
+state.ts の公開関数すべてが state.test.ts に現れる

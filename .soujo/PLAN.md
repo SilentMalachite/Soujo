@@ -37,4 +37,5 @@
 - [x] L35 skill-converge — skills/converge/SKILL.md があり、go が最後の層で 節目 → next set converge → layer done と締めて converge に切り替わり、skills テスト（8スキル・フェーズの effort・節目が next set より前）と README(+ja) の全スキル表記が通り、CHANGELOG(+ja) に載る
 - [x] L36 skill-principles — spec が原則を1問で決めてキー付きで書き、go が原則に反するときは1問聞き、reviewer と review が原則違反を先に出し、CLAUDE.md・AGENTS.md とそのテンプレートが原則の優先を述べ、skills・hosts テストが通り、README(+ja)・CHANGELOG(+ja) に載る
 - [x] L37 converge-verify — 既存プロジェクトの複製で両ホストが go → converge（差を層に）→ go → converge（収束）を回し、$converge が組み込みと衝突せず、SPEC(+ja) §12 の基準11・12 が ✓ になる
+- [x] L38 plan-layers-test — test/state.test.ts に planLayers の直接のテスト（各項目の行番号・コードフェンス内の行を数えない）があり、state.ts の公開関数すべてが state.test.ts に現れ、npm test が通る（§12-9 partial）
 

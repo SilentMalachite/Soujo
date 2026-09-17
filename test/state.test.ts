@@ -24,6 +24,7 @@ import {
   parseLog,
   parseNext,
   parsePlan,
+  planLayers,
   printable,
   removedEntries,
   requireMonth,
@@ -148,6 +149,21 @@ test('parsePlan reads checklist items and splits at the first separator', () => 
   ]);
   assert.equal(parsePlan('- [X] L1 — c\r\n')[0]?.done, true);
   assert.equal(parsePlan('- [X] L1 — c\r\n')[0]?.condition, 'c');
+});
+
+test('planLayers gives each item its line number and skips items inside code fences', () => {
+  assert.deepEqual(planLayers(PLAN), [
+    { item: { layer: 'L1 scaffold', condition: 'build が通る', done: true }, line: 3 },
+    { item: { layer: 'L2 state', condition: '9関数 — テストあり', done: false }, line: 4 },
+    { item: { layer: 'L3 io', condition: '', done: false }, line: 5 },
+  ]);
+  // Fence lines and the lines inside them are not items, but they still count toward the line numbers after them.
+  const text = ['- [ ] L1 — a', '```markdown', '- [ ] X — b', '```', '', '- [x] L2 — c', ''].join('\r\n');
+  assert.deepEqual(planLayers(text), [
+    { item: { layer: 'L1', condition: 'a', done: false }, line: 1 },
+    { item: { layer: 'L2', condition: 'c', done: true }, line: 6 },
+  ]);
+  assert.deepEqual(planLayers('- [ ] L1 — a\n~~~\n- [ ] X — b\n'), [{ item: { layer: 'L1', condition: 'a', done: false }, line: 1 }]);
 });
 
 test('parsePlan accepts common separator variants but not hyphens inside words', () => {
