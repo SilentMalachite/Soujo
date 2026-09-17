@@ -1,7 +1,7 @@
 // soujo resume: four lines to continue from — 次 (NEXT.md or PLAN), 前回 (LOG.md), コミット (git), 再開 (what to run).
 
 import { dirname } from 'node:path';
-import { readState, readTemplate, requireStateDir } from '../files.js';
+import { readState, requireStateDir } from '../files.js';
 import { gitChangeCount, type Commit } from '../git.js';
 import {
   daysBetween,
@@ -11,6 +11,7 @@ import {
   nextStatus,
   parseNext,
   parsePlan,
+  specUnwritten,
   validateNext,
   validatePlan,
   type PlanItem,
@@ -20,16 +21,11 @@ import { attempt, clip, commandArg, describeInvalidNext, headState, optionArg, r
 // From this many days since the last commit, 再開 points to soujo brief first.
 const AWAY_DAYS = 3;
 
-function normalized(text: string): string {
-  return text.replace(/\r\n/g, '\n').trim();
-}
-
-// SPEC.md is missing or still the template. Unreadable files count as written, so nothing is guessed from a failure.
-function specUnwritten(dir: string): boolean {
+// SPEC.md is missing or as empty as a template of any version (see specUnwritten). An unreadable file counts as written, so
+// nothing is guessed from a failure.
+function specMissing(dir: string): boolean {
   const spec = attempt(() => readState(dir, 'SPEC.md'));
-  if (spec === undefined) return true;
-  const template = attempt(() => readTemplate('SPEC.md'));
-  return typeof spec === 'string' && typeof template === 'string' && normalized(spec) === normalized(template);
+  return spec === undefined || (typeof spec === 'string' && specUnwritten(spec));
 }
 
 function checkOf(item: PlanItem): string {
@@ -80,7 +76,7 @@ export function nextAndCommand(dir: string, plan: string | undefined | Error): [
   }
   // converge checks the code against SPEC and adds what is missing, what SPEC has and PLAN never got included.
   if (items.length > 0) return ['次: なし（PLAN は全層完了）', `再開: ${reason} → ${skill('converge')}`];
-  if (specUnwritten(dir)) return ['次: なし（SPEC.md が未作成）', `再開: ${reason} → ${skill('spec')}`];
+  if (specMissing(dir)) return ['次: なし（SPEC.md が未作成）', `再開: ${reason} → ${skill('spec')}`];
   return [`次: なし（${plan === undefined ? 'PLAN.md がない' : 'PLAN.md に層がない'}）`, `再開: ${reason} → ${skill('plan')}`];
 }
 

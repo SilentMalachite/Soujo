@@ -372,6 +372,31 @@ export function validateSpec(text) {
     }
     return problems;
 }
+/**
+ * Whether SPEC.md holds nothing but ATX headings, blank lines, and HTML comments, as the template of every version does, so
+ * that a SPEC copied from any of them counts as unwritten. A comment may run over lines; the text of one left open counts as
+ * written. Scanned by position, so that many comment openers stay linear.
+ */
+export function specUnwritten(text) {
+    const kept = [];
+    let position = 0;
+    for (;;) {
+        const start = text.indexOf('<!--', position);
+        const end = start < 0 ? -1 : text.indexOf('-->', start + '<!--'.length);
+        if (end < 0)
+            break;
+        kept.push(text.slice(position, start));
+        position = end + '-->'.length;
+    }
+    kept.push(text.slice(position));
+    return kept
+        .join('')
+        .split('\n')
+        .every((raw) => {
+        const line = raw.replace(/\r$/, '');
+        return line.trim() === '' || HEADING.test(line);
+    });
+}
 /** "[x] <layer>" or "[ ] <layer>", as plan list and map plan show a layer. */
 export function formatItem(item) {
     return `[${item.done ? 'x' : ' '}] ${item.layer}`;

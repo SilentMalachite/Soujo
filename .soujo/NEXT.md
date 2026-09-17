@@ -1,5 +1,5 @@
-次: L34 spec-template
-前提: L33 済: validateSpec（state.ts）と next check の SPEC 警告・読めない SPEC の警告
-確認: templates/SPEC.md に原則と受け入れ基準のキーの形があり、resume が見出し・空行・HTML コメントだけの SPEC を旧テンプレートも含めて未作成とみなすことがテストで通り、CHANGELOG(+ja) に載る
-注意: 新テンプレートでも next check が無警告であること（next.test に既存テストあり）。resume の specUnwritten を置き換える。dist は npm run build で更新
-effort: medium
+次: L35 skill-converge
+前提: L34 済: SPEC テンプレートに原則とキーの形、resume は見出し・空行・コメントだけの SPEC を未作成とみなす
+確認: skills/converge/SKILL.md があり、go が最後の層で 節目 → next set converge → layer done と締めて converge に切り替わり、skills テスト（8スキル・フェーズの effort・節目が next set より前）と README(+ja) の全スキル表記が通り、CHANGELOG(+ja) に載る
+注意: SKILL.md は SPEC §7 の converge 行に従う。skills.test の SKILLS とフェーズ判定（spec/plan）に converge を足す。dist 変更なしでも npm test
+effort: high

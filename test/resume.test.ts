@@ -166,6 +166,17 @@ test('resume and brief degrade only their git lines when git fails in a reposito
 test('resume points to spec, plan, or converge when PLAN has no layer to do', (t) => {
   const cases: [Record<string, string>, string, string][] = [
     [{ 'SPEC.md': readTemplate('SPEC.md') }, '次: なし（SPEC.md が未作成）', '再開: NEXT.md がない → /soujo:spec（Codex は $spec）'],
+    // The template before principles and keys, and one with CRLF, a line left to fill in, and a comment of its own.
+    [
+      { 'SPEC.md': '# SPEC\n\n## 目的\n\n## やらないこと\n\n## 受け入れ基準\n\n## 技術判断\n', 'PLAN.md': '# PLAN\n' },
+      '次: なし（SPEC.md が未作成）',
+      '再開: NEXT.md がない → /soujo:spec（Codex は $spec）',
+    ],
+    [
+      { 'SPEC.md': `${readTemplate('SPEC.md').replaceAll('\n', '\r\n')}## メモ\n<!--\n あとで\n-->\n` },
+      '次: なし（SPEC.md が未作成）',
+      '再開: NEXT.md がない → /soujo:spec（Codex は $spec）',
+    ],
     [{}, '次: なし（SPEC.md が未作成）', '再開: NEXT.md がない → /soujo:spec（Codex は $spec）'],
     [{ 'SPEC.md': '# SPEC\n目的\n' }, '次: なし（PLAN.md がない）', '再開: NEXT.md がない → /soujo:plan（Codex は $plan）'],
     [

@@ -402,3 +402,8 @@ next check が SPEC の問題と読めない SPEC.md を警告（PLAN の後ろ�
 ## 2026-09-17 codex-fix-l33
 Codex レビュー L32〜L33 の6件を修正: 原則は字下げなしの - と — だけを認め、本文を挟むコメント行も行に数え、字下げ・別記号の原則のキーも重複検査に入れる
 テスト追加: 全層完了で NEXT を読めない resume・converge での close・validateSpec の長大入力。指摘は REVIEW-FIX.md
+
+## 2026-09-17 L34 spec-template
+templates/SPEC.md に原則の節とキーの形（1行コメント）、NEXT テンプレートの確認に原則
+specUnwritten（state.ts）: 見出し・空行・HTML コメントだけの SPEC を旧テンプレートも含め未作成とみなし resume が使う
+テスト追加、CHANGELOG(+ja) 記載

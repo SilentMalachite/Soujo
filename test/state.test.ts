@@ -28,6 +28,7 @@ import {
   removedEntries,
   requireMonth,
   rotateLog,
+  specUnwritten,
   validateNext,
   validatePlan,
   validateSpec,
@@ -177,6 +178,7 @@ test('long whitespace runs are processed in linear time', () => {
     `${spaces}- A1`,
   ];
   validateSpec(spec.join('\n'));
+  specUnwritten(`${'<!--'.repeat(100_000)}\n${spaces}#`);
   assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)}ms`);
 });
 
@@ -512,6 +514,29 @@ test('validateSpec names unkeyed criteria and repeated keys by their line', () =
     outOfForm(14),
     'SPEC.md の17行目のキー「A2」が重複',
   ]);
+});
+
+test('specUnwritten takes a SPEC of nothing but headings, blank lines, and HTML comments for unwritten', () => {
+  const unwritten = [
+    '',
+    '\n\n',
+    // The template before principles and keys.
+    '# SPEC\n\n## 目的\n\n## やらないこと\n\n## 受け入れ基準\n\n## 技術判断\n',
+    '# SPEC\r\n\r\n## 原則\r\n<!-- - P1 <名前> — <1文> -->\r\n',
+    '# SPEC\n<!-- 複数行の\n\n本文 --> <!-- b -->\n   ### 字下げ3つの見出し\n#\n## 原則 <!-- a -->\n',
+  ];
+  for (const text of unwritten) assert.equal(specUnwritten(text), true, JSON.stringify(text));
+  const written = [
+    '# SPEC\n目的\n',
+    '## 目的\n- 書いた\n',
+    '# SPEC\n<!-- 閉じない\n## 目的\n',
+    '# SPEC\n<!-- a --> 本文\n',
+    '#タイトル\n',
+    '    # 字下げ4つはコード\n',
+    '```\n# コメント\n```\n',
+    '## 目的\n---\n',
+  ];
+  for (const text of written) assert.equal(specUnwritten(text), false, JSON.stringify(text));
 });
 
 test('validatePlan reports an empty layer name or one with control characters, with its line number', () => {

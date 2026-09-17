@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSyn
 import { join } from 'node:path';
 import { init } from '../src/commands/init.js';
 import { packageDir, readTemplate } from '../src/files.js';
-import { parsePlan, validateNext } from '../src/state.js';
+import { parsePlan, specUnwritten, validateNext, validateSpec } from '../src/state.js';
 import { deadPid, repo, temp } from './helpers.js';
 
 const ALL = ['.soujo/SPEC.md', '.soujo/PLAN.md', '.soujo/LOG.md', '.soujo/NEXT.md', 'CLAUDE.md', 'AGENTS.md'];
@@ -146,6 +146,18 @@ test('init creates what is missing although two state files are one file, and re
 test('templates: NEXT.md is valid, PLAN.md has no layers, CLAUDE.md / AGENTS.md are the repository copies without this repository\'s section', () => {
   assert.deepEqual(validateNext(readTemplate('NEXT.md')), []);
   assert.deepEqual(parsePlan(readTemplate('PLAN.md')), []);
+  const spec = readTemplate('SPEC.md');
+  assert.deepEqual(
+    spec.split('\n').filter((line) => line.startsWith('#')),
+    ['# SPEC', '## 原則', '## 目的', '## やらないこと', '## 受け入れ基準', '## 技術判断'],
+  );
+  assert.deepEqual([validateSpec(spec), specUnwritten(spec)], [[], true]);
+  // The key forms the template shows as comments are the ones next check accepts once written out.
+  const examples = [...spec.matchAll(/^<!-- (- [PA]1 .+) -->$/gm)].map((match) => match[1]);
+  assert.deepEqual(examples.map((line) => line?.slice(0, 5)), ['- P1 ', '- A1 ']);
+  const filled = spec.replace(/^<!-- (- [PA]1 .+) -->$/gm, '$1');
+  assert.deepEqual([validateSpec(filled), specUnwritten(filled)], [[], false]);
+  assert.match(readTemplate('NEXT.md'), /^確認: .*原則・目的・やらないこと・受け入れ基準・技術判断/m);
   for (const file of ['CLAUDE.md', 'AGENTS.md']) {
     const template = readTemplate(file);
     const own = readFileSync(join(packageDir(), file), 'utf8');
