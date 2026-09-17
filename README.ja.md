@@ -22,7 +22,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 
 ```
 /soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:converge（最後の層の後）
-                                 ↑                          │ 差あり: 層として追加
+                                 ↑                          │ 差あり: 層を追加（未完了は最大12）
                                  └──────────────────────────┘ 差なし: 収束。SPEC が変わったら /soujo:plan
 中断後は /soujo:resume（何日・何週間も空いたら soujo brief も）・ 止まる前に /soujo:close
 ```
@@ -32,7 +32,7 @@ AI とのコーディングは途中で途切れる。使用上限、圧縮さ�
 | spec | `/soujo:spec` | `$spec` | 1問ずつ（最大7問）→ `.soujo/SPEC.md`、続けて `LOG.md` に `節目` エントリ |
 | plan | `/soujo:plan` | `$plan` | 30分以内の層、各1行の完了条件 → `.soujo/PLAN.md`、層を足したら `節目` エントリ |
 | go | `/soujo:go` | `$go` | 次の層を実装し、次の `NEXT.md` を書いて（最後の層はその前に `節目` エントリ）`layer: <層>` でコミット。最後の層の後は converge へ続ける |
-| converge | `/soujo:converge` | `$converge` | コードを `SPEC.md` のキー付きの受け入れ基準と原則に照らし、差を1つずつ層として `PLAN.md` に足す（`（A3 partial）`）か、収束を記録する。どちらも `節目` エントリを残す。SPEC もコードも変えない |
+| converge | `/soujo:converge` | `$converge` | コードを `SPEC.md` のキー付きの受け入れ基準と原則に照らし、未完了の層が解消しない差を1つずつ層として `PLAN.md` に足す（`（A3 partial）`。未完了は最大12）か、収束を記録する。どちらも `節目` エントリを残し、何も求めていないコードと上限を超えた差はその未決の行に書く。SPEC もコードも変えない |
 | resume | `/soujo:resume` | `$resume` | 4行：次の層・前回のログ・最新コミット・再開方法。3日以上空いていれば続けて `soujo brief` の5行 |
 | close | `/soujo:close` | `$close` | `中断: …` をログに残し `wip: <層>` でコミット |
 | map | `/soujo:map` | `$map` | 計画の図、import のグラフ、直近の層の Before/After |
@@ -96,7 +96,7 @@ Claude Code のプラグインは `version` を書いていないので、新し
 
 git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init` が `.soujo/` と、なければ `CLAUDE.md`・`AGENTS.md` を作る。既存のファイルは上書きしない。
 
-`spec` と `plan` はコミットしないので、最初の `/soujo:go` がコミットするまで Claude Code の Stop フックが未コミットの変更を警告する。
+`spec`・`plan`・`converge` はコミットしないので、次の `/soujo:go` が層を締めるまで Claude Code の Stop フックが未コミットの変更を警告する。差のなかった `converge` の後は、SPEC が変わって層が締まるまで続く。
 
 ## ホストごとの注意
 

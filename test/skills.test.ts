@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { nextCheck, nextSet } from '../src/commands/next.js';
 import { resume } from '../src/commands/resume.js';
 import { packageDir, readTemplate } from '../src/files.js';
 import { assertKnownCommand, commands, commitAll, project, repo, temp } from './helpers.js';
@@ -260,31 +261,79 @@ test('converge reads keyed lines and the layers\' code, classifies every gap, ap
   const found = sections(body('converge'));
   const text = (section: string) => found.get(section)?.join('\n') ?? '';
   const expected: [string, string[]][] = [
-    ['読むもの', ['`A<n>`・`P<n>` の行', '`layer:` コミットが変えたファイル', '基準の語で検索して見つかる箇所', 'それより先は読まない']],
+    [
+      '読むもの',
+      ['`A<n>`・`P<n>` の行（キーがなければ受け入れ基準と原則を持つ節）', '`layer:`・`wip:` コミットが変えたファイル', '基準の語（識別子にした語も）で検索して見つかる箇所', 'それより先は読まない'],
+    ],
     [
       'やること',
       [
         '`met`・`missing`・`partial`・`contradicts`',
-        '`path:line`',
-        '`unrequested`',
+        '`path:line` で示す（コードが見つからなければ `missing`）',
+        'SPEC も PLAN も求めていないコードは `unrequested`',
         'SPEC とコードは変えない',
-        '同じキーを持つ未完了の層がないもの',
-        '既存の行はそのままに PLAN の末尾へ',
+        'キーのない SPEC では SPEC での呼び名（節と番号）をキーの代わりにし、節目の未決に「SPEC にキーがない」と書く',
+        '差（`missing`・`partial`・`contradicts`）のうち、未完了の層の完了条件では解消しないもの（キーの一致は手がかり）だけ',
+        '既存の行は完了・未完了とも書き換えずに PLAN の末尾へ1差1層で足す',
         '`- [ ] <層名> — <完了条件>（<キー> <種類>）`',
         '原則の違反を先に',
         '未完了の層は最大12',
-        '上限を超えた差は層にせず、節目の未決の行に書く',
+        '`unrequested` と上限を超えた差は層にせず、節目の未決の行に書く',
       ],
     ],
-    ['出力の形', ['差の表 `キー / 種類 / 根拠 / 残り`', '`soujo map plan` の図をそのまま', '`収束: <照らしたキー>` の1行']],
+    [
+      'soujo に頼むこと',
+      [
+        '`PLAN.md の`・`PLAN.md を` で始まる警告があれば何も足さず、その警告を伝えて止める',
+        '差か未完了の層が残れば：',
+        'NEXT.md がない・無効か、`次:` が PLAN の最初の未完了層でないか、警告が `確認:` を指したら',
+        '差も未完了の層もなければ（`unrequested` だけでも）：',
+      ],
+    ],
+    ['出力の形', ['差の表 `キー / 種類 / 根拠 / 残り`', '`soujo map plan` の図をそのまま', '`収束: <照らしたキー>` の1行', 'PLAN.md の問題で止めたら、その警告の1行だけ']],
   ];
   for (const [section, phrases] of expected) {
     for (const phrase of phrases) assert.ok(text(section).includes(phrase), `converge の${section}: ${phrase}`);
   }
-  // With a layer added, next check decides whether NEXT.md moves to it, and the plan is drawn last.
-  const added = commands(found.get('soujo に頼むこと')?.[0] ?? '').map((argv) => argv.slice(0, 2).join(' '));
-  assert.deepEqual(added, ['log add', 'next check', 'next set', 'map plan']);
-  assert.deepEqual(commands(found.get('soujo に頼むこと')?.[1] ?? '').map((argv) => argv.slice(0, 2).join(' ')), ['log add', 'next set']);
+  // next check comes first; then one of two ways, each drawing its own conclusion from the CLI. soujo brief is only named, as
+  // where the 節目 entry shows.
+  const asks = (index: number) =>
+    commands(found.get('soujo に頼むこと')?.[index] ?? '')
+      .map((argv) => argv.slice(0, 2).join(' '))
+      .filter((command) => command !== 'brief');
+  assert.deepEqual([asks(0), asks(1), asks(2)], [['next check'], ['log add', 'next check', 'next set', 'map plan'], ['log add', 'next set']]);
+  const plan = sections(body('plan'));
+  assert.ok((plan.get('読むもの') ?? []).some((line) => line.includes('既存の行は完了・未完了とも書き換えず、足すのは末尾だけ')), 'plan も追記だけ');
+  assert.ok(
+    (plan.get('soujo に頼むこと') ?? []).some((line) => line.includes('未完了の層があって、NEXT.md がない・無効か、`次:` がその最初の層でないか、警告が `確認:` を指したら')),
+    'plan の next set の条件',
+  );
+});
+
+// SPEC §6, §7: what the CLI answers at each way converge ends, which the skill's conditions rely on.
+test('the CLI answers converge\'s endings as the skill expects', (t) => {
+  const done = '- [x] L1 a — a\n';
+  const next = (layer: string) => `次: ${layer}\n前提: p\n確認: c\n注意: なし\neffort: high\n`;
+  // A keyed layer added after every layer: next check names 次:, and next set with the layer's condition quiets it.
+  const added = project(temp(t), { 'PLAN.md': `${done}- [ ] L2 fix — b を満たす（A1 partial）\n`, 'NEXT.md': next('converge') });
+  assert.deepEqual(nextCheck(added, false), ['soujo 警告: NEXT.md の次「converge」より前の「L2 fix」が PLAN で未完了']);
+  nextSet(added, { layer: 'L2 fix', premise: 'converge で差を確認', check: 'b を満たす（A1 partial）', effort: 'medium' });
+  assert.deepEqual(nextCheck(added, false), []);
+  // Without NEXT.md the warning names only the file, so the skill decides from NEXT.md rather than from 次: in a warning.
+  const missing = project(temp(t), { 'PLAN.md': `${done}- [ ] L2 fix — b（A1 missing）\n` });
+  assert.deepEqual(nextCheck(missing, false), ['soujo 警告: NEXT.md がない']);
+  // Converged: next set plan leaves nothing to warn about, and resume goes on with go, which switches to plan.
+  const converged = project(temp(t), { 'PLAN.md': done, 'NEXT.md': next('converge') });
+  nextSet(converged, { layer: 'plan', premise: 'converge で収束', check: 'SPEC に未実装が残っていない' });
+  assert.deepEqual(nextCheck(converged, false), []);
+  assert.deepEqual([resume(converged)[0], resume(converged)[3]], ['次: plan（effort: high）確認: SPEC に未実装が残っていない', '再開: /soujo:go（Codex は $go）']);
+  // An unfinished layer left makes plan too early, which is why converge does not end converged then.
+  const early = project(temp(t), { 'PLAN.md': `${done}- [ ] L2 b — b\n`, 'NEXT.md': next('plan') });
+  assert.deepEqual(nextCheck(early, false), ['soujo 警告: NEXT.md の次「plan」より前の「L2 b」が PLAN で未完了']);
+  // A PLAN problem is a warning starting with "PLAN.md の", the one converge stops on, and next set refuses meanwhile.
+  const broken = project(temp(t), { 'PLAN.md': `${done}- [ ] L2 b — b\n- [ ] L2 b — c\n`, 'NEXT.md': next('converge') });
+  assert.ok((nextCheck(broken, false)[0] ?? '').split(' / ').some((problem) => problem.replace('soujo 警告: ', '').startsWith('PLAN.md の')));
+  assert.throws(() => nextSet(broken, { layer: 'L2 b', premise: 'p', check: 'b' }), /PLAN\.md を直してから/);
 });
 
 // The end of 再開: after 3 days away as the skills and CLAUDE.md / AGENTS.md quote it: the number of days varies, so it is left out.

@@ -416,3 +416,7 @@ SPEC §5 の節目の書き手に converge を追加。後続層分（plan 予�
 skills/converge/SKILL.md を追加（SPEC §7。差が残れば層を追加・なければ収束して次: plan）
 go は最後の層で 節目 → next set converge → layer done → converge。plan の予約名に converge
 skills・hosts テスト、README(+ja)・plugin.json・CLAUDE/AGENTS(+tpl)・SPEC(+ja) §7・CHANGELOG(+ja) 同期
+
+## 2026-09-17 codex-fix-l35
+Codex レビュー L35 の11件を修正: converge は差か未完了層が残るかで分岐し、NEXT は状態で直す。キーなし SPEC・wip・PLAN の問題で停止も明記
+plan は追記だけ。skills テストに本文の条件と CLI の終わり方を追加、README・SPEC(+ja)・CHANGELOG 同期。L36 分4件は予定どおり

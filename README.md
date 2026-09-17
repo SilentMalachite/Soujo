@@ -22,7 +22,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 
 ```
 /soujo:spec → /soujo:plan → /soujo:go → /soujo:go → … → /soujo:converge (after the last layer)
-                                 ↑                          │ gaps: added as layers
+                                 ↑                          │ gaps: new layers, up to 12 unfinished
                                  └──────────────────────────┘ none: converged, /soujo:plan once SPEC changes
 /soujo:resume after a break (with soujo brief after days or weeks away) · /soujo:close before stopping
 ```
@@ -32,7 +32,7 @@ Design and decisions: [SPEC.md](SPEC.md).
 | spec | `/soujo:spec` | `$spec` | One question at a time (at most 7) → `.soujo/SPEC.md`, then a `節目` entry in `LOG.md` |
 | plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added |
 | go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>`; after the last layer, goes on with converge |
-| converge | `/soujo:converge` | `$converge` | Checks the code against the keyed acceptance criteria and principles of `SPEC.md` and appends each gap to `PLAN.md` as a layer (`（A3 partial）`), or records that the code has converged; a `節目` entry either way. Changes neither SPEC nor code |
+| converge | `/soujo:converge` | `$converge` | Checks the code against the keyed acceptance criteria and principles of `SPEC.md` and appends each gap no unfinished layer closes to `PLAN.md` as a layer (`（A3 partial）`, up to 12 unfinished), or records that the code has converged; a `節目` entry either way, whose open line holds code nothing asks for and gaps past the limit. Changes neither SPEC nor code |
 | resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume; from 3 days away, followed by the five lines of `soujo brief` |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
@@ -96,7 +96,7 @@ If `codex plugin marketplace upgrade soujo` fails with `` marketplace `soujo` is
 
 In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, which creates `.soujo/` and, when missing, `CLAUDE.md` and `AGENTS.md`. Existing files are never overwritten.
 
-`spec` and `plan` do not commit, so the Claude Code Stop hook warns about uncommitted changes until the first `/soujo:go` commits.
+`spec`, `plan`, and `converge` do not commit, so the Claude Code Stop hook warns about uncommitted changes until the next `/soujo:go` closes a layer; after a `converge` that found no gap, until SPEC changes and a layer is closed.
 
 ## Host notes
 
