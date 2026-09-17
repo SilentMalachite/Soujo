@@ -305,6 +305,7 @@ OpenAI の「Rethinking skills and prompts for GPT-6 Astra」（2026-09-11）に
 - `converge` の文脈量（L37）：Codex では `$converge` 単独で入力48.8万トークン（キャッシュ44.3万）、`converge` を続けた `$go` で69.1万（キャッシュ64.1万）。Claude Code では `converge` を続けた `go` が35ターンでキャッシュから123万トークンを読んだ（ターンの合計）。
 - `converge` の判定は毎回同じとは限らない（L37）：収束した Codex の複製でもう一度 `$converge` を実行すると、コピー設置から `agent-review --version` を起動すると `.pyc` が書かれることを見つけ、前回はテストが書き込みを抑えていたため met とした原則（ファイルを書かない）に反するとして層を足した。収束の後の `converge` が層を足すことがある。
 - Claude Code の `converge` は、`soujo init` が足した `CLAUDE.md` を `unrequested` に挙げた（L37）。Codex は挙げなかった。スキルは `unrequested` をコードについて定めている。
+- Codex は、拒否されたコマンドの後の `converge` の順を守らないことがあった（L37）：2回とも節目の `log add` に、スキルが定める2行を超えて met の一覧を足し、拒否された（3行まで）。1巡目はそのコマンドを直して再実行してから先へ進んだが、2巡目は先に `next set --layer plan` を実行し、節目はその後に残した。その間で止まっていれば、節目のない `次: plan` が残った。
 - Codex の文脈量：`$go` 1回で入力約30万〜69万トークン（大半キャッシュ。主に Codex 全体の文脈）。L12 では無関係なグローバルスキルも読み、Codex のメモリファイルを検索した。
 - Claude Code の `review` は `soujo:reviewer` の指摘を順に全部残したが、返った表を加工せずに出さなかった（§7）：パスを短くし、セルを言い換え、句をいくつか落とし、前置きの1文を足した。
 - `soujo:reviewer` は場所の列に絶対パスを書く。`agents/reviewer.md` は `path:line` としか指定していない。
