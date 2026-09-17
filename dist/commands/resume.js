@@ -64,8 +64,9 @@ export function nextAndCommand(dir, plan) {
     if (item !== undefined) {
         return [`次: ${clip(item.layer)}（PLAN から）確認: ${checkOf(item)}`, `再開: ${reason} → soujo next set で書いてから ${skill('go')}`];
     }
+    // converge checks the code against SPEC and adds what is missing, what SPEC has and PLAN never got included.
     if (items.length > 0)
-        return ['次: なし（PLAN は全層完了）', `再開: ${reason} → 層を足すなら ${skill('plan')}`];
+        return ['次: なし（PLAN は全層完了）', `再開: ${reason} → ${skill('converge')}`];
     if (specUnwritten(dir))
         return ['次: なし（SPEC.md が未作成）', `再開: ${reason} → ${skill('spec')}`];
     return [`次: なし（${plan === undefined ? 'PLAN.md がない' : 'PLAN.md に層がない'}）`, `再開: ${reason} → ${skill('plan')}`];

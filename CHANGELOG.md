@@ -6,8 +6,13 @@ The English version is canonical; the Japanese page is a translation. Versions f
 
 ## Unreleased
 
+### Added
+
+- `converge` is a phase, like `spec` and `plan`: `soujo next set --layer converge` writes `effort: high` and refuses any other effort, and `next check`, `resume`, and `close` put `次: converge` after every layer, as they do `次: plan`. A PLAN layer named `converge` is refused by `next set`, `layer done`, and `close`, and warned about by `next check`.
+
 ### Changed
 
+- With every layer done and `NEXT.md` missing, unreadable, invalid, or pointing to a finished layer, `soujo resume` points to `/soujo:converge` instead of `/soujo:plan`.
 - `test/cli.test.ts` tests an unreadable current directory made by locking its parent only where that makes it unreadable: Linux answers `getcwd` without checking permissions, which failed CI on Ubuntu since 0.3.1.
 
 ## 0.3.2 — 2026-09-16

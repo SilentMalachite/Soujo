@@ -353,29 +353,40 @@ test('nextStatus tells a finished layer and a layer left unclosed before NEXT.md
   assert.deepEqual(nextStatus('L3', items), { state: 'skipped', unfinished: { layer: 'L2', condition: 'b', done: false } });
 });
 
-test('nextStatus puts plan after every layer, so an unchecked layer before it was never closed', () => {
+test('nextStatus puts plan and converge after every layer, so an unchecked layer before them was never closed', () => {
   const last = parsePlan('- [x] L1 — a\n- [ ] L2 — b\n');
-  assert.deepEqual(nextStatus('plan', last), { state: 'skipped', unfinished: { layer: 'L2', condition: 'b', done: false } });
-  assert.deepEqual(nextStatus('plan', parsePlan('- [ ] L1 — a\n')), { state: 'skipped', unfinished: { layer: 'L1', condition: 'a', done: false } });
-  assert.deepEqual(nextStatus('plan', parsePlan('- [x] L1 — a\n')), { state: 'ok' });
-  assert.deepEqual(nextStatus('plan', []), { state: 'ok' });
+  for (const phase of ['plan', 'converge']) {
+    assert.deepEqual(nextStatus(phase, last), { state: 'skipped', unfinished: { layer: 'L2', condition: 'b', done: false } }, phase);
+    assert.deepEqual(
+      nextStatus(phase, parsePlan('- [ ] L1 — a\n')),
+      { state: 'skipped', unfinished: { layer: 'L1', condition: 'a', done: false } },
+      phase,
+    );
+    assert.deepEqual(nextStatus(phase, parsePlan('- [x] L1 — a\n')), { state: 'ok' }, phase);
+    assert.deepEqual(nextStatus(phase, []), { state: 'ok' }, phase);
+  }
+  assert.deepEqual(nextStatus('Converge', last), { state: 'ok' });
   assert.deepEqual(nextStatus('spec', last), { state: 'ok' });
   assert.deepEqual(nextStatus('L9', last), { state: 'ok' });
 });
 
 test('nextStatus never takes a phase for a PLAN layer of the same name', () => {
-  const named = parsePlan('- [x] spec — a\n- [x] plan — b\n- [ ] L3 — c\n');
+  const named = parsePlan('- [x] spec — a\n- [x] plan — b\n- [x] converge — c\n- [ ] L4 — d\n');
+  const unfinished = { state: 'skipped', unfinished: { layer: 'L4', condition: 'd', done: false } };
   assert.deepEqual(nextStatus('spec', named), { state: 'ok' });
-  assert.deepEqual(nextStatus('plan', named), { state: 'skipped', unfinished: { layer: 'L3', condition: 'c', done: false } });
+  assert.deepEqual(nextStatus('plan', named), unfinished);
+  assert.deepEqual(nextStatus('converge', named), unfinished);
 });
 
 test('validatePlan reports repeated layer names and layers named like a phase or a milestone, once each', () => {
   assert.deepEqual(validatePlan(PLAN), []);
   assert.deepEqual(validatePlan(''), []);
-  assert.deepEqual(validatePlan('- [x] L1 — a\n- [ ] L1 — b\n- [ ] L1\n- [ ] plan — c\n- [x] spec\n- [ ] Plan — d\n- [ ] 節目 — e\n- [x] 節目\n'), [
+  const plan = '- [x] L1 — a\n- [ ] L1 — b\n- [ ] L1\n- [ ] plan — c\n- [x] spec\n- [ ] Plan — d\n- [ ] converge — f\n- [ ] 節目 — e\n- [x] 節目\n';
+  assert.deepEqual(validatePlan(plan), [
     'PLAN.md の層「L1」が重複',
     'PLAN.md の層名「plan」がフェーズ名と同じ',
     'PLAN.md の層名「spec」がフェーズ名と同じ',
+    'PLAN.md の層名「converge」がフェーズ名と同じ',
     'PLAN.md の層名「節目」が LOG の節目と同じ',
   ]);
 });
@@ -510,7 +521,7 @@ test('checkMismatch names a 確認 that is not the completion condition PLAN giv
   assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state — npm test が通る\r\n')), undefined);
   assert.equal(checkMismatch({ ...next, check: next.check.replace('npm test', 'npm\ttest') }, parsePlan('- [ ] L2 state — npm test が通る\n')), undefined);
   // Nothing to compare against: either phase, a layer PLAN does not have, and a layer left without a condition.
-  for (const layer of ['spec', 'plan', 'L9']) assert.equal(checkMismatch({ ...next, layer }, items), undefined, layer);
+  for (const layer of ['spec', 'plan', 'converge', 'L9']) assert.equal(checkMismatch({ ...next, layer }, items), undefined, layer);
   assert.equal(checkMismatch(next, parsePlan('- [ ] L2 state\n')), undefined);
   assert.equal(checkMismatch(next, []), undefined);
   // A repeated layer name matches two conditions, so neither is the layer's: validatePlan names the repeat instead.

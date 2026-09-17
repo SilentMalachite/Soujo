@@ -388,3 +388,8 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.3.2 にし、
 ## 2026-09-17 節目
 PLAN.md に 6層: L32 phase-converge〜L37 converge-verify（Spec-kit の constitution を SPEC の原則に、converge を最後の層の後のフェーズに。SPEC(+ja) §3・§5〜§7・§9〜§14 に記載）
 外したもの: フェーズの記録をコミットするコマンド（§14 未決に残す）・soujo map spec・原則の版番号と同期レポート
+
+## 2026-09-17 L32 phase-converge
+converge を PHASES に追加（全層の後ろ・effort high・層名で拒否）
+全層完了で NEXT.md が使えないとき resume は /soujo:converge を示す
+state/next/resume/layer テスト追加、CHANGELOG(+ja) 記載

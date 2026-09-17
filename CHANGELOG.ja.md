@@ -6,8 +6,13 @@
 
 ## 未リリース
 
+### 追加
+
+- `converge` を `spec`・`plan` と同じフェーズにする：`soujo next set --layer converge` は `effort: high` を書き、ほかの effort を拒否する。`next check`・`resume`・`close` は `次: plan` と同じく `次: converge` を全層の後ろとみなす。`converge` という名前の PLAN の層は、`next set`・`layer done`・`close` が拒否し、`next check` が警告する。
+
 ### 変更
 
+- 全層完了で `NEXT.md` がない・読めない・無効・完了済みの層を指すとき、`soujo resume` は `/soujo:plan` ではなく `/soujo:converge` を案内する。
 - `test/cli.test.ts` は、親ディレクトリを閉じて読めなくした現在のディレクトリを、それで読めなくなる環境でだけ試す。Linux は権限を見ずに `getcwd` に答えるので、0.3.1 以降 Ubuntu の CI が落ちていた。
 
 ## 0.3.2 — 2026-09-16

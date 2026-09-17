@@ -2,8 +2,13 @@
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 export const NEXT_MAX_LINES = 5;
 export const LOG_MAX_LINES = 3;
-/** Steps outside PLAN's layers, matched exactly after trimming: spec and plan before the first layer, plan after the last. */
-export const PHASES = ['spec', 'plan'];
+/**
+ * Steps outside PLAN's layers, matched exactly after trimming: spec and plan before the first layer, converge after the last,
+ * and plan once converge finds no gap.
+ */
+export const PHASES = ['spec', 'plan', 'converge'];
+// The phases that come after every layer, since the go and converge skills write them once the last layer is done.
+const AFTER_LAYERS = ['plan', 'converge'];
 /** The layer name of a LOG entry that marks a milestone: what phase ended and what is open. */
 export const MILESTONE = '節目';
 const NEXT_KEYS = [
@@ -281,14 +286,14 @@ export function nextLayer(items) {
 }
 /**
  * How NEXT.md's layer stands in PLAN: 'done' when it is checked, 'skipped' when an unchecked layer comes before it
- * (NEXT.md was moved on but that layer was never closed), 'ok' otherwise. Phases are never matched to PLAN's layers: "plan"
- * comes after every layer, since the go skill writes it after the last one; "spec" and other layers not in PLAN are 'ok'.
+ * (NEXT.md was moved on but that layer was never closed), 'ok' otherwise. Phases are never matched to PLAN's layers:
+ * "converge" and "plan" come after every layer (AFTER_LAYERS); "spec" and other layers not in PLAN are 'ok'.
  */
 export function nextStatus(layer, items) {
     const found = PHASES.includes(layer) ? -1 : items.findIndex((item) => item.layer === layer);
     if (items[found]?.done)
         return { state: 'done' };
-    const position = layer === 'plan' ? items.length : found;
+    const position = AFTER_LAYERS.includes(layer) ? items.length : found;
     const unfinished = items.findIndex((item) => !item.done);
     const item = items[unfinished];
     return item !== undefined && unfinished < position ? { state: 'skipped', unfinished: item } : { state: 'ok' };

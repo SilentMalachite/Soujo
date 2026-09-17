@@ -94,23 +94,33 @@ test('next set writes nothing for invalid values', (t) => {
   assert.throws(() => nextSet(temp(t), base), /\.soujo\/ が見つからない/);
 });
 
-test('next set refuses a layer missing from PLAN.md except spec and plan, and any layer while PLAN.md has none', (t) => {
+test('next set refuses a layer missing from PLAN.md except the phases, and any layer while PLAN.md has none', (t) => {
   const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
   const base = { premise: 'p', check: 'c' };
-  assert.throws(() => nextSet(dir, { ...base, layer: 'L2' }), /^Error: NEXT\.md を書かない: PLAN\.md に層「L2」がない/);
+  assert.throws(
+    () => nextSet(dir, { ...base, layer: 'L2' }),
+    /^Error: NEXT\.md を書かない: PLAN\.md に層「L2」がない（PLAN の層名をそのまま、または spec \/ plan \/ converge）$/,
+  );
   assert.throws(() => nextSet(dir, { ...base, layer: 'L2 state — test' }), /PLAN\.md に層「L2 state — test」がない/);
   assert.equal(readNext(dir), NEXT);
-  for (const layer of [' L2 state ', 'L1 scaffold', 'spec', 'plan']) {
+  for (const layer of [' L2 state ', 'L1 scaffold', 'spec', 'plan', 'converge']) {
     assert.deepEqual(nextSet(dir, { ...base, layer }), [`NEXT.md を更新: 次: ${layer.trim()}`]);
   }
   const empty = project(temp(t), { 'PLAN.md': '# PLAN\n' });
   assert.deepEqual(nextSet(empty, { ...base, layer: 'L1' }), ['NEXT.md を更新: 次: L1']);
 });
 
-test('next set writes effort high for spec and plan, and refuses any other effort for them', (t) => {
+test('next set writes effort high for spec, plan, and converge, and refuses any other effort for them', (t) => {
   const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
   const base = { premise: 'p', check: 'c' };
-  const accepted: [string, string | undefined][] = [['plan', undefined], [' spec ', undefined], ['plan', 'high'], ['\tplan', ' high ']];
+  const accepted: [string, string | undefined][] = [
+    ['plan', undefined],
+    [' spec ', undefined],
+    ['converge', undefined],
+    ['plan', 'high'],
+    ['\tplan', ' high '],
+    [' converge', 'high'],
+  ];
   for (const [layer, effort] of accepted) {
     assert.deepEqual(nextSet(dir, { ...base, layer, effort }), [`NEXT.md を更新: 次: ${layer.trim()}`]);
     assert.equal(readNext(dir), `次: ${layer.trim()}\n前提: p\n確認: c\n注意: なし\neffort: high\n`, `${layer} ${effort}`);
@@ -122,6 +132,7 @@ test('next set writes effort high for spec and plan, and refuses any other effor
     ['plan', 'medium', /^Error: NEXT\.md を書かない: 層「plan」の effort は high 固定（--effort を外して再実行）$/],
     [' spec ', 'low', /^Error: NEXT\.md を書かない: 層「spec」の effort は high 固定（--effort を外して再実行）$/],
     ['\tspec', ' xhigh ', /^Error: NEXT\.md を書かない: 層「spec」の effort は high 固定/],
+    ['converge ', 'medium', /^Error: NEXT\.md を書かない: 層「converge」の effort は high 固定（--effort を外して再実行）$/],
     // Unknown and multi-line values are reported as for any layer, before the fixed effort.
     ['plan', 'HIGH', /^Error: NEXT\.md を書かない: effort は low\|medium\|high\|xhigh のどれか: HIGH$/],
     ['plan', 'max', /^Error: NEXT\.md を書かない: effort は/],
@@ -130,6 +141,7 @@ test('next set writes effort high for spec and plan, and refuses any other effor
     ['plan\n', 'medium', /「次」は1行で書く/],
     // Phases match exactly, so "Plan" is an ordinary layer and missing from PLAN.md.
     ['Plan', undefined, /PLAN\.md に層「Plan」がない/],
+    ['Converge', undefined, /PLAN\.md に層「Converge」がない/],
   ];
   for (const [layer, effort, error] of refused) {
     assert.throws(() => nextSet(dir, { ...base, layer, effort }), error, `${layer} ${effort}`);
@@ -189,8 +201,10 @@ test('next check warns when NEXT.md moved past a layer that was never closed', (
   const dir = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'L3 io'), 'PLAN.md': `${PLAN}- [ ] L3 io — io\n` });
   assert.deepEqual(nextCheck(dir, false), ['soujo 警告: NEXT.md の次「L3 io」より前の「L2 state」が PLAN で未完了']);
 
-  const plan = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'plan'), 'PLAN.md': PLAN });
-  assert.deepEqual(nextCheck(plan, false), ['soujo 警告: NEXT.md の次「plan」より前の「L2 state」が PLAN で未完了']);
+  for (const phase of ['plan', 'converge']) {
+    const after = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', phase), 'PLAN.md': PLAN });
+    assert.deepEqual(nextCheck(after, false), [`soujo 警告: NEXT.md の次「${phase}」より前の「L2 state」が PLAN で未完了`]);
+  }
 });
 
 test('next check warns about repeated layer names and layers named like a phase, even without NEXT.md', (t) => {
@@ -233,8 +247,10 @@ test('next check warns when 確認 in NEXT.md is not the completion condition PL
   const same = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN.replace('npm test', 'npm\ttest ') });
   assert.deepEqual(nextCheck(same, false), []);
   // Nothing to compare against: a phase, and a layer left without a completion condition (named by that warning alone).
-  const phase = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', 'plan'), 'PLAN.md': '- [x] L1 scaffold — build\n' });
-  assert.deepEqual(nextCheck(phase, false), []);
+  for (const layer of ['plan', 'converge']) {
+    const phase = project(temp(t), { 'NEXT.md': NEXT.replace('L2 state', layer), 'PLAN.md': '- [x] L1 scaffold — build\n' });
+    assert.deepEqual(nextCheck(phase, false), [], layer);
+  }
   const none = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': '- [x] L1 scaffold — build\n- [ ] L2 state\n' });
   assert.deepEqual(nextCheck(none, false), ['soujo 警告: PLAN.md の2行目の層「L2 state」に完了条件がない']);
 });

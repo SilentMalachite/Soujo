@@ -163,7 +163,7 @@ test('resume and brief degrade only their git lines when git fails in a reposito
   assert.deepEqual(brief(dir).slice(0, 2), ['進捗: PLAN 2/4 層完了・最終 layer: git の状態を読めない', '以後: git の状態を読めない']);
 });
 
-test('resume points to spec or plan when PLAN has no layer to do', (t) => {
+test('resume points to spec, plan, or converge when PLAN has no layer to do', (t) => {
   const cases: [Record<string, string>, string, string][] = [
     [{ 'SPEC.md': readTemplate('SPEC.md') }, '次: なし（SPEC.md が未作成）', '再開: NEXT.md がない → /soujo:spec（Codex は $spec）'],
     [{}, '次: なし（SPEC.md が未作成）', '再開: NEXT.md がない → /soujo:spec（Codex は $spec）'],
@@ -176,7 +176,17 @@ test('resume points to spec or plan when PLAN has no layer to do', (t) => {
     [
       { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '- [x] L1 — c\n' },
       '次: なし（PLAN は全層完了）',
-      '再開: NEXT.md がない → 層を足すなら /soujo:plan（Codex は $plan）',
+      '再開: NEXT.md がない → /soujo:converge（Codex は $converge）',
+    ],
+    [
+      { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '- [x] L1 — c\n', 'NEXT.md': '' },
+      '次: なし（PLAN は全層完了）',
+      '再開: NEXT.md が無効: 空 → /soujo:converge（Codex は $converge）',
+    ],
+    [
+      { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '- [x] L1 — c\n', 'NEXT.md': NEXT.replace('L3 io', 'L1') },
+      '次: なし（PLAN は全層完了）',
+      '再開: NEXT.md の次「L1」は PLAN で完了済み → /soujo:converge（Codex は $converge）',
     ],
   ];
   for (const [files, next, command] of cases) {
@@ -198,8 +208,10 @@ test('resume names the unclosed layer when NEXT.md was moved on before layer don
     `再開: 「L3 io」を締めていない → 完了なら soujo layer done 'L3 io'、途中なら soujo next set --layer='L3 io' で次を戻す`,
   ]);
 
-  writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', 'plan'));
-  assert.deepEqual(resume(dir)[0], '次: L3 io（PLAN で未完了。NEXT.md は「plan」）確認: io');
+  for (const phase of ['plan', 'converge']) {
+    writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', phase));
+    assert.deepEqual(resume(dir)[0], `次: L3 io（PLAN で未完了。NEXT.md は「${phase}」）確認: io`);
+  }
 });
 
 test('resume says to re-run layer done when a PLAN check is not committed yet', (t) => {

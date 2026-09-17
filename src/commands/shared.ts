@@ -101,7 +101,7 @@ export function readPlan(cwd: string): PlanItem[] {
 }
 
 /** A skill as typed in Claude Code, with the Codex spelling. */
-export function skill(name: 'go' | 'plan' | 'resume' | 'spec'): string {
+export function skill(name: 'converge' | 'go' | 'plan' | 'resume' | 'spec'): string {
   return `/soujo:${name}（Codex は $${name}）`;
 }
 

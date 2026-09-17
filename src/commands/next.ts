@@ -52,7 +52,7 @@ export function nextShow(cwd: string, hook: boolean): string[] {
   }
 }
 
-// The effort of the spec and plan skills (SPEC §7), so that it is not chosen anew after the last layer.
+// The effort of the spec, plan, and converge skills (SPEC §7), so that it is not chosen anew after the last layer.
 const PHASE_EFFORT: Effort = 'high';
 
 /**

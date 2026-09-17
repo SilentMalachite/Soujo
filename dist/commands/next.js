@@ -31,7 +31,7 @@ export function nextShow(cwd, hook) {
         throw error;
     }
 }
-// The effort of the spec and plan skills (SPEC §7), so that it is not chosen anew after the last layer.
+// The effort of the spec, plan, and converge skills (SPEC §7), so that it is not chosen anew after the last layer.
 const PHASE_EFFORT = 'high';
 /**
  * Rewrites NEXT.md. Writes nothing when the result would be invalid, when a phase gets an effort other than
