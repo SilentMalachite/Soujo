@@ -83,6 +83,29 @@ test('the Codex manifest names every skill in its long description', () => {
   assert.deepEqual([...listed].sort(), skills.map((skill) => `$${skill}`).sort());
 });
 
+// Where the repository's instruction files go on past their templates, with a section init does not copy.
+const OWN_SECTION: Record<string, string> = {
+  'CLAUDE.md': '\n## 8. Soujo 本体（このリポジトリだけ）\n',
+  'AGENTS.md': '\n## Soujo 本体（このリポジトリだけ）\n',
+};
+
+// SPEC §14: CLAUDE.md / AGENTS.md and their templates say only that the principles outrank the rest; the principles are in SPEC.
+test('CLAUDE.md and AGENTS.md are their templates plus their own section, and say once that the principles outrank the rest', () => {
+  for (const [file, own] of Object.entries(OWN_SECTION)) {
+    const template = readFileSync(join(packageDir(), 'templates', file), 'utf8');
+    const text = readFileSync(join(packageDir(), file), 'utf8');
+    const index = text.indexOf(own);
+    assert.ok(index !== -1, `${file} に本体の節`);
+    assert.equal(text.slice(0, index), template, `${file} の本体の節より上は templates/${file} と同一`);
+    const lines = template.split('\n').filter((line) => line.includes('原則'));
+    assert.equal(lines.length, 1, `templates/${file} で原則に触れるのは1行`);
+    for (const word of ['`.soujo/SPEC.md`', '`## 原則`', 'SPEC のほかの節・PLAN の完了条件・既存のコードより優先する', '1問聞']) {
+      assert.ok(lines[0]?.includes(word), `templates/${file} の原則の行に ${word}`);
+    }
+    assert.doesNotMatch(template, /\bP\d+\b|P<n>/, `templates/${file} に原則そのものを書かない`);
+  }
+});
+
 // The category is the same word in each host's casing: lower case in Claude Code marketplaces, capitalized in Codex.
 test('both marketplaces are named soujo, point at the repository root, and share the description and category', () => {
   const pkg = read<Manifest>('package.json');

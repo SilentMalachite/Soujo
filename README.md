@@ -29,18 +29,18 @@ Design and decisions: [SPEC.md](SPEC.md).
 
 | Skill | Claude Code | Codex | Result |
 |---|---|---|---|
-| spec | `/soujo:spec` | `$spec` | One question at a time (at most 7) → `.soujo/SPEC.md`, then a `節目` entry in `LOG.md` |
+| spec | `/soujo:spec` | `$spec` | One question at a time (at most 7, the principles settled in one of them) → `.soujo/SPEC.md` with keyed principles and acceptance criteria, then a `節目` entry in `LOG.md` that says which principles changed |
 | plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added |
-| go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>`; after the last layer, goes on with converge |
+| go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>`; after the last layer, goes on with converge. Asks one question only when the completion condition cannot hold without breaking a principle |
 | converge | `/soujo:converge` | `$converge` | Checks the code against the keyed acceptance criteria and principles of `SPEC.md` and appends each gap no unfinished layer closes to `PLAN.md` as a layer (`（A3 partial）`, up to 12 unfinished), or records that the code has converged; a `節目` entry either way, whose open line holds code nothing asks for and gaps past the limit. Changes neither SPEC nor code |
 | resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume; from 3 days away, followed by the five lines of `soujo brief` |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
-| review | `/soujo:review` | `$review` | Every finding on the given range (default: the latest layer, uncommitted changes included) in one table, unfiltered |
+| review | `/soujo:review` | `$review` | Every finding on the given range (default: the latest layer, uncommitted changes included) in one table, unfiltered, violations of the principles first |
 
 | File | Holds | Limit |
 |---|---|---|
-| `SPEC.md` | Goals, non-goals, acceptance criteria, technical decisions | ~100 lines |
+| `SPEC.md` | Principles (`- P1 <name> — <sentence>`, which outrank the other sections, the completion conditions, and existing code), goals, non-goals, acceptance criteria (`- A1 <sentence>`), technical decisions | ~100 lines; principles 7 lines |
 | `PLAN.md` | `- [ ] <layer> — <completion condition>` | 1 line per layer |
 | `LOG.md` | Journal that commands append to; only `soujo log rotate` moves entries out. `節目` entries, written by spec / plan / go / converge at phase boundaries, say what ended and what is open, and `soujo brief` shows the last one | 3 lines per entry |
 | `LOG-YYYY-MM.md` | Past months of `LOG.md`, moved by `soujo log rotate` | — (entries as `LOG.md` had them) |

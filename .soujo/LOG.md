@@ -420,3 +420,8 @@ skills・hosts テスト、README(+ja)・plugin.json・CLAUDE/AGENTS(+tpl)・SPE
 ## 2026-09-17 codex-fix-l35
 Codex レビュー L35 の11件を修正: converge は差か未完了層が残るかで分岐し、NEXT は状態で直す。キーなし SPEC・wip・PLAN の問題で停止も明記
 plan は追記だけ。skills テストに本文の条件と CLI の終わり方を追加、README・SPEC(+ja)・CHANGELOG 同期。L36 分4件は予定どおり
+
+## 2026-09-17 L36 skill-principles
+spec は原則を1問で決め P/A キー付きで5節を書き、原則の節は空のままにする。go は原則に反するときだけ1問聞く
+review と reviewer は原則を読み、違反を P<n> で始めて先に並べる。CLAUDE/AGENTS とテンプレートは原則の優先だけを述べる
+skills・hosts テストに原則の検査を足し、README(+ja)・CHANGELOG(+ja) に載せた

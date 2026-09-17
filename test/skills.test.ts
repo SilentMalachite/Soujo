@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { nextCheck, nextSet } from '../src/commands/next.js';
 import { resume } from '../src/commands/resume.js';
 import { packageDir, readTemplate } from '../src/files.js';
+import { validateSpec } from '../src/state.js';
 import { assertKnownCommand, commands, commitAll, project, repo, temp } from './helpers.js';
 
 const SKILLS = ['close', 'converge', 'go', 'map', 'plan', 'resume', 'review', 'spec'];
@@ -256,6 +257,65 @@ test('go closes the last layer with 節目, next set converge, and layer done, t
   assert.ok(milestone !== -1 && milestone < converge && converge < done, `go: 節目 → next set converge → layer done（${[milestone, converge, done]}）`);
 });
 
+// SPEC §7: the one question go asks is where a completion condition cannot hold without breaking a principle.
+test('go asks one question only when the completion condition cannot hold without breaking a principle', () => {
+  const line = sections(body('go')).get('やること')?.find((task) => task.includes('原則')) ?? '';
+  for (const phrase of [
+    '確認を挟まず、満たすまで続ける',
+    'SPEC の原則は完了条件と既存のコードより優先する',
+    '原則に反さずには完了条件を満たせないときだけ',
+    'どの原則とどう食い違うかを番号付きの候補で1問聞く',
+  ]) {
+    assert.ok(line.includes(phrase), `go: ${phrase}`);
+  }
+});
+
+// A placeholder form of the skills with every <...> filled in, the key numbered n.
+function fill(form: string, n: number): string {
+  return form.replace('<n>', String(n)).replace(/<[^>]+>/g, 'x');
+}
+
+// SPEC §5, §7, §14: spec settles the principles in one question and writes them, and the criteria, in the form next check reads.
+test('spec settles the principles in one question and writes keyed principles and criteria that next check accepts', () => {
+  const found = sections(body('spec'));
+  const text = (section: string) => found.get(section)?.join('\n') ?? '';
+  const template = readTemplate('SPEC.md');
+  const headings = [...template.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
+  const expected: [string, string[]][] = [
+    ['読むもの', ['埋まっている節は聞き直さない（見出しのない節は足す）', '原則の候補を出すときはそれとリポジトリが文書で述べる慣習']],
+    [
+      'やること',
+      [
+        '原則は1問で決め、候補はそれまでの答え・設定ファイル・述べられた慣習から出す',
+        `該当節（${headings.join('・')}）`,
+        '7行まで',
+        'キーは再利用も振り直しもせず',
+        '意味を変えずにキーだけ足す',
+        `${headings.length}節が埋まるか7問に達したら終える`,
+        '原則の節には書かず空のまま',
+      ],
+    ],
+    ['soujo に頼むこと', ['（原則を変えたら 原則: <変えたキーと何を>）']],
+    ['出力の形', ['原則はキーと名前']],
+  ];
+  assert.equal(headings[0], '原則', 'テンプレートの最初の節は原則');
+  for (const [section, phrases] of expected) {
+    for (const phrase of phrases) assert.ok(text(section).includes(phrase), `spec の${section}: ${phrase}`);
+  }
+  // The forms are those the template shows, and a SPEC written in them passes next check up to the limit of 7 principles.
+  const principle = /`(- P<n> <名前> — <判定できる1文>)`/.exec(text('やること'))?.[1] ?? '';
+  const criterion = /`(- A<n> <判定できる1文>)`/.exec(text('やること'))?.[1] ?? '';
+  assert.ok(principle !== '' && template.includes(principle.replace('<n>', '1')), 'spec の原則の形はテンプレートのもの');
+  assert.ok(criterion !== '' && template.includes(criterion.replace('<n>', '1')), 'spec の受け入れ基準の形はテンプレートのもの');
+  const written = (count: number) =>
+    `## 原則\n${Array.from({ length: count }, (_, index) => fill(principle, index + 1)).join('\n')}\n\n## 受け入れ基準\n${fill(criterion, 1)}\n未定\n`;
+  assert.deepEqual(validateSpec(written(7)), []);
+  assert.equal(validateSpec(written(8)).length, 1);
+  // 未定 is text beside the criteria, but a line that is not a principle under 原則, which is why that section stays empty.
+  assert.deepEqual(validateSpec('## 原則\n\n## 受け入れ基準\n未定\n'), []);
+  assert.deepEqual(validateSpec('## 原則\n未定\n'), ['SPEC.md の2行目が原則の形（- P<n> <名前> — <1文>）でない']);
+});
+
 // SPEC §7: what converge reads, how it classifies, what it writes, and what it shows.
 test('converge reads keyed lines and the layers\' code, classifies every gap, appends keyed layers only, and shows a table', () => {
   const found = sections(body('converge'));
@@ -402,4 +462,21 @@ test('the review skill hands the reviewer a range, and the reviewer takes the di
   const reads = body.split('\n').find((line) => line.startsWith('- 読むもの：')) ?? '';
   assert.ok(reads.includes('始めるときに自分で `git diff` で取る'), 'reviewer は diff を自分で取る');
   assert.ok(reads.includes('写しを渡されても使わない'), 'reviewer は渡された写しを使わない');
+});
+
+// SPEC §7: review shows the reviewer's table unedited, so both read the principles and put their violations first.
+test('review and the reviewer read the principles and put their violations first, keyed', () => {
+  const READS = '`.soujo/SPEC.md` の原則（`P<n>` の行。キーがなければ原則の節）';
+  const OUTRANK = '原則はほかの SPEC の節・完了条件・既存のコードより優先する';
+  const FIRST = '原則の違反は先頭の行にまとめ、「何が」をキー（`P<n>`）で始める。';
+  const review = sections(body('review'));
+  assert.ok((review.get('読むもの') ?? []).some((line) => line.includes(READS)), 'review は原則を読む');
+  assert.ok((review.get('やること') ?? []).some((line) => line.includes('原則の違反は先に並べる') && line.includes(OUTRANK)), 'review は原則の違反を先に');
+  assert.ok((review.get('出力の形')?.[0] ?? '').includes(FIRST), 'review の表の並び');
+
+  const lines = split(join(packageDir(), 'agents', 'reviewer.md')).body.split('\n');
+  const line = (start: string) => lines.find((text) => text.startsWith(start)) ?? '';
+  assert.ok(line('- 読むもの：').includes(READS), 'reviewer は原則を読む');
+  assert.ok(line('- 観点：まず SPEC の原則への違反').includes(OUTRANK), 'reviewer は原則の違反を最初に見る');
+  assert.ok(line('- 出力は').includes(FIRST), 'reviewer の表の並び');
 });
