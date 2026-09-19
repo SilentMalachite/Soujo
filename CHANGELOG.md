@@ -4,6 +4,17 @@
 
 The English version is canonical; the Japanese page is a translation. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- `layer done`, `close`, and `log rotate` check the untracked credential file names again right before `git add -A`. The first check runs before the records are written, so a credential file made in between was staged unseen.
+- The credential file names now also cover `.envrc`, `credentials`, `secrets.yml` / `secrets.yaml`, the `id_dsa` key with its `.pub`, and the `*.p12` / `*.pfx` key bundles, and they are compared in lower case on every file system, not only where it ignores case. A repository committed where `.ENV` and `.env` are two files is cloned where they are one.
+- A commit is refused while a `git bisect` is unfinished, as during a merge, rebase, cherry-pick, or revert. A bisect leaves HEAD detached, so a layer commit made in the middle of one was left behind by `git bisect reset`.
+- git runs without the variables that change how a pathspec is read (`GIT_LITERAL_PATHSPECS`, `GIT_GLOB_PATHSPECS`, `GIT_NOGLOB_PATHSPECS`, `GIT_ICASE_PATHSPECS`), as it already ran without those pointing at another repository. With `GIT_LITERAL_PATHSPECS` set, `:(exclude,literal).soujo` and `:(literal)PLAN.md` were read as file names: `next check` counted the records of a phase, and what HEAD holds of a state file was read as missing, which `resume`, `close`, `layer done`, and `log add` act on.
+- `next check --hook` gives its git calls 20 seconds together, inside the timeout of the Stop hook. A `git status` a huge working tree could not finish in time was killed by the host with the warning in it; now it is reported as one of the warnings.
+- `resumable` reports a thrown non-Error as its text instead of `undefined`.
+
 ## 0.5.0 — 2026-09-18
 
 Release: [v0.5.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.5.0).

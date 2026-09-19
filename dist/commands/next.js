@@ -1,7 +1,7 @@
 // soujo next show / set / check: the one file needed to resume.
 import { dirname } from 'node:path';
 import { STATE_DIR, findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { gitChangeCount, gitToplevel } from '../git.js';
+import { gitChangeCount, gitDeadline, gitToplevel } from '../git.js';
 import { PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, validateSpec, } from '../state.js';
 // How many problems a warning names before counting the rest, so that the line stays readable where a hook shows it.
 const SHOWN_PROBLEMS = 4;
@@ -156,9 +156,17 @@ function changeProblems(root, phase) {
         return [`未コミットの変更を確認できない: ${reason(error)}`];
     }
 }
+/**
+ * How long the git calls of `--hook` may take together. The host kills the Stop hook after the timeout of hooks/hooks.json
+ * (checked against this in test/hosts.test.ts) and the warning with it, so a `git status` a huge working tree cannot
+ * finish in time is reported as one problem among the others instead of leaving the session without a word.
+ */
+export const HOOK_GIT_BUDGET = 20 * 1000;
 /** One warning line when the project is not safely resumable; nothing otherwise or outside Soujo projects. Never throws. */
-export function nextCheck(cwd, hook, now = new Date()) {
+export function nextCheck(cwd, hook, now = new Date(), budget = HOOK_GIT_BUDGET) {
     let found;
+    if (hook)
+        gitDeadline(Date.now() + budget);
     try {
         const dir = findStateDir(cwd);
         if (dir === undefined)
@@ -167,6 +175,10 @@ export function nextCheck(cwd, hook, now = new Date()) {
     }
     catch (error) {
         found = [`確認できない: ${reason(error)}`];
+    }
+    finally {
+        if (hook)
+            gitDeadline(undefined);
     }
     if (found.length === 0)
         return [];

@@ -18,7 +18,7 @@ import {
   skill,
   uncommittedLogs,
 } from '../src/commands/shared.js';
-import { gitLastCommit } from '../src/git.js';
+import { gitLastCommit, gitStatus } from '../src/git.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
 const NEXT = '次: L3 io\n前提: p\n確認: c\n注意: なし\neffort: medium\n';
@@ -231,12 +231,31 @@ test('commitRecords refuses when git add leaves the re-pointed symlink of a stat
   assert.equal(gitLastCommit(dir)?.subject, 'base');
 });
 
+// requireCommittable runs before the records are written; a credential file made in between would be staged unseen.
+test('commitRecords checks the untracked credential names again, right before staging everything', (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT });
+  commitAll(dir, 'base');
+  writeFileSync(join(dir, 'PLAN.md'), 'written after the first check\n');
+  writeFileSync(join(dir, '.env'), 'TOKEN=x\n');
+  assert.throws(() => commitRecords(dir, 'layer: L1'), /^Error: \.env は認証情報のファイル名なのでコミットしない/);
+  assert.equal(gitLastCommit(dir)?.subject, 'base');
+  assert.deepEqual(gitStatus(dir).filter((record) => record.startsWith('A ')), []);
+});
+
 test('resumable appends what is recorded to the error', () => {
   assert.equal(resumable(() => 1, 'x'), 1);
   assert.throws(
     () =>
       resumable(() => {
         throw new Error('失敗');
+      }, '記録済み'),
+    /^Error: 失敗（記録済み）$/,
+  );
+  // Nothing throws a non-Error today; without String() the message would read "undefined（記録済み）".
+  assert.throws(
+    () =>
+      resumable(() => {
+        throw '失敗';
       }, '記録済み'),
     /^Error: 失敗（記録済み）$/,
   );

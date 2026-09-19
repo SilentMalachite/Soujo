@@ -73,8 +73,16 @@ const CREDENTIAL_EXAMPLES = [
   'id_ecdsa.pub',
   'id_ecdsa_sk',
   'id_ecdsa_sk.pub',
+  'id_dsa',
+  'id_dsa.pub',
+  'credentials',
+  '.envrc',
+  'secrets.yml',
+  'secrets.yaml',
   'server.pem',
   'server.key',
+  'client.p12',
+  'client.pfx',
   'sub/id_rsa',
 ];
 

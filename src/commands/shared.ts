@@ -5,7 +5,6 @@ import {
   STATE_DIR,
   STATE_FILES,
   MAX_SYMLINKS,
-  foldsCase,
   isSymlink,
   readState,
   removeRootTemps,
@@ -48,7 +47,7 @@ const SHOWN_PATHS = 3;
  * commit that stages everything must not take one in only because the project's .gitignore forgot it.
  */
 export const CREDENTIAL_FILE =
-  /^(?:\.env(?:\.(?!example$).+)?|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|auth\.json|id_(?:rsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.+\.(?:pem|key))$/;
+  /^(?:\.env(?:\.(?!example$).+)?|\.envrc|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|credentials|auth\.json|secrets\.ya?ml|id_(?:rsa|dsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.+\.(?:pem|key|p12|pfx))$/;
 
 export const NO_LAYERS = 'PLAN.md に層がない';
 
@@ -170,13 +169,11 @@ export function requireNext(dir: string, hint: string): Next {
 }
 
 /**
- * Whether path (relative to root) names a credential file: as written, or in another letter case where the file system
- * ignores case, since a tool opening .npmrc there opens .NPMRC. The file system is asked only for a name that needs it.
+ * Whether path names a credential file, by its base name in lower case, on any file system: one committed where .ENV and
+ * .env are two files is cloned where they are one, and a tool reading .env there reads what was committed as .ENV.
  */
-function isCredential(root: string, path: string): boolean {
-  const name = posix.basename(path);
-  if (CREDENTIAL_FILE.test(name)) return true;
-  return CREDENTIAL_FILE.test(name.toLowerCase()) && foldsCase(join(root, path));
+function isCredential(path: string): boolean {
+  return CREDENTIAL_FILE.test(posix.basename(path).toLowerCase());
 }
 
 /** paths joined for a message: the first SHOWN_PATHS of them, then how many are left. */
@@ -205,8 +202,17 @@ export function requireCommittable(root: string, maxUntracked?: number): void {
   const unmerged = gitUnmergedCount(root);
   if (unmerged > 0) throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
   requireNotIgnored(root, STATE_FILES);
+  requireNoCredentials(root, maxUntracked);
+}
+
+/**
+ * Throws when staging everything in the project would take in an untracked file whose name is a credential file's (see
+ * isCredential). The untracked files are read to a byte limit (maxUntracked, git.ts's default; given only by tests), past
+ * which none of them was seen and committing is refused.
+ */
+export function requireNoCredentials(root: string, maxUntracked?: number): void {
   const untracked = gitUntracked(root, maxUntracked);
-  const credentials = untracked.paths.filter((path) => isCredential(root, path));
+  const credentials = untracked.paths.filter((path) => isCredential(path));
   if (credentials.length > 0) {
     throw new Error(`${listPaths(credentials)} は認証情報のファイル名なのでコミットしない（.gitignore に足すか、コミットするなら先に git add する）`);
   }
@@ -311,6 +317,8 @@ export function commitRecords(root: string, subject: string, extra: readonly Sta
   // The state files' leftovers are cleared by the command that writes them; the root's CLAUDE.md / AGENTS.md are written only
   // by init, so a killed one leaves its temporary file for this commit to take in.
   removeRootTemps(root);
+  // requireCommittable looked before the records were written; a credential file made in between would be staged unseen.
+  requireNoCredentials(root);
   gitAddAll(root);
   const paths = [...RECORDS, ...extra].flatMap((file) => [statePath(file), trackedStatePath(root, file)]);
   const unstaged = gitNotStaged(root, [...new Set(paths)]);
@@ -325,6 +333,6 @@ export function resumable<T>(step: () => T, recorded: string): T {
   try {
     return step();
   } catch (error) {
-    throw new Error(`${(error as Error).message}（${recorded}）`);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}（${recorded}）`);
   }
 }

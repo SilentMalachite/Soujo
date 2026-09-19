@@ -429,18 +429,15 @@ test('layer done refuses an untracked credential file before writing, and commit
   assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
 });
 
-test('layer done refuses a credential file named in another letter case only where the file system ignores case', (t) => {
+// The letter case of the file system does not decide: a repository committed where .ENV and .env are two files is cloned
+// where they are one, and a tool reading .env there reads what was committed as .ENV.
+test('layer done refuses a credential file named in another letter case on any file system', (t) => {
   const dir = workingProject(t);
   mkdirSync(join(dir, 'config'));
   writeFileSync(join(dir, '.NPMRC'), 'x\n');
   writeFileSync(join(dir, 'config', 'ID_RSA'), 'x\n');
-  if (foldsCase(dir)) {
-    assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: \.NPMRC, config\/ID_RSA は認証情報のファイル名なのでコミットしない/);
-    assert.equal(read(dir, 'PLAN.md'), PLAN);
-  } else {
-    layerDone(dir, 'L2 state', undefined, NOW);
-    assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 state');
-  }
+  assert.throws(() => layerDone(dir, 'L2 state', undefined, NOW), /^Error: \.NPMRC, config\/ID_RSA は認証情報のファイル名なのでコミットしない/);
+  assert.equal(read(dir, 'PLAN.md'), PLAN);
 });
 
 test('layer done lists at most five added files', (t) => {

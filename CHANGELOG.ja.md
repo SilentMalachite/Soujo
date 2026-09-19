@@ -4,6 +4,17 @@
 
 英語版が正本で、このページはその翻訳。版の付け方は[セマンティック バージョニング](https://semver.org/lang/ja/)に従う。
 
+## 未リリース
+
+### 修正
+
+- `layer done`・`close`・`log rotate` が `git add -A` の直前に未追跡の認証情報ファイル名をもう一度検査するようにした。最初の検査は記録を書く前に走るので、その間に作られた認証情報ファイルが見られないままステージされていた。
+- 認証情報のファイル名に `.envrc`・`credentials`・`secrets.yml`／`secrets.yaml`・`id_dsa` 鍵とその `.pub`・鍵束の `*.p12`／`*.pfx` を加え、大小文字を無視する FS に限らず、どのファイルシステムでも小文字にして比べるようにした。`.ENV` と `.env` が別物の FS でコミットしたリポジトリは、同じ物とみなす FS に clone される。
+- `git bisect` の途中はコミットを拒否するようにした（merge・rebase・cherry-pick・revert と同じ扱い）。bisect は HEAD を切り離すので、その最中の層コミットは `git bisect reset` で置き去りになっていた。
+- 別のリポジトリを指す環境変数に加えて、pathspec の読み方を変える環境変数（`GIT_LITERAL_PATHSPECS`・`GIT_GLOB_PATHSPECS`・`GIT_NOGLOB_PATHSPECS`・`GIT_ICASE_PATHSPECS`）も外して git を実行するようにした。`GIT_LITERAL_PATHSPECS` があると `:(exclude,literal).soujo` や `:(literal)PLAN.md` がファイル名として読まれ、`next check` がフェーズ中の記録を数え、HEAD にある状態ファイルが「ない」と読まれて `resume`・`close`・`layer done`・`log add` の判定が狂っていた。
+- `next check --hook` の git 呼び出しを合計20秒で打ち切るようにした（Stop フックの持ち時間の内側）。巨大な作業ツリーで `git status` が間に合わないと、警告ごとホストに殺されていた。いまは警告の1件として出る。
+- `resumable` が Error 以外の throw を `undefined` ではなくその文字列で伝えるようにした。
+
 ## 0.5.0 — 2026-09-18
 
 リリース：[v0.5.0](https://github.com/SilentMalachite/Soujo/releases/tag/v0.5.0)。

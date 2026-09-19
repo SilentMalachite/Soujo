@@ -21,8 +21,16 @@ id_ecdsa
 id_ecdsa.pub
 id_ecdsa_sk
 id_ecdsa_sk.pub
+id_dsa
+id_dsa.pub
+.envrc
+credentials
+secrets.yml
+secrets.yaml
 *.pem
 *.key
+*.p12
+*.pfx
 
 # Tool artifacts (Serena project cache, graphify knowledge graph): not part of the package.
 .serena/

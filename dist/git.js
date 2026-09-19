@@ -10,6 +10,20 @@ const COUNT_OUTPUT = 16 * 1024 * 1024;
 // How long one git call may take before it is killed, so that a `commit.gpgSign` pinentry with nothing to read from, or a
 // hook that never returns, fails in one line instead of holding the session that called soujo (SPEC §14).
 const TIMEOUT = 120 * 1000;
+// When every later git call must have ended (a Date.now() value), or undefined for the plain TIMEOUT.
+let deadline;
+/**
+ * Makes every later git call end by at (a Date.now() value), killed and reported like one past TIMEOUT; undefined restores
+ * the plain limit. A hook the host kills after its own timeout can so say what git could not finish, instead of nothing.
+ */
+export function gitDeadline(at) {
+    deadline = at;
+}
+// How long the next call may take: what is left of the deadline, never more than TIMEOUT and never zero, which spawnSync
+// reads as "no limit".
+function timeLimit() {
+    return deadline === undefined ? TIMEOUT : Math.max(1, Math.min(TIMEOUT, deadline - Date.now()));
+}
 const COMMIT_FORMAT = '--format=%h%x09%ct%x09%s';
 function firstLine(text, from) {
     const lines = (text ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '');
@@ -36,25 +50,38 @@ export const REPOSITORY_ENV = [
     'GIT_SHALLOW_FILE',
     'GIT_COMMON_DIR',
 ];
-// The environment without REPOSITORY_ENV, so that a soujo started from a git hook or a shell that set them reads and
-// commits the repository of cwd, not another one.
+/**
+ * The variables that change how a pathspec is read. With GIT_LITERAL_PATHSPECS set, git takes `:(exclude,literal).soujo`
+ * and `:(literal)PLAN.md` for file names of their own, which leaves the excluded paths in and finds nothing at HEAD; the
+ * others glob, un-glob, or fold the case of paths meant to be literal.
+ */
+export const PATHSPEC_ENV = [
+    'GIT_LITERAL_PATHSPECS',
+    'GIT_GLOB_PATHSPECS',
+    'GIT_NOGLOB_PATHSPECS',
+    'GIT_ICASE_PATHSPECS',
+];
+// The environment without REPOSITORY_ENV and PATHSPEC_ENV, so that a soujo started from a git hook or a shell that set
+// them reads and commits the repository of cwd, not another one, and reads its own pathspecs as written.
 function environment(extra) {
     const env = { ...process.env, ...extra };
-    for (const name of REPOSITORY_ENV)
+    for (const name of [...REPOSITORY_ENV, ...PATHSPEC_ENV])
         delete env[name];
     return env;
 }
 function run(cwd, args, extra = {}, input, maxBuffer = MAX_OUTPUT) {
     const stdin = input === undefined ? 'ignore' : 'pipe';
-    return spawnSync('git', args, {
+    const limit = timeLimit();
+    const result = spawnSync('git', args, {
         cwd,
         encoding: 'utf8',
         input,
         stdio: [stdin, 'pipe', 'pipe'],
         maxBuffer,
-        timeout: TIMEOUT,
+        timeout: limit,
         env: environment(extra),
     });
+    return Object.assign(result, { limit });
 }
 // A path printed by git on one line: only the line break is dropped, since a directory name may start or end with a space.
 function pathLine(output) {
@@ -63,7 +90,9 @@ function pathLine(output) {
 function failure(args, result) {
     const reason = 
     // A killed call left its own message ("spawnSync git ETIMEDOUT"), which says nothing about the wait it stands for.
-    (result.error?.code === 'ETIMEDOUT' ? `${TIMEOUT / 1000}秒で時間切れ` : undefined) ??
+    (result.error?.code === 'ETIMEDOUT'
+        ? `${Math.ceil(result.limit / 1000)}秒で時間切れ`
+        : undefined) ??
         firstLine(result.error?.message, 'first') ??
         firstLine(result.stderr, 'first') ??
         firstLine(result.stdout, 'last') ??
@@ -185,6 +214,8 @@ const OPERATIONS = [
     ['REVERT_HEAD', 'revert'],
     // Left by a multi-commit cherry-pick or revert even after CHERRY_PICK_HEAD / REVERT_HEAD are gone.
     ['sequencer', 'cherry-pick / revert'],
+    // A bisect detaches HEAD, so a commit made in the middle of one is left behind by `git bisect reset`.
+    ['BISECT_LOG', 'bisect'],
 ];
 /** The unfinished git operation (merge, rebase, cherry-pick, revert), or undefined. */
 export function gitOperationInProgress(cwd) {

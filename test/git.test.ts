@@ -30,7 +30,7 @@ import {
   gitUntracked,
   statusRecords,
 } from '../src/git.js';
-import { commitAll, repo, samePath, temp } from './helpers.js';
+import { commitAll, project, repo, samePath, temp } from './helpers.js';
 
 test('gitToplevel finds the repository root from a subdirectory, or undefined outside', (t) => {
   const dir = repo(t);
@@ -302,6 +302,43 @@ test('gitOperationInProgress reports an unfinished rebase or merge', (t) => {
   const sequencing = repo(t);
   mkdirSync(join(sequencing, '.git', 'sequencer'));
   assert.equal(gitOperationInProgress(sequencing), 'cherry-pick / revert');
+});
+
+// A bisect leaves HEAD detached: a commit made in the middle of one is left behind by `git bisect reset`.
+test('gitOperationInProgress reports an unfinished bisect', (t) => {
+  const dir = repo(t);
+  writeFileSync(join(dir, 'a.txt'), 'a\n');
+  commitAll(dir, 'first');
+  writeFileSync(join(dir, 'a.txt'), 'b\n');
+  commitAll(dir, 'second');
+  assert.equal(gitOperationInProgress(dir), undefined);
+  execFileSync('git', ['bisect', 'start'], { cwd: dir });
+  execFileSync('git', ['bisect', 'bad'], { cwd: dir });
+  execFileSync('git', ['bisect', 'good', 'HEAD~1'], { cwd: dir });
+  assert.equal(gitOperationInProgress(dir), 'bisect');
+  execFileSync('git', ['bisect', 'reset'], { cwd: dir });
+  assert.equal(gitOperationInProgress(dir), undefined);
+});
+
+// The variables that change how a pathspec is read make git take ":(exclude,literal)x" and ":(literal)x" for file names.
+test('git reads its pathspecs the same way however GIT_LITERAL_PATHSPECS and its kin are set', (t) => {
+  const dir = project(repo(t), { 'PLAN.md': 'committed\n' });
+  writeFileSync(join(dir, 'a.txt'), 'a\n');
+  commitAll(dir, 'first');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), 'changed\n');
+  writeFileSync(join(dir, 'b.txt'), 'b\n');
+  const restore = { ...process.env };
+  t.after(() => {
+    for (const name of ['GIT_LITERAL_PATHSPECS', 'GIT_GLOB_PATHSPECS', 'GIT_NOGLOB_PATHSPECS', 'GIT_ICASE_PATHSPECS']) {
+      if (restore[name] === undefined) delete process.env[name];
+      else process.env[name] = restore[name];
+    }
+  });
+  process.env.GIT_LITERAL_PATHSPECS = '1';
+  process.env.GIT_ICASE_PATHSPECS = '1';
+  assert.deepEqual(gitChangeCount(dir, undefined, ['.soujo']), { count: 1, truncated: false });
+  assert.deepEqual(gitChangedPaths(dir, ['b.txt', 'a.txt']), ['b.txt']);
+  assert.deepEqual(gitHeadEntry(dir, '.soujo/PLAN.md'), { symlink: false, content: 'committed\n' });
 });
 
 test('gitHeadEntry reads a file or symlink at HEAD relative to cwd, literally, or undefined', { skip: process.platform === 'win32' }, (t) => {

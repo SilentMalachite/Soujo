@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRunning, type StateFile } from '../src/files.js';
-import { REPOSITORY_ENV } from '../src/git.js';
+import { PATHSPEC_ENV, REPOSITORY_ENV } from '../src/git.js';
 import { EFFORTS } from '../src/state.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
@@ -20,7 +20,7 @@ writeFileSync(emptyConfig, '');
 process.on('exit', () => rmSync(dirname(emptyConfig), { recursive: true, force: true }));
 process.env.GIT_CONFIG_GLOBAL = emptyConfig;
 process.env.GIT_CONFIG_NOSYSTEM = '1';
-for (const name of REPOSITORY_ENV) delete process.env[name];
+for (const name of [...REPOSITORY_ENV, ...PATHSPEC_ENV]) delete process.env[name];
 
 let exited: number | undefined;
 

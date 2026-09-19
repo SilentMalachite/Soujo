@@ -15,6 +15,25 @@ function readNext(dir: string): string {
   return readFileSync(join(dir, '.soujo', 'NEXT.md'), 'utf8');
 }
 
+// The host kills the Stop hook after its own timeout; a git call that outlasts the budget becomes a warning instead.
+test('next check --hook ends its git calls within the budget and warns about the time out', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  commitAll(dir);
+  const bin = temp(t);
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\n[ "$1" = status ] && sleep 30\nexec "${realGit}" "$@"\n`, { mode: 0o755 });
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}:${path}`;
+  const started = Date.now();
+  try {
+    const [line] = nextCheck(dir, true, new Date(), 300);
+    assert.match(line ?? '', /未コミットの変更を確認できない: git status に失敗: 1秒で時間切れ/);
+  } finally {
+    process.env.PATH = path;
+  }
+  assert.ok(Date.now() - started < 5000, `next check took ${Date.now() - started}ms`);
+});
+
 test('next show prints NEXT.md lines from a subdirectory', (t) => {
   const dir = project(repo(t), { 'NEXT.md': NEXT });
   mkdirSync(join(dir, 'src'));

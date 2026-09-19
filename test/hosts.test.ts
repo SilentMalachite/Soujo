@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { HOOK_GIT_BUDGET } from '../src/commands/next.js';
 import { packageDir } from '../src/files.js';
 import { commitAll, project, repo, temp } from './helpers.js';
 
@@ -29,7 +30,7 @@ interface CodexMarketplace {
 
 interface HookGroup {
   matcher?: string;
-  hooks: { type: string; command: string }[];
+  hooks: { type: string; command: string; timeout?: number }[];
 }
 
 function read<T>(path: string): T {
@@ -153,6 +154,14 @@ test('hooks/hooks.json runs next show --hook on SessionStart and next check --ho
       event,
     );
   }
+});
+
+// The Stop hook is killed by the host after its own timeout, and with it the warning; the git calls end before that.
+test('the Stop hook gives git more time than next check spends on it', () => {
+  const { hooks } = read<{ hooks: Record<string, HookGroup[]> }>('hooks/hooks.json');
+  const timeout = hooks['Stop']?.[0]?.hooks[0]?.timeout;
+  assert.equal(typeof timeout, 'number');
+  assert.ok((timeout ?? 0) >= HOOK_GIT_BUDGET / 1000 + 5, `Stop timeout ${String(timeout)}s vs budget ${HOOK_GIT_BUDGET / 1000}s`);
 });
 
 test('hook commands exit 0: SessionStart prints NEXT.md, Stop prints one systemMessage until the project is resumable', (t) => {
