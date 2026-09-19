@@ -10,19 +10,24 @@ const COUNT_OUTPUT = 16 * 1024 * 1024;
 // How long one git call may take before it is killed, so that a `commit.gpgSign` pinentry with nothing to read from, or a
 // hook that never returns, fails in one line instead of holding the session that called soujo (SPEC §14).
 const TIMEOUT = 120 * 1000;
-// When every later git call must have ended (a Date.now() value), or undefined for the plain TIMEOUT.
-let deadline;
+// The budget the later git calls share and when it ends, read from a clock that only moves forward (performance.now(), not
+// the wall clock a correction may move back), or undefined for the plain TIMEOUT one call at a time.
+let budget;
 /**
- * Makes every later git call end by at (a Date.now() value), killed and reported like one past TIMEOUT; undefined restores
- * the plain limit. A hook the host kills after its own timeout can so say what git could not finish, instead of nothing.
+ * Makes every later git call end within ms from now, together: each is given what is left, killed and reported like one
+ * past TIMEOUT, and one started with nothing left is reported without being run. undefined restores the plain limit. A hook
+ * the host kills after its own timeout can so say what git could not finish, instead of nothing.
  */
-export function gitDeadline(at) {
-    deadline = at;
+export function gitBudget(ms) {
+    budget = ms === undefined ? undefined : { total: ms, until: performance.now() + ms };
 }
-// How long the next call may take: what is left of the deadline, never more than TIMEOUT and never zero, which spawnSync
-// reads as "no limit".
+// How long the next call may take, and the limit its failure names: what is left of the budget, never more than TIMEOUT.
+// 0 or less means the budget is spent, and the message names the whole of it rather than the sliver that was left.
 function timeLimit() {
-    return deadline === undefined ? TIMEOUT : Math.max(1, Math.min(TIMEOUT, deadline - Date.now()));
+    if (budget === undefined)
+        return { left: TIMEOUT, named: TIMEOUT };
+    const left = Math.min(TIMEOUT, budget.until - performance.now());
+    return { left, named: left > 0 ? left : budget.total };
 }
 const COMMIT_FORMAT = '--format=%h%x09%ct%x09%s';
 function firstLine(text, from) {
@@ -61,27 +66,47 @@ export const PATHSPEC_ENV = [
     'GIT_NOGLOB_PATHSPECS',
     'GIT_ICASE_PATHSPECS',
 ];
-// The environment without REPOSITORY_ENV and PATHSPEC_ENV, so that a soujo started from a git hook or a shell that set
-// them reads and commits the repository of cwd, not another one, and reads its own pathspecs as written.
+/**
+ * env without REPOSITORY_ENV and PATHSPEC_ENV, so that a soujo started from a git hook or a shell that set them reads and
+ * commits the repository of cwd, not another one, and reads its own pathspecs as written. Where the system's variable names
+ * ignore letter case (Windows), a name is removed in whatever case it was set, since the child would read it all the same.
+ * Exported for its tests.
+ */
+export function withoutGitEnv(env, foldsCase = process.platform === 'win32') {
+    const removed = new Set([...REPOSITORY_ENV, ...PATHSPEC_ENV]);
+    const stripped = { ...env };
+    for (const name of Object.keys(stripped)) {
+        if (removed.has(name) || (foldsCase && removed.has(name.toUpperCase())))
+            delete stripped[name];
+    }
+    return stripped;
+}
 function environment(extra) {
-    const env = { ...process.env, ...extra };
-    for (const name of [...REPOSITORY_ENV, ...PATHSPEC_ENV])
-        delete env[name];
-    return env;
+    return withoutGitEnv({ ...process.env, ...extra });
+}
+// What a call past the budget returns: the ETIMEDOUT of a killed one, so that every caller reports it the same way.
+function timedOut(limit) {
+    const error = new Error('git は制限時間内に始められなかった');
+    error.code = 'ETIMEDOUT';
+    return { pid: 0, output: [], stdout: '', stderr: '', status: null, signal: null, error, limit };
 }
 function run(cwd, args, extra = {}, input, maxBuffer = MAX_OUTPUT) {
     const stdin = input === undefined ? 'ignore' : 'pipe';
-    const limit = timeLimit();
+    const { left, named } = timeLimit();
+    // Starting a call with nothing left would wait for a whole git run past the budget, since spawnSync reads 0 as "no limit".
+    if (left <= 0)
+        return timedOut(named);
     const result = spawnSync('git', args, {
         cwd,
         encoding: 'utf8',
         input,
         stdio: [stdin, 'pipe', 'pipe'],
         maxBuffer,
-        timeout: limit,
+        // Whole milliseconds: performance.now() leaves a fraction, which spawnSync refuses.
+        timeout: Math.ceil(left),
         env: environment(extra),
     });
-    return Object.assign(result, { limit });
+    return Object.assign(result, { limit: named });
 }
 // A path printed by git on one line: only the line break is dropped, since a directory name may start or end with a space.
 function pathLine(output) {
@@ -217,7 +242,7 @@ const OPERATIONS = [
     // A bisect detaches HEAD, so a commit made in the middle of one is left behind by `git bisect reset`.
     ['BISECT_LOG', 'bisect'],
 ];
-/** The unfinished git operation (merge, rebase, cherry-pick, revert), or undefined. */
+/** The unfinished git operation (merge, rebase, cherry-pick, revert, bisect), or undefined. */
 export function gitOperationInProgress(cwd) {
     const gitDir = pathLine(git(cwd, ['rev-parse', '--absolute-git-dir']));
     return OPERATIONS.find(([marker]) => existsSync(join(gitDir, marker)))?.[1];

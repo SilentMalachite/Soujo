@@ -44,10 +44,11 @@ const SHOWN_PATHS = 3;
 
 /**
  * The name of a file that holds credentials (by its base name, in lower case). .env.example is a template without values. A
- * commit that stages everything must not take one in only because the project's .gitignore forgot it.
+ * commit that stages everything must not take one in only because the project's .gitignore forgot it. The "s" flag and the
+ * "*" before an extension are what a name may really hold: a file name may carry a line break, and ".p12" is a whole name.
  */
 export const CREDENTIAL_FILE =
-  /^(?:\.env(?:\.(?!example$).+)?|\.envrc|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|credentials|auth\.json|secrets\.ya?ml|id_(?:rsa|dsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.+\.(?:pem|key|p12|pfx))$/;
+  /^(?:\.env(?:\.(?!example$).*)?|\.envrc|\.npmrc|\.netrc|_netrc|\.git-credentials|\.credentials\.json|credentials|auth\.json|secrets\.ya?ml|id_(?:rsa|dsa|ed25519(?:_sk)?|ecdsa(?:_sk)?)(?:\.pub)?|.*\.(?:pem|key|p12|pfx))$/s;
 
 export const NO_LAYERS = 'PLAN.md に層がない';
 
@@ -185,7 +186,7 @@ function listPaths(paths: readonly string[]): string {
 /**
  * Throws unless committing the project at root is safe: a repository, .soujo/ not a symlink, every state file (a symlink's
  * target included) inside the project, outside .git, and not another state file or archive, no unfinished
- * merge/rebase/cherry-pick/revert anywhere in the repository, no unmerged files in the project, no state file or symlink
+ * merge/rebase/cherry-pick/revert/bisect anywhere in the repository, no unmerged files in the project, no state file or symlink
  * target ignored by git, and no untracked credential file (see isCredential) that staging everything would take in. One
  * added with `git add` first is tracked, and is committed as the user chose. The untracked files are read to a byte limit
  * (maxUntracked, git.ts's default; given only by tests), past which none of them was seen and committing is refused.

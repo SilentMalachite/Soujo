@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 
 import { join } from 'node:path';
 import { nextCheck, nextSet, nextShow } from '../src/commands/next.js';
 import { packageDir, readTemplate } from '../src/files.js';
+import { gitToplevel } from '../src/git.js';
 import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 
 const NEXT = '次: L2 state\n前提: L1 完了\n確認: npm test が通る\n注意: なし\neffort: medium\n';
@@ -21,17 +22,22 @@ test('next check --hook ends its git calls within the budget and warns about the
   commitAll(dir);
   const bin = temp(t);
   const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
-  writeFileSync(join(bin, 'git'), `#!/bin/sh\n[ "$1" = status ] && sleep 30\nexec "${realGit}" "$@"\n`, { mode: 0o755 });
+  // Every call sleeps, so the budget has to be shared for the check to end at all.
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nsleep 30\n`, { mode: 0o755 });
   const path = process.env.PATH;
   process.env.PATH = `${bin}:${path}`;
   const started = Date.now();
   try {
     const [line] = nextCheck(dir, true, new Date(), 300);
-    assert.match(line ?? '', /未コミットの変更を確認できない: git status に失敗: 1秒で時間切れ/);
+    assert.match(line ?? '', /未コミットの変更を確認できない: git \S+ に失敗: 1秒で時間切れ/);
+    // The budget is shared: one slow call spends it, and the calls after it are reported without being started, so the
+    // whole check ends in about the budget rather than in one sleep per call.
+    assert.ok(Date.now() - started < 3000, `next check took ${Date.now() - started}ms`);
   } finally {
     process.env.PATH = path;
   }
-  assert.ok(Date.now() - started < 5000, `next check took ${Date.now() - started}ms`);
+  // Released afterwards: with a spent budget left in place, every later call would be reported as timed out without running.
+  assert.doesNotThrow(() => gitToplevel(dir));
 });
 
 test('next show prints NEXT.md lines from a subdirectory', (t) => {

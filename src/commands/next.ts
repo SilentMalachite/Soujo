@@ -2,7 +2,7 @@
 
 import { dirname } from 'node:path';
 import { STATE_DIR, findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { gitChangeCount, gitDeadline, gitToplevel } from '../git.js';
+import { gitBudget, gitChangeCount, gitToplevel } from '../git.js';
 import {
   PHASES,
   checkMismatch,
@@ -186,7 +186,7 @@ export const HOOK_GIT_BUDGET = 20 * 1000;
 /** One warning line when the project is not safely resumable; nothing otherwise or outside Soujo projects. Never throws. */
 export function nextCheck(cwd: string, hook: boolean, now: Date = new Date(), budget: number = HOOK_GIT_BUDGET): string[] {
   let found: string[];
-  if (hook) gitDeadline(Date.now() + budget);
+  if (hook) gitBudget(budget);
   try {
     const dir = findStateDir(cwd);
     if (dir === undefined) return [];
@@ -194,7 +194,7 @@ export function nextCheck(cwd: string, hook: boolean, now: Date = new Date(), bu
   } catch (error) {
     found = [`確認できない: ${reason(error)}`];
   } finally {
-    if (hook) gitDeadline(undefined);
+    if (hook) gitBudget(undefined);
   }
   if (found.length === 0) return [];
   const line = warning(found);

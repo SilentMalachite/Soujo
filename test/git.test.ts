@@ -5,6 +5,7 @@ import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import * as gitApi from '../src/git.js';
 import {
+  PATHSPEC_ENV,
   REPOSITORY_ENV,
   completeFields,
   countRecords,
@@ -29,6 +30,7 @@ import {
   gitUnmergedCount,
   gitUntracked,
   statusRecords,
+  withoutGitEnv,
 } from '../src/git.js';
 import { commitAll, project, repo, samePath, temp } from './helpers.js';
 
@@ -320,6 +322,25 @@ test('gitOperationInProgress reports an unfinished bisect', (t) => {
   assert.equal(gitOperationInProgress(dir), undefined);
 });
 
+// Windows reads a variable name in any letter case, so one set as git_literal_pathspecs would reach the child all the same.
+test('withoutGitEnv removes every repository and pathspec variable, in any letter case where names fold', () => {
+  const env = {
+    GIT_DIR: 'x',
+    GIT_LITERAL_PATHSPECS: '1',
+    GIT_GLOB_PATHSPECS: '1',
+    git_noglob_pathspecs: '1',
+    Git_Icase_Pathspecs: '1',
+    git_index_file: 'x',
+    PATH: '/usr/bin',
+  };
+  assert.deepEqual(withoutGitEnv(env, false), { git_noglob_pathspecs: '1', Git_Icase_Pathspecs: '1', git_index_file: 'x', PATH: '/usr/bin' });
+  assert.deepEqual(withoutGitEnv(env, true), { PATH: '/usr/bin' });
+  for (const name of [...REPOSITORY_ENV, ...PATHSPEC_ENV]) {
+    assert.equal(withoutGitEnv({ [name]: '1', KEEP: '1' }, false).KEEP, '1', name);
+    assert.deepEqual(Object.keys(withoutGitEnv({ [name]: '1', KEEP: '1' }, false)), ['KEEP'], name);
+  }
+});
+
 // The variables that change how a pathspec is read make git take ":(exclude,literal)x" and ":(literal)x" for file names.
 test('git reads its pathspecs the same way however GIT_LITERAL_PATHSPECS and its kin are set', (t) => {
   const dir = project(repo(t), { 'PLAN.md': 'committed\n' });
@@ -329,13 +350,12 @@ test('git reads its pathspecs the same way however GIT_LITERAL_PATHSPECS and its
   writeFileSync(join(dir, 'b.txt'), 'b\n');
   const restore = { ...process.env };
   t.after(() => {
-    for (const name of ['GIT_LITERAL_PATHSPECS', 'GIT_GLOB_PATHSPECS', 'GIT_NOGLOB_PATHSPECS', 'GIT_ICASE_PATHSPECS']) {
+    for (const name of PATHSPEC_ENV) {
       if (restore[name] === undefined) delete process.env[name];
       else process.env[name] = restore[name];
     }
   });
-  process.env.GIT_LITERAL_PATHSPECS = '1';
-  process.env.GIT_ICASE_PATHSPECS = '1';
+  for (const name of PATHSPEC_ENV) process.env[name] = '1';
   assert.deepEqual(gitChangeCount(dir, undefined, ['.soujo']), { count: 1, truncated: false });
   assert.deepEqual(gitChangedPaths(dir, ['b.txt', 'a.txt']), ['b.txt']);
   assert.deepEqual(gitHeadEntry(dir, '.soujo/PLAN.md'), { symlink: false, content: 'committed\n' });

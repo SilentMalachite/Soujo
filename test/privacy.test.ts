@@ -162,12 +162,18 @@ function messageLeaks(cwd: string): string[] {
 }
 
 test('no tracked file is a credential file', () => {
-  for (const file of tracked(packageDir())) assert.doesNotMatch(basename(file), CREDENTIAL_FILE, file);
+  // Compared in lower case, as the CLI compares an untracked name: a tracked .ENV is a credential file too.
+  for (const file of tracked(packageDir())) assert.doesNotMatch(basename(file).toLowerCase(), CREDENTIAL_FILE, file);
 });
 
 test('.gitignore ignores every kind of credential file, and not .env.example', () => {
   for (const name of CREDENTIAL_EXAMPLES) assert.match(basename(name), CREDENTIAL_FILE, name);
+  // The names the CLI meets are not always in lower case, and a file name may hold a line break or be an extension alone.
+  for (const name of ['.ENV', 'SECRETS.YAML', 'CLIENT.P12', 'Id_Dsa', '.p12', 'a\nb.pem']) {
+    assert.match(basename(name).toLowerCase(), CREDENTIAL_FILE, name);
+  }
   assert.doesNotMatch('.env.example', CREDENTIAL_FILE);
+  assert.doesNotMatch('README.md'.toLowerCase(), CREDENTIAL_FILE);
   const ignored = git(packageDir(), ['check-ignore', '--no-index', '--', ...CREDENTIAL_EXAMPLES, '.env.example']).toString('utf8');
   assert.deepEqual(ignored.split('\n').filter(Boolean).sort(), [...CREDENTIAL_EXAMPLES].sort());
 });

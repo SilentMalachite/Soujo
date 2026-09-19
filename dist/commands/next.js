@@ -1,7 +1,7 @@
 // soujo next show / set / check: the one file needed to resume.
 import { dirname } from 'node:path';
 import { STATE_DIR, findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { gitChangeCount, gitDeadline, gitToplevel } from '../git.js';
+import { gitBudget, gitChangeCount, gitToplevel } from '../git.js';
 import { PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, validateSpec, } from '../state.js';
 // How many problems a warning names before counting the rest, so that the line stays readable where a hook shows it.
 const SHOWN_PROBLEMS = 4;
@@ -166,7 +166,7 @@ export const HOOK_GIT_BUDGET = 20 * 1000;
 export function nextCheck(cwd, hook, now = new Date(), budget = HOOK_GIT_BUDGET) {
     let found;
     if (hook)
-        gitDeadline(Date.now() + budget);
+        gitBudget(budget);
     try {
         const dir = findStateDir(cwd);
         if (dir === undefined)
@@ -178,7 +178,7 @@ export function nextCheck(cwd, hook, now = new Date(), budget = HOOK_GIT_BUDGET)
     }
     finally {
         if (hook)
-            gitDeadline(undefined);
+            gitBudget(undefined);
     }
     if (found.length === 0)
         return [];
