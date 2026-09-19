@@ -458,3 +458,7 @@ package.json・package-lock.json・.codex-plugin/plugin.json を 0.4.0 にし、
 ## 2026-09-18 release-0.5.0
 0.5.0 をリリース（2026-09-18）: 外部レビューの指摘12件の修正と、フェーズ中の Stop フックの静粛化、Windows の CI
 package.json・package-lock.json・.codex-plugin/plugin.json を 0.5.0 にし、CHANGELOG(+ja) を 0.5.0 — 2026-09-18 に
+
+## 2026-09-20 release-0.6.0
+0.6.0 をリリース（2026-09-20）: 外部レビュー7件と Codex レビュー7件の修正（認証情報名・bisect・pathspec の環境変数・フックの予算）
+package.json・package-lock.json・.codex-plugin/plugin.json を 0.6.0 にし、CHANGELOG(+ja) を 0.6.0 — 2026-09-20 に
