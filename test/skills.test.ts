@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { init } from '../src/commands/init.js';
 import { nextCheck, nextSet } from '../src/commands/next.js';
 import { resume } from '../src/commands/resume.js';
 import { packageDir, readTemplate } from '../src/files.js';
@@ -122,6 +123,26 @@ test('each skill stops for a missing soujo exactly where it runs soujo', () => {
   }
   assert.equal(expected.review, NO_STOP);
   assert.equal(expected.map, '`soujo` が見つからなければ、`plan`・`code` のときだけ止めて1行で伝える。');
+});
+
+// SPEC §14: under a Bash allowlist a chained first command (`command -v soujo && soujo init; ls`) was denied, so every skill
+// and the reviewer say the same sentence where they say whose soujo and git they run.
+const ONE_COMMAND = 'コマンドはツール呼び出し1回に1つだけ実行し、`&&`・`;` でつながない（許可リストに拒まれることがある）。';
+
+test('every skill and the reviewer run one command per tool call, and no soujo command in the skills is chained', () => {
+  for (const name of SKILLS) {
+    const found = sections(body(name));
+    const first = found.get('読むもの')?.[0] ?? '';
+    assert.ok(first.endsWith(`${ONE_COMMAND}${stopWhen(found.get('soujo に頼むこと') ?? [])}`), `${name} の読むもの1行目で、止める条件の前に1回1コマンド`);
+    assert.equal(body(name).split(ONE_COMMAND).length, 2, `${name} に1回1コマンドは1回`);
+    for (const argv of commands(body(name))) {
+      assert.ok(!argv.some((token) => ['&&', '||', ';'].includes(token) || token.endsWith(';')), `${name}: soujo ${argv.join(' ')}`);
+    }
+  }
+  const lines = split(join(packageDir(), 'agents', 'reviewer.md')).body.split('\n').filter((line) => line.includes(ONE_COMMAND));
+  assert.equal(lines.length, 1, 'reviewer に1回1コマンドは1行');
+  assert.ok((lines[0] ?? '').startsWith('- `soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもの。'), 'reviewer は作業中のプロジェクトの行に');
+  assert.ok((lines[0] ?? '').endsWith(ONE_COMMAND), 'reviewer はその行の終わりに');
 });
 
 // SPEC §7: without a range, review and map take the diff of the latest layer from before it began.
@@ -289,7 +310,9 @@ test('spec settles the principles in one question and writes keyed principles an
       'やること',
       [
         '原則は1問で決め、候補はそれまでの答え・設定ファイル・述べられた慣習から出す',
-        `該当節（${headings.join('・')}）`,
+        // SPEC §14: the skill tended to write SPEC.md only at the end, so each answer is written before the next question.
+        `答えを得るたびに、次の問いを出す前に該当節（${headings.join('・')}）へ書く`,
+        '（中断しても答えが SPEC.md に残る。まとめて最後に書かない）',
         '7行まで',
         'キーは再利用も振り直しもせず',
         '既存の SPEC のキーのない原則・基準は、意味を変えずにこの形へ直す（原則には名前と `—` も補う）',
@@ -335,6 +358,8 @@ test('converge reads keyed lines and the layers\' code, classifies every gap, ap
       [
         '`met`・`missing`・`partial`・`contradicts`',
         '`path:line` で示す（コードが見つからなければ `missing`）',
+        // SPEC §14: a principle marked met because the tests suppress a write was contradicted by the next run's real start-up.
+        '判定は利用者が実際に動かす経路（コマンド・起動のしかた）で行い、その経路にない環境変数や設定で抑えた振る舞いを `met` の根拠にしない',
         'SPEC も PLAN も求めていないコードは `unrequested`',
         'SPEC とコードは変えない',
         'キーのない SPEC では SPEC での呼び名（節と番号）をキーの代わりにし、節目の未決に「SPEC にキーがない」と書く',
@@ -350,6 +375,7 @@ test('converge reads keyed lines and the layers\' code, classifies every gap, ap
       'soujo に頼むこと',
       [
         '`PLAN.md の`・`PLAN.md を` で始まる警告があれば何も足さず、その警告を伝えて止める',
+        '節目の `--line` は下に示した2つだけで、キーは行を足さずに1行目の括弧の中へ書く',
         '差か未完了の層が残れば：',
         'NEXT.md がない・無効か、`次:` が PLAN の最初の未完了層でないか、警告が `確認:` を指したら',
         '差も未完了の層もなければ（`unrequested` だけでも）：',
@@ -367,12 +393,30 @@ test('converge reads keyed lines and the layers\' code, classifies every gap, ap
       .map((argv) => argv.slice(0, 2).join(' '))
       .filter((command) => command !== 'brief');
   assert.deepEqual([asks(0), asks(1), asks(2)], [['next check'], ['log add', 'next check', 'next set', 'map plan'], ['log add', 'next set']]);
+  // SPEC §14: Codex put met keys on extra --line's and log add refused the entry, so both endings keep the keys in the first
+  // line's parentheses and none in the second.
+  for (const argv of commands(text('soujo に頼むこと')).filter(isMilestone)) {
+    const [first, second] = argv.flatMap((token, index) => (argv[index - 1] === '--line' ? [token] : []));
+    assert.match(first ?? '', /（<[^>]*キー>）/, `converge の節目の1行目の括弧にキー: ${first}`);
+    assert.doesNotMatch(second ?? '', /キー/, `converge の節目の2行目にキーがない: ${second}`);
+  }
   const plan = sections(body('plan'));
   assert.ok((plan.get('読むもの') ?? []).some((line) => line.includes('既存の行は完了・未完了とも書き換えず、足すのは末尾だけ')), 'plan も追記だけ');
   assert.ok(
     (plan.get('soujo に頼むこと') ?? []).some((line) => line.includes('未完了の層があって、NEXT.md がない・無効か、`次:` がその最初の層でないか、警告が `確認:` を指したら')),
     'plan の next set の条件',
   );
+});
+
+// SPEC §14: Claude Code's converge listed the CLAUDE.md that soujo init added as unrequested, so the skill names what init places.
+test('converge counts none of the files soujo init places as unrequested', (t) => {
+  const outside = init(repo(t))
+    .map((line) => line.replace('作成: ', ''))
+    .filter((path) => !path.startsWith('.soujo/'));
+  assert.deepEqual(outside, ['CLAUDE.md', 'AGENTS.md']);
+  const task = sections(body('converge')).get('やること')?.join('\n') ?? '';
+  const phrase = `\`soujo init\` が置いたファイル（${outside.join(' / ')}）と \`.soujo/\` は \`unrequested\` に数えない`;
+  assert.ok(task.includes(phrase), `converge のやること: ${phrase}`);
 });
 
 // SPEC §6, §7: what the CLI answers at each way converge ends, which the skill's conditions rely on.
@@ -477,7 +521,9 @@ test('review and the reviewer read the principles and put their violations first
   const FIRST = '原則の違反は1件1行で表の先頭から並べ、「何が」をそのキー（`P<n>`。キーのない SPEC では節と番号）で始める。';
   const review = sections(body('review'));
   assert.ok((review.get('読むもの') ?? []).some((line) => line.includes(READS)), 'review は原則を読む');
-  assert.ok((review.get('やること')?.[0] ?? '').includes('返った表を加工せずに出す'), 'review は reviewer の表を加工しない');
+  // SPEC §14: Claude Code shortened paths, reworded cells, dropped phrases, and added a leading sentence, so each is named.
+  const UNEDITED = '返った表を加工せずに出す（パスを縮めない・セルを言い換えない・語句を落とさない・前置きの文を足さない）。';
+  assert.ok((review.get('やること')?.[0] ?? '').includes(UNEDITED), 'review は reviewer の表を加工しない');
   assert.ok((review.get('やること') ?? []).some((line) => line.includes('原則の違反は先に並べる') && line.includes(OUTRANK)), 'review は原則の違反を先に');
   assert.ok((review.get('出力の形')?.[0] ?? '').includes(FIRST), 'review の表の並び');
 

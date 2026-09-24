@@ -4,7 +4,7 @@ description: "Soujo の .soujo/NEXT.md が指す層を実装し、次の NEXT.md
 ---
 
 ## 読むもの
-- `soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもの。スキルの置き場所へ cd したり、そこの `.soujo/`・`dist/` を使ったりしない。`soujo` が見つからなければ止めて1行で伝える。
+- `soujo`（PATH 上のコマンド）・git・`.soujo/` は作業中のプロジェクトのもの。スキルの置き場所へ cd したり、そこの `.soujo/`・`dist/` を使ったりしない。コマンドはツール呼び出し1回に1つだけ実行し、`&&`・`;` でつながない（許可リストに拒まれることがある）。`soujo` が見つからなければ止めて1行で伝える。
 - `soujo resume` の4行 → `.soujo/NEXT.md` → `.soujo/SPEC.md` → `.soujo/PLAN.md` の該当層の行。
 
 ## やること
