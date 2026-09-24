@@ -244,6 +244,15 @@ test('next set, show, and check work through the CLI; check exits 0 even with ba
     'soujo: NEXT.md を書かない: 層「plan」の effort は high 固定（--effort を外して再実行）\n',
   ]);
   assert.equal(soujoIn(dir, 'next', 'show').stdout, '次: L1\n前提: p\n確認: c\n注意: なし\neffort: low\n');
+  // plan and converge wait for the milestone, and the command the refusal names is the one that lets them through.
+  const early = soujoIn(dir, 'next', 'set', '--layer', 'plan', '--premise', 'p', '--check', 'c');
+  assert.deepEqual([early.status, early.stdout, early.stderr], [
+    1,
+    '',
+    `soujo: NEXT.md を書かない: LOG.md に節目がない（先に soujo log add '節目' --line '<何が終わったか>' --line '<何が未決か>'）\n`,
+  ]);
+  assert.equal(soujoIn(dir, 'next', 'show').stdout, '次: L1\n前提: p\n確認: c\n注意: なし\neffort: low\n');
+  assert.equal(soujoIn(dir, 'log', 'add', '節目', '--line', 'SPEC.md を書いた', '--line', '未決: なし').status, 0);
   const fixed = soujoIn(dir, 'next', 'set', '--layer', 'plan', '--premise', 'p', '--check', 'c');
   assert.deepEqual([fixed.status, fixed.stdout], [0, 'NEXT.md を更新: 次: plan\n']);
   assert.equal(soujoIn(dir, 'next', 'show').stdout, '次: plan\n前提: p\n確認: c\n注意: なし\neffort: high\n');
@@ -563,7 +572,9 @@ test('a layer name starting with "-" goes through the CLI as the messages spell 
   // As resume spells them: the option value attached with "=", the positional after "--".
   const set = soujoIn(dir, 'next', 'set', '--layer=-L1 scaffold', '--premise=p', '--check=c', '--effort', 'low');
   assert.deepEqual([set.status, set.stdout], [0, 'NEXT.md を更新: 次: -L1 scaffold\n'], set.stderr);
-  // layer done refuses while NEXT.md still points at the layer, as it does for any other name.
+  // layer done refuses while NEXT.md still points at the layer, as it does for any other name. The last layer's milestone
+  // comes first, as the go skill leaves it.
+  soujoIn(dir, 'log', 'add', '節目', '--line', 'PLAN の全層完了');
   soujoIn(dir, 'next', 'set', '--layer', 'plan', '--premise=p', '--check=c');
   const done = soujoIn(dir, 'layer', 'done', '--', '-L1 scaffold');
   assert.equal(done.status, 0, done.stderr);

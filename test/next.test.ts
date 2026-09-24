@@ -11,6 +11,8 @@ import { commitAll, deadPid, project, repo, temp } from './helpers.js';
 const NEXT = '次: L2 state\n前提: L1 完了\n確認: npm test が通る\n注意: なし\neffort: medium\n';
 // L2 state's completion condition is NEXT.md's 確認, so that next check has nothing to warn about by default.
 const PLAN = '- [x] L1 scaffold — build\n- [ ] L2 state — npm test が通る\n';
+// A milestone and no entry of a layer, so that next set to plan and converge is not refused for its want of one.
+const LOG = '# LOG\n\n## 2026-09-12 節目\n2層に分けた\n';
 
 function readNext(dir: string): string {
   return readFileSync(join(dir, '.soujo', 'NEXT.md'), 'utf8');
@@ -121,7 +123,7 @@ test('next set writes nothing for invalid values', (t) => {
 });
 
 test('next set refuses a layer missing from PLAN.md except the phases, and any layer while PLAN.md has none', (t) => {
-  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': LOG });
   const base = { premise: 'p', check: 'c' };
   assert.throws(
     () => nextSet(dir, { ...base, layer: 'L2' }),
@@ -137,7 +139,7 @@ test('next set refuses a layer missing from PLAN.md except the phases, and any l
 });
 
 test('next set writes effort high for spec, plan, and converge, and refuses any other effort for them', (t) => {
-  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': LOG });
   const base = { premise: 'p', check: 'c' };
   const accepted: [string, string | undefined][] = [
     ['plan', undefined],
@@ -174,6 +176,50 @@ test('next set writes effort high for spec, plan, and converge, and refuses any 
     assert.equal(readNext(dir), before, `${layer} ${effort}`);
   }
   assert.throws(() => nextSet(temp(t), { ...base, layer: 'plan', effort: 'medium' }), /\.soujo\/ が見つからない/);
+});
+
+// The skills leave the milestone before next set; the CLI keeps that order, so a session stopped in between never leaves
+// 次: plan or 次: converge without the milestone brief shows.
+test('next set refuses plan and converge until LOG.md has a milestone after the last entry of a PLAN layer, and writes nothing', (t) => {
+  const base = { premise: 'p', check: 'c' };
+  const hint = `（先に soujo log add '節目' --line '<何が終わったか>' --line '<何が未決か>'）`;
+  const early = '# LOG\n\n## 2026-09-12 節目\n2層に分けた\n\n## 2026-09-13 L1 scaffold\nbuild\n';
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN, 'LOG.md': early });
+  for (const layer of ['plan', ' converge ']) {
+    const message = `NEXT.md を書かない: LOG.md に層「L1 scaffold」の記録より後の節目がない${hint}`;
+    assert.throws(() => nextSet(dir, { ...base, layer }), { message }, layer);
+  }
+  const none = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  assert.throws(() => nextSet(none, { ...base, layer: 'plan' }), { message: `NEXT.md を書かない: LOG.md に節目がない${hint}` });
+  assert.equal(readNext(dir), NEXT);
+  assert.equal(readNext(none), NEXT);
+
+  // The checks before it come first, so what the command line gets wrong is named before what LOG.md lacks.
+  assert.throws(() => nextSet(none, { ...base, layer: 'plan', effort: 'low' }), /effort は high 固定/);
+  const repeated = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': `${PLAN}- [ ] L2 state — again\n` });
+  assert.throws(() => nextSet(repeated, { ...base, layer: 'converge' }), /PLAN\.md を直してから/);
+
+  // spec and PLAN's layers need no milestone.
+  for (const layer of ['spec', 'L2 state']) assert.deepEqual(nextSet(none, { ...base, layer }), [`NEXT.md を更新: 次: ${layer}`]);
+
+  // A milestone after the last layer's entry lets both through, whatever other entries follow it.
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), `${early}\n## 2026-09-14 節目\nPLAN の全層完了\n\n## 2026-09-14 release-0.6.0\nx\n`);
+  for (const layer of ['converge', 'plan']) {
+    assert.deepEqual(nextSet(dir, { ...base, layer }), [`NEXT.md を更新: 次: ${layer}`]);
+    assert.equal(readNext(dir), `次: ${layer}\n前提: p\n確認: c\n注意: なし\neffort: high\n`);
+  }
+});
+
+test('next set reads LOG.md only for plan and converge, so one it cannot read refuses no other layer', { skip: process.platform === 'win32' }, (t) => {
+  const secret = join(temp(t), 'secret');
+  writeFileSync(secret, '## 2026-09-14 節目\ntoken-123\n');
+  const dir = project(temp(t), { 'NEXT.md': NEXT, 'PLAN.md': PLAN });
+  symlinkSync(secret, join(dir, '.soujo', 'LOG.md'));
+  assert.throws(() => nextSet(dir, { layer: 'plan', premise: 'p', check: 'c' }), /^Error: LOG\.md を読まない: 実体（symlink の先）がプロジェクトの外$/);
+  assert.equal(readNext(dir), NEXT);
+  for (const layer of ['spec', 'L2 state']) {
+    assert.deepEqual(nextSet(dir, { layer, premise: 'p', check: 'c' }), [`NEXT.md を更新: 次: ${layer}`]);
+  }
 });
 
 test('next set refuses while PLAN.md repeats a layer name or names a layer like a phase, and writes nothing', (t) => {

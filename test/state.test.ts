@@ -18,6 +18,7 @@ import {
   logMonths,
   markDone,
   missingConditions,
+  missingMilestone,
   newlyDone,
   nextLayer,
   nextStatus,
@@ -764,6 +765,39 @@ test('lastMilestone returns the last 節目 entry wherever it is, or undefined',
   assert.deepEqual(lastMilestone(log), { date: '2026-09-12', layer: '節目', lines: ['12層に分けた', '未決: map'] });
   assert.equal(lastMilestone('# LOG\n\n## 2026-09-13 L1 節目\na\n'), undefined);
   assert.equal(lastMilestone(''), undefined);
+});
+
+test('missingMilestone asks plan and converge for a milestone after the last entry of a PLAN layer, and nothing else', () => {
+  const items = parsePlan('- [x] L1 a — a\n- [x] L2 b — b\n- [ ] L3 c — c\n');
+  const log = (...entries: string[]) => `# LOG\n\n${entries.map((entry, index) => `## 2026-09-1${index} ${entry}\n`).join('\n')}`;
+  const after = (layer: string) => `LOG.md に層「${layer}」の記録より後の節目がない`;
+  const cases: [string, string | undefined][] = [
+    // With no entry of a layer, any milestone does, and entries of other names are neither.
+    ['', 'LOG.md に節目がない'],
+    ['# LOG\n', 'LOG.md に節目がない'],
+    [log('release-0.6.0\nx', 'plan\n中断: x', 'L9 gone\nx'), 'LOG.md に節目がない'],
+    [log('節目\nSPEC を書いた'), undefined],
+    [log('節目\nSPEC を書いた', 'release-0.6.0\nx'), undefined],
+    // One before the last entry of a layer closed an earlier phase; close's 中断 of a layer not done yet is a layer's entry too.
+    [log('節目\nx', 'L1 a\na'), after('L1 a')],
+    [log('L1 a\na', '節目\nx', 'L2 b\nb'), after('L2 b')],
+    [log('L2 b\nb', '節目\nx', 'L3 c\n中断: x'), after('L3 c')],
+    [log('L2 b\nb', 'release-0.6.0\nx'), after('L2 b')],
+    [log('L2 b\nb', 'L2 b 節目\nx'), after('L2 b')],
+    [log('節目\nx', 'L1 a\na', '節目\ny'), undefined],
+    [log('L2 b\nb', '節目\nx', 'release-0.6.0\nx', 'converge\n中断: x', 'L9 gone\nx'), undefined],
+  ];
+  for (const [text, expected] of cases) {
+    for (const layer of ['plan', 'converge', ' plan\t']) {
+      assert.equal(missingMilestone(layer, items, text), expected, `${layer} ${text}`);
+      assert.equal(missingMilestone(layer, items, text.replaceAll('\n', '\r\n')), expected, `CRLF ${layer} ${text}`);
+    }
+    // spec comes before any layer, and a PLAN layer or a name only like a phase is no phase at all.
+    for (const layer of ['spec', 'L3 c', 'Plan', 'Converge', '節目']) assert.equal(missingMilestone(layer, items, text), undefined, layer);
+  }
+  // A PLAN without layers makes every entry one of another name.
+  assert.equal(missingMilestone('plan', [], log('節目\nx', 'L1 a\na')), undefined);
+  assert.equal(missingMilestone('plan', [], log('L1 a\na')), 'LOG.md に節目がない');
 });
 
 test('daysBetween counts local calendar days, and 0 when the end is not on a later date', () => {

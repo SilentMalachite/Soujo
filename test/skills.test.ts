@@ -432,7 +432,9 @@ test('the CLI answers converge\'s endings as the skill expects', (t) => {
   const missing = project(temp(t), { 'PLAN.md': `${done}- [ ] L2 fix — b（A1 missing）\n` });
   assert.deepEqual(nextCheck(missing, false), ['soujo 警告: NEXT.md がない']);
   // Converged: next set plan leaves nothing to warn about, and resume goes on with go, which switches to plan.
-  const converged = project(temp(t), { 'PLAN.md': done, 'NEXT.md': next('converge') });
+  // converge leaves its milestone first: the one go left before the last layer done is not after that layer's entry.
+  const log = '# LOG\n\n## 2026-09-12 節目\nPLAN の全層完了\n\n## 2026-09-12 L1 a\n\n## 2026-09-13 節目\nconverge: 収束\n';
+  const converged = project(temp(t), { 'PLAN.md': done, 'NEXT.md': next('converge'), 'LOG.md': log });
   nextSet(converged, { layer: 'plan', premise: 'converge で収束', check: 'SPEC に未実装が残っていない' });
   assert.deepEqual(nextCheck(converged, false), []);
   assert.deepEqual([resume(converged)[0], resume(converged)[3]], ['次: plan（effort: high）確認: SPEC に未実装が残っていない', '再開: /soujo:go（Codex は $go）']);

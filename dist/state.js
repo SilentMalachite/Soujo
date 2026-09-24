@@ -8,8 +8,11 @@ export const PRINCIPLES_MAX_LINES = 7;
  * and plan once converge finds no gap.
  */
 export const PHASES = ['spec', 'plan', 'converge'];
-// The phases that come after every layer, since the go and converge skills write them once the last layer is done.
-const AFTER_LAYERS = ['plan', 'converge'];
+/**
+ * The phases that come after every layer, since the go and converge skills write them once the last layer is done. Each
+ * waits for the milestone of the phase before it (see missingMilestone).
+ */
+export const AFTER_LAYERS = ['plan', 'converge'];
 /** The layer name of a LOG entry that marks a milestone: what phase ended and what is open. */
 export const MILESTONE = '節目';
 const NEXT_KEYS = [
@@ -508,6 +511,26 @@ export function lastLog(text) {
 /** The last milestone entry (layer 節目) of LOG.md, or undefined when there is none. */
 export function lastMilestone(text) {
     return parseLog(text).filter((entry) => entry.layer === MILESTONE).at(-1);
+}
+/**
+ * What LOG.md lacks before NEXT.md may point to layer, or undefined when nothing: plan and converge (AFTER_LAYERS, matched
+ * after trimming) wait for a milestone after the last entry of one of PLAN's layers, the entries layer done and close write.
+ * The skills leave the milestone saying what a phase ended before next set, since a session stopped between the two would
+ * resume at the next phase without the milestone brief shows; this keeps that order instead of trusting the model. A
+ * milestone before that entry closed an earlier phase, and with no such entry any milestone does. Entries of other names (a
+ * release written by hand, a phase's 中断) are neither. spec and PLAN's layers need none.
+ */
+export function missingMilestone(layer, items, log) {
+    if (!AFTER_LAYERS.includes(layer.trim()))
+        return undefined;
+    const layers = new Set(items.map((item) => item.layer));
+    for (const entry of parseLog(log).reverse()) {
+        if (entry.layer === MILESTONE)
+            return undefined;
+        if (layers.has(entry.layer))
+            return `LOG.md に層「${entry.layer}」の記録より後の節目がない`;
+    }
+    return 'LOG.md に節目がない';
 }
 /** Whether value is a month as log rotation names it: YYYY-MM, the month from 01 to 12. */
 export function isMonth(value) {

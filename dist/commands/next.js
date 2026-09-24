@@ -2,7 +2,7 @@
 import { dirname } from 'node:path';
 import { STATE_DIR, findStateDir, hideHome, homePath, readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
 import { gitBudget, gitChangeCount, gitToplevel } from '../git.js';
-import { PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, validateSpec, } from '../state.js';
+import { AFTER_LAYERS, PHASES, checkMismatch, contentLines, formatDate, formatNext, logMonths, missingConditions, missingMilestone, rotateLog, nextStatus, parseNext, parsePlan, printable, validateNext, validatePlan, validateSpec, } from '../state.js';
 // How many problems a warning names before counting the rest, so that the line stays readable where a hook shows it.
 const SHOWN_PROBLEMS = 4;
 // The one line that names problems: the first SHOWN_PROBLEMS of them, then how many are left. Problems named by line are one
@@ -36,7 +36,8 @@ const PHASE_EFFORT = 'high';
 /**
  * Rewrites NEXT.md. Writes nothing when the result would be invalid, when a phase gets an effort other than
  * PHASE_EFFORT, when PLAN.md has ambiguous layer names, or when PLAN.md has layers and the layer is neither one of them
- * nor a phase: a mistyped name would otherwise pass next check and resume until layer done.
+ * nor a phase: a mistyped name would otherwise pass next check and resume until layer done. Nor when plan or converge
+ * comes before its milestone (see missingMilestone), checked last, so that what the command or PLAN.md gets wrong is named first.
  */
 export function nextSet(cwd, input) {
     const dir = requireStateDir(cwd);
@@ -58,6 +59,12 @@ export function nextSet(cwd, input) {
     const items = parsePlan(plan);
     if (items.length > 0 && !phase && !items.some((item) => item.layer === layer)) {
         throw new Error(`NEXT.md を書かない: PLAN.md に層「${layer}」がない（PLAN の層名をそのまま、または ${PHASES.join(' / ')}）`);
+    }
+    // Read only for the layers that wait for a milestone, so that a LOG.md that cannot be read refuses no other layer.
+    const log = AFTER_LAYERS.includes(layer) ? (readState(dir, 'LOG.md') ?? '') : '';
+    const missing = missingMilestone(layer, items, log);
+    if (missing !== undefined) {
+        throw new Error(`NEXT.md を書かない: ${missing}（先に soujo log add '節目' --line '<何が終わったか>' --line '<何が未決か>'）`);
     }
     // A killed write's temporary file would otherwise stay untracked until layer done or close, or block a write under the same pid.
     removeLeftoverTemps(dir);
