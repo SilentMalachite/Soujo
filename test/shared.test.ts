@@ -14,6 +14,8 @@ import {
   requireCommittable,
   requireCommittableFiles,
   requireNext,
+  requireNextStep,
+  requireRecordsCommittable,
   resumable,
   skill,
   uncommittedLogs,
@@ -157,6 +159,37 @@ test('requireCommittable refuses when it could not read every untracked file nam
   // A credential name among the ones that were read is the more useful of the two, so it is reported first.
   writeFileSync(join(dir, '.env'), '');
   assert.throws(() => requireCommittable(dir, 1024), /^Error: \.env は認証情報のファイル名なのでコミットしない/);
+});
+
+// Only staging the whole project takes an untracked file in, which a commit of the records alone does not.
+test('requireRecordsCommittable makes the checks of requireCommittable but the untracked credential names', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { 'NEXT.md': NEXT });
+  writeFileSync(join(dir, '.env'), 'TOKEN=x\n');
+  assert.throws(() => requireCommittable(dir), /^Error: \.env は認証情報のファイル名なのでコミットしない/);
+  assert.doesNotThrow(() => requireRecordsCommittable(dir));
+
+  assert.throws(() => requireRecordsCommittable(project(temp(t))), /^Error: git リポジトリではないのでコミットできない$/);
+  const rebasing = project(repo(t));
+  mkdirSync(join(rebasing, '.git', 'rebase-merge'));
+  assert.throws(() => requireRecordsCommittable(rebasing), /^Error: git の rebase が途中なのでコミットしない/);
+  const ignoring = project(repo(t), { 'LOG.md': '' });
+  writeFileSync(join(ignoring, '.gitignore'), '.soujo/LOG.md\n');
+  assert.throws(() => requireRecordsCommittable(ignoring), /^Error: \.soujo\/LOG\.md が git に無視されていて/);
+  const linked = repo(t);
+  project(join(linked, 'real'));
+  symlinkSync('real/.soujo', join(linked, '.soujo'));
+  assert.throws(() => requireRecordsCommittable(linked), /^Error: \.soujo\/ が symlink なので記録をコミットできない/);
+});
+
+test('requireNextStep refuses a NEXT.md that is missing, invalid, or still at the step', (t) => {
+  const hint = '（先に soujo next set で次の一手を書く）';
+  const dir = project(temp(t));
+  assert.throws(() => requireNextStep(join(dir, '.soujo'), 'converge'), new RegExp(`^Error: NEXT\\.md がない${hint}$`));
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), '次: converge\n');
+  assert.throws(() => requireNextStep(join(dir, '.soujo'), 'converge'), new RegExp(`^Error: NEXT\\.md が無効: 「前提」がない、`));
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', 'converge'));
+  assert.throws(() => requireNextStep(join(dir, '.soujo'), 'converge'), new RegExp(`^Error: NEXT\\.md の次がまだ「converge」${hint}$`));
+  assert.doesNotThrow(() => requireNextStep(join(dir, '.soujo'), 'L2 state'));
 });
 
 test('headState reads the committed file, following a symlinked state file', { skip: process.platform === 'win32' }, (t) => {

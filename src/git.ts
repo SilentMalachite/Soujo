@@ -323,6 +323,45 @@ export function gitCommit(cwd: string, message: string): void {
   git(cwd, ['commit', '-q', '-m', message, ...HERE]);
 }
 
+function literalPathspecs(paths: readonly string[]): string[] {
+  return paths.map((path) => `:(literal)${path}`);
+}
+
+function inWorkingTree(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stages the given paths (relative to cwd, taken literally) as they are in the working tree, a deletion included, and nothing
+ * else. Left out: a path neither in the working tree nor in the index, since git refuses a pathspec that matches nothing (one
+ * removed from both but still in HEAD is committed by gitCommitPaths all the same), and a skip-worktree entry, which git
+ * refuses to stage when it is named (gitNotStaged then reports it, as it does after gitAddAll).
+ */
+export function gitAddPaths(cwd: string, paths: readonly string[]): void {
+  if (paths.length === 0) return;
+  // "<tag> <path>" per index entry, the path relative to cwd as it is given here; the tag is "S" for skip-worktree.
+  const records = completeFields(git(cwd, ['ls-files', '-z', '-t', '--', ...literalPathspecs(paths)])).fields;
+  const indexed = new Map(records.filter((record) => record.length > 2).map((record) => [record.slice(2), record[0]]));
+  const staged = paths.filter((path) => (indexed.has(path) ? indexed.get(path) !== 'S' : inWorkingTree(join(cwd, path))));
+  if (staged.length > 0) git(cwd, ['add', '-A', '--', ...literalPathspecs(staged)]);
+}
+
+/**
+ * Commits the given paths (relative to cwd, taken literally) as they are in the working tree, and nothing else: changes staged
+ * for other paths stay staged (`git commit --only`). Each path has to be known to git, in the index or in HEAD (see
+ * gitAddPaths). The repository's hooks run, as in gitCommit.
+ */
+export function gitCommitPaths(cwd: string, message: string, paths: readonly string[]): void {
+  // Without a path, `git commit --only` would commit the whole index.
+  if (paths.length === 0) throw new Error('コミットするパスがない');
+  git(cwd, ['commit', '-q', '--only', '-m', message, '--', ...literalPathspecs(paths)]);
+}
+
 /** Whether the index has anything to commit in cwd and below (compared with HEAD, or with nothing before the first commit). */
 export function gitHasStagedChanges(cwd: string): boolean {
   return exitCode(cwd, ['diff', '--cached', '--quiet', ...HERE]) === 1;

@@ -10,10 +10,12 @@ import {
   completeFields,
   countRecords,
   gitAddAll,
+  gitAddPaths,
   gitAddedFiles,
   gitChangeCount,
   gitChangedPaths,
   gitCommit,
+  gitCommitPaths,
   gitCommitsAfter,
   gitFindCommit,
   gitFindCommitStarting,
@@ -260,6 +262,41 @@ test('gitStatusExcluding leaves out the given paths literally, and gitChangedPat
     '.soujo/LOG-2026-08.md',
   ]);
   assert.deepEqual(gitChangedPaths(app, []), []);
+});
+
+// A phase commits its records under its own name, so neither the staging nor the commit may take in anything else.
+test('gitAddPaths and gitCommitPaths stage and commit only the given paths, taken literally, leaving other staged changes staged', (t) => {
+  const top = repo(t);
+  const app = join(top, 'app');
+  mkdirSync(app);
+  writeFileSync(join(top, 'outside.txt'), 'o\n');
+  writeFileSync(join(app, 'a.md'), 'a\n');
+  writeFileSync(join(app, 'gone.md'), 'g\n');
+  commitAll(top, 'base');
+
+  writeFileSync(join(top, 'outside.txt'), 'staged\n');
+  execFileSync('git', ['add', 'outside.txt'], { cwd: top });
+  writeFileSync(join(app, 'a.md'), 'changed\n');
+  writeFileSync(join(app, '[ab].md'), 'new\n');
+  rmSync(join(app, 'gone.md'));
+  // "[ab].md" as a glob would match a.md; a path neither in the working tree nor in the index is left out, not refused.
+  gitAddPaths(app, ['[ab].md', 'gone.md', 'missing.md']);
+  gitAddPaths(app, []);
+  assert.deepEqual(gitStatus(top), ['A  app/[ab].md', ' M app/a.md', 'D  app/gone.md', 'M  outside.txt']);
+
+  gitCommitPaths(app, 'records', ['[ab].md', 'gone.md']);
+  assert.equal(gitLastCommit(app)?.subject, 'records');
+  const committed = execFileSync('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: top, encoding: 'utf8' });
+  assert.deepEqual(committed.split('\n').filter(Boolean), ['app/[ab].md', 'app/gone.md']);
+  assert.deepEqual(gitStatus(top), [' M app/a.md', 'M  outside.txt']);
+  // Without a path, `git commit --only` would commit the whole index.
+  assert.throws(() => gitCommitPaths(app, 'everything', []), /^Error: コミットするパスがない$/);
+  assert.equal(gitLastCommit(app)?.subject, 'records');
+
+  // git refuses to stage a skip-worktree entry it is given by name, so it is left out, for gitNotStaged to report.
+  execFileSync('git', ['update-index', '--skip-worktree', 'a.md'], { cwd: app });
+  gitAddPaths(app, ['a.md']);
+  assert.deepEqual(gitNotStaged(app, ['a.md']), ['a.md']);
 });
 
 test('gitUnmergedCount counts conflicts in cwd and below', (t) => {

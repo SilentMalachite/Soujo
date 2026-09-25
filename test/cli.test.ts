@@ -73,6 +73,7 @@ const USAGES = {
   resume: 'soujo resume',
   brief: 'soujo brief',
   close: 'soujo close [--note <1〜3行>]',
+  phaseDone: `soujo phase done '<フェーズ>'`,
   mapPlan: 'soujo map plan',
   mapCode: 'soujo map code [ディレクトリ]',
 };
@@ -109,6 +110,8 @@ test('<command> --help prints the usage line of that command, the same text as i
     [['resume', 'now'], USAGES.resume],
     [['brief', 'now'], USAGES.brief],
     [['close', 'note'], USAGES.close],
+    [['phase', 'done'], USAGES.phaseDone],
+    [['phase', 'done', 'spec', 'plan'], USAGES.phaseDone],
     [['map', 'plan', 'x'], USAGES.mapPlan],
     [['map', 'code', 'a', 'b'], USAGES.mapCode],
   ];
@@ -126,6 +129,7 @@ test('the first word of two-word commands with --help lists the commands startin
     [['plan', '-h'], [USAGES.planList, USAGES.planNext]],
     [['log', '--help'], [USAGES.logAdd, USAGES.logRotate]],
     [['layer', '--help'], [USAGES.layerDone]],
+    [['phase', '-h'], [USAGES.phaseDone]],
     [['map', '--help'], [USAGES.mapPlan, USAGES.mapCode]],
   ];
   for (const [args, usages] of cases) {
@@ -142,6 +146,7 @@ test('--help wins over other arguments and --hook, but not after -- or as an att
     [['next', 'check', '--hook', '--help'], USAGES.nextCheck],
     [['next', 'show', '--hook', '-h'], USAGES.nextShow],
     [['layer', 'done', 'L1', '--note', '--help'], USAGES.layerDone],
+    [['phase', 'done', 'nope', '--help'], USAGES.phaseDone],
   ];
   for (const [args, usage] of cases) {
     const result = soujoIn(outside, ...args);
@@ -182,6 +187,7 @@ test('--help on write commands writes nothing', (t) => {
     [['log', 'rotate', '--before', '2026-09', '--help'], USAGES.logRotate],
     [['layer', 'done', 'L1 scaffold', '--note', 'a', '--help'], USAGES.layerDone],
     [['close', '--note', 'a', '-h'], USAGES.close],
+    [['phase', 'done', 'spec', '--help'], USAGES.phaseDone],
   ];
   for (const [args, usage] of cases) {
     const result = soujoIn(dir, ...args);
@@ -313,6 +319,30 @@ test('close exits 1 on an invalid NEXT.md without writing, then commits through 
   assert.match(readFileSync(join(dir, '.soujo', 'LOG.md'), 'utf8'), /\n中断: - 途中\n$/);
 });
 
+test('phase done commits the records through the CLI, exits 0 with nothing left to commit, and exits 1 on a refusal', (t) => {
+  const dir = repo(t);
+  soujoIn(dir, 'init');
+  const early = soujoIn(dir, 'phase', 'done', 'spec');
+  assert.deepEqual([early.status, early.stdout, early.stderr], [1, '', 'soujo: NEXT.md の次がまだ「spec」（先に soujo next set で次の一手を書く）\n']);
+  assert.equal(soujoIn(dir, 'log', 'add', '節目', '--line', 'SPEC.md を書いた', '--line', '未決: なし').status, 0);
+  assert.equal(soujoIn(dir, 'next', 'set', '--layer', 'plan', '--premise', 'SPEC.md 完成', '--check', 'c').status, 0);
+
+  const done = soujoIn(dir, 'phase', 'done', 'spec');
+  assert.equal(done.status, 0, done.stderr);
+  assert.match(done.stdout, /^フェーズ「spec」の記録をコミット: [0-9a-f]+ phase: spec\n$/);
+  // The files init placed next to .soujo/ are no record, so they are left for a layer.
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' }), '?? AGENTS.md\n?? CLAUDE.md\n');
+  const again = soujoIn(dir, 'phase', 'done', 'spec');
+  assert.deepEqual([again.status, again.stdout, again.stderr], [0, 'フェーズ「spec」の記録に未コミットの変更なし\n', '']);
+
+  const unknownPhase = soujoIn(dir, 'phase', 'done', 'layer');
+  assert.deepEqual([unknownPhase.status, unknownPhase.stdout, unknownPhase.stderr], [
+    1,
+    '',
+    'soujo: フェーズ「layer」はない（spec / plan / converge のどれか）\n',
+  ]);
+});
+
 test('map plan and map code print their diagrams through the CLI', (t) => {
   const dir = repo(t);
   soujoIn(dir, 'init');
@@ -377,6 +407,7 @@ test('inside a host plugin directory only --help, next check, and next show --ho
       [['resume'], 1, '', refused],
       [['brief'], 1, '', refused],
       [['close', '--note', 'a'], 1, '', refused],
+      [['phase', 'done', 'spec'], 1, '', refused],
       [['map', 'plan'], 1, '', refused],
       [['map', 'code'], 1, '', refused],
       [['map', 'code', project], 1, '', refused],

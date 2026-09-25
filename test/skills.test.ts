@@ -257,6 +257,38 @@ test('spec, plan, go, and converge write a two-line 節目 entry before any next
   assert.deepEqual(ways, ['節目', 'next set', '節目', 'next set']);
 });
 
+function isPhaseDone(argv: string[]): boolean {
+  return argv[0] === 'phase' && argv[1] === 'done';
+}
+
+// SPEC §6, §7: spec, plan, and converge commit their records with phase done once next set has handed over, since phase done
+// refuses while 次: is still the phase; each names itself, and no other skill commits a phase.
+test('spec, plan, and converge run phase done with their own name after their next set, and no other skill runs it', () => {
+  for (const name of SKILLS) {
+    const done = commands(body(name)).filter(isPhaseDone);
+    if (PHASES.includes(name)) {
+      assert.ok(done.length > 0, `${name}: soujo phase done`);
+      for (const argv of done) assert.deepEqual(argv, ['phase', 'done', name], name);
+    } else {
+      assert.deepEqual(done, [], `${name}: phase done がない`);
+    }
+  }
+  const asks = (name: string) => sections(body(name)).get('soujo に頼むこと') ?? [];
+  // soujo brief is only named, as where the 節目 entry shows.
+  const sequence = (name: string) =>
+    commands(asks(name).join('\n'))
+      .map((argv) => argv.slice(0, 2).join(' '))
+      .filter((command) => command !== 'brief');
+  assert.deepEqual(sequence('spec'), ['init', 'log add', 'next set', 'phase done']);
+  // spec leaves next set out while 次: is a layer of PLAN; its records are committed all the same.
+  assert.ok(asks('spec').some((line) => line.includes("`soujo phase done 'spec'`（next set をしないときも。`git init` を断られたときはしない）")), 'spec: next set がなくても phase done、git がなければしない');
+  assert.deepEqual(sequence('plan'), ['log add', 'next check', 'next set', 'phase done', 'map plan']);
+  // Without layers added, NEXT.md still points at plan, which phase done refuses.
+  assert.ok(asks('plan').some((line) => line.includes("`soujo phase done 'plan'`（層を足したときだけ）→ `soujo map plan`")), 'plan: 層を足したときだけ');
+  // The next set of converge's first ending is conditional; phase done and map plan are not.
+  assert.ok(asks('converge').some((line) => line.includes("。続けて `soujo phase done 'converge'` → `soujo map plan`。")), 'converge: 条件つきの next set の後に続けて');
+});
+
 // SPEC §14: a layer named like a phase or 節目 is refused, so the skills that add layers say so.
 test('plan and converge name every phase and 節目 as layer names the CLI refuses', () => {
   for (const name of ['plan', 'converge']) {
@@ -401,7 +433,11 @@ test('converge reads keyed lines and the layers\' code, classifies every gap, ap
     commands(found.get('soujo に頼むこと')?.[index] ?? '')
       .map((argv) => argv.slice(0, 2).join(' '))
       .filter((command) => command !== 'brief');
-  assert.deepEqual([asks(0), asks(1), asks(2)], [['next check'], ['log add', 'next check', 'next set', 'map plan'], ['log add', 'next set']]);
+  assert.deepEqual([asks(0), asks(1), asks(2)], [
+    ['next check'],
+    ['log add', 'next check', 'next set', 'phase done', 'map plan'],
+    ['log add', 'next set', 'phase done'],
+  ]);
   // SPEC §14: Codex put met keys on extra --line's and log add refused the entry, so both endings keep the keys in the first
   // line's parentheses and none in the second.
   for (const argv of commands(text('soujo に頼むこと')).filter(isMilestone)) {

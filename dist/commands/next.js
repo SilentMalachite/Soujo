@@ -148,9 +148,8 @@ function problems(dir, now) {
 }
 /**
  * Kept apart like the state files, so that a git failure does not hide the other warnings. While `次:` is a phase, the
- * records `.soujo/` holds are left out of the count: spec, plan, and converge write them and commit nothing, so a warning
- * about them would stand from the phase until the next layer done, with nothing to do about it. A change anywhere else
- * still warns.
+ * records `.soujo/` holds are left out of the count: spec, plan, and converge commit them only at their end, with phase done,
+ * so a warning about them in the middle of a phase would give nothing to do. A change anywhere else still warns.
  */
 function changeProblems(root, phase) {
     try {

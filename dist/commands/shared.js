@@ -1,11 +1,11 @@
 // Checks and messages used by more than one command: committing records, reading NEXT.md and PLAN.md, and naming skills for both hosts.
 import { join, posix } from 'node:path';
 import { STATE_DIR, STATE_FILES, MAX_SYMLINKS, isSymlink, readState, removeRootTemps, requireState, requireStateDir, stateIdentities, stateTarget, statePath, symlinkTargetParts, trackedStatePath, } from '../files.js';
-import { gitAddAll, gitCommit, gitHasCommits, gitHasStagedChanges, gitHeadEntry, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, gitUntracked, } from '../git.js';
+import { gitAddAll, gitAddPaths, gitChangedPaths, gitCommit, gitCommitPaths, gitHasCommits, gitHasStagedChanges, gitHeadEntry, gitIgnored, gitLastCommit, gitNotStaged, gitOperationInProgress, gitToplevel, gitUnmergedCount, gitUntracked, } from '../git.js';
 import { parseLog, parseNext, parsePlan, validateNext, validatePlan } from '../state.js';
 const CLIP = 60;
-// The records a layer or wip commit must carry as written. SPEC.md is one too: the skills write it, and a layer's commit
-// would otherwise leave its change behind without a word.
+// The records a layer, wip, or phase commit must carry as written. SPEC.md is one too: the skills write it, and a layer's
+// commit would otherwise leave its change behind without a word.
 const RECORDS = ['SPEC.md', 'PLAN.md', 'LOG.md', 'NEXT.md'];
 // How many paths an error names before counting the rest.
 const SHOWN_PATHS = 3;
@@ -18,6 +18,8 @@ export const CREDENTIAL_FILE = /^(?:\.env(?:\.(?!example$).*)?|\.envrc|\.npmrc|\
 export const NO_LAYERS = 'PLAN.md に層がない';
 /** The start of the subject of a layer done commit. */
 export const LAYER_COMMIT = 'layer: ';
+/** The start of the subject of a phase done commit. */
+export const PHASE_COMMIT = 'phase: ';
 /** The start of the first line of a LOG entry written by close. */
 export const INTERRUPTED = '中断: ';
 /** A note starting like a 中断 entry, in any spelling close accepts. */
@@ -116,6 +118,15 @@ export function requireNext(dir, hint) {
     return next;
 }
 /**
+ * Throws unless NEXT.md is valid and has moved past step (a layer or a phase), so that the commit closing step carries the
+ * next one.
+ */
+export function requireNextStep(dir, step) {
+    const hint = '（先に soujo next set で次の一手を書く）';
+    if (requireNext(dir, hint).layer === step)
+        throw new Error(`NEXT.md の次がまだ「${step}」${hint}`);
+}
+/**
  * Whether path names a credential file, by its base name in lower case, on any file system: one committed where .ENV and
  * .env are two files is cloned where they are one, and a tool reading .env there reads what was committed as .ENV.
  */
@@ -128,14 +139,23 @@ function listPaths(paths) {
     return `${paths.slice(0, SHOWN_PATHS).join(', ')}${rest}`;
 }
 /**
- * Throws unless committing the project at root is safe: a repository, .soujo/ not a symlink, every state file (a symlink's
- * target included) inside the project, outside .git, and not another state file or archive, no unfinished
- * merge/rebase/cherry-pick/revert/bisect anywhere in the repository, no unmerged files in the project, no state file or symlink
- * target ignored by git, and no untracked credential file (see isCredential) that staging everything would take in. One
- * added with `git add` first is tracked, and is committed as the user chose. The untracked files are read to a byte limit
- * (maxUntracked, git.ts's default; given only by tests), past which none of them was seen and committing is refused.
+ * Throws unless committing the project at root is safe: the checks of requireRecordsCommittable, and no untracked credential
+ * file (see isCredential) that staging everything would take in. One added with `git add` first is tracked, and is committed
+ * as the user chose. The untracked files are read to a byte limit (maxUntracked, git.ts's default; given only by tests), past
+ * which none of them was seen and committing is refused.
  */
 export function requireCommittable(root, maxUntracked) {
+    requireRecordsCommittable(root);
+    requireNoCredentials(root, maxUntracked);
+}
+/**
+ * Throws unless committing the records of the project at root is safe: a repository, .soujo/ not a symlink, every state file
+ * (a symlink's target included) inside the project, outside .git, and not another state file or archive, no unfinished
+ * merge/rebase/cherry-pick/revert/bisect anywhere in the repository, no unmerged files in the project, and no state file or
+ * symlink target ignored by git. A commit of the records alone (commitOnlyRecords) needs no more: the untracked credential
+ * names of requireCommittable matter only to a commit that stages everything.
+ */
+export function requireRecordsCommittable(root) {
     const toplevel = gitToplevel(root);
     if (toplevel === undefined)
         throw new Error('git リポジトリではないのでコミットできない');
@@ -150,7 +170,6 @@ export function requireCommittable(root, maxUntracked) {
     if (unmerged > 0)
         throw new Error(`競合が未解決のファイルが ${unmerged}件あるのでコミットしない`);
     requireNotIgnored(root, STATE_FILES);
-    requireNoCredentials(root, maxUntracked);
 }
 /**
  * Throws when staging everything in the project would take in an untracked file whose name is a credential file's (see
@@ -269,14 +288,37 @@ export function commitRecords(root, subject, extra = []) {
     // requireCommittable looked before the records were written; a credential file made in between would be staged unseen.
     requireNoCredentials(root);
     gitAddAll(root);
-    const paths = [...RECORDS, ...extra].flatMap((file) => [statePath(file), trackedStatePath(root, file)]);
-    const unstaged = gitNotStaged(root, [...new Set(paths)]);
-    if (unstaged.length > 0)
-        throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
+    requireStaged(root, recordPaths(root, extra));
     if (!gitHasStagedChanges(root))
         return false;
     gitCommit(root, subject);
     return true;
+}
+/**
+ * Commits SPEC, PLAN, LOG, and NEXT (a symlink together with its target) as written, as subject, and nothing else: every
+ * other change in the project, staged or not, is left as it was, so that the subject names no one else's work. Returns
+ * false, without committing, when none of them has an uncommitted change. As in commitRecords, nothing is committed while one
+ * is not staged as written (skip-worktree).
+ */
+export function commitOnlyRecords(root, subject) {
+    const paths = recordPaths(root);
+    gitAddPaths(root, paths);
+    requireStaged(root, paths);
+    const changed = gitChangedPaths(root, paths);
+    if (changed.length === 0)
+        return false;
+    gitCommitPaths(root, subject, changed);
+    return true;
+}
+// SPEC, PLAN, LOG, NEXT, and extra relative to root, each with the symlink target git tracks for it, once each.
+function recordPaths(root, extra = []) {
+    return [...new Set([...RECORDS, ...extra].flatMap((file) => [statePath(file), trackedStatePath(root, file)]))];
+}
+// Throws when staging left one of paths as it was: the commit would lack it, and a re-run could not add it afterwards.
+function requireStaged(root, paths) {
+    const unstaged = gitNotStaged(root, paths);
+    if (unstaged.length > 0)
+        throw new Error(`${unstaged.join(', ')} の変更を git が拾っていない（skip-worktree などを確認）`);
 }
 /** Runs step and appends what is already recorded and how to resume to its error message. */
 export function resumable(step, recorded) {

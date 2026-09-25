@@ -6,6 +6,10 @@ The English version is canonical; the Japanese page is a translation. Versions f
 
 ## Unreleased
 
+### Added
+
+- `soujo phase done '<phase>'` commits the four records of `spec` / `plan` / `converge` as `phase: <phase>` after their `next set`, leaving every other change as it was. The three skills run it, so a phase's records no longer wait for the next `layer done`.
+
 ### Changed
 
 - `soujo next set` refuses `plan` and `converge` until `LOG.md` has a milestone after the last entry of a PLAN layer (what `layer done` and `close` write), so `次:` can no longer move to one of these phases before the milestone `brief` shows is written. `go` leaves the milestone again when `next set` refuses for a missing one.

@@ -8,6 +8,7 @@ import { layerDone } from './commands/layer.js';
 import { logAdd, logRotate } from './commands/log.js';
 import { mapCode, mapPlan } from './commands/map.js';
 import { nextCheck, nextSet, nextShow } from './commands/next.js';
+import { phaseDone } from './commands/phase.js';
 import { planList, planNext } from './commands/plan.js';
 import { resume } from './commands/resume.js';
 import { hideHome, homePath, pluginDir } from './files.js';
@@ -112,6 +113,14 @@ const COMMANDS = {
             const { positionals, values } = parseArgs({ args, options: { note: { type: 'string' } }, allowPositionals: true });
             expectPositionals(positionals, 0, usage);
             return close(cwd, values.note);
+        },
+    },
+    'phase done': {
+        usage: `phase done '<フェーズ>'`,
+        run: (args, cwd, usage) => {
+            const { positionals } = parseArgs({ args, allowPositionals: true });
+            expectPositionals(positionals, 1, usage);
+            return phaseDone(cwd, positionals[0] ?? '');
         },
     },
     'map plan': noArguments('map plan', mapPlan),

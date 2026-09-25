@@ -3,15 +3,10 @@ import { dirname } from 'node:path';
 import { readState, removeLeftoverTemps, requireState, requireStateDir, writeState } from '../files.js';
 import { gitAddedFiles, gitFindCommit } from '../git.js';
 import { appendLog, formatDate, logLines, markDone, parsePlan, planLayers, validatePlan } from '../state.js';
-import { INTERRUPTED, INTERRUPTION_NOTE, LAYER_COMMIT, commitRecords, committedHash, headState, requireCommittable, requireNext, resumable, uncommittedLogs, } from './shared.js';
+import { INTERRUPTED, INTERRUPTION_NOTE, LAYER_COMMIT, commitRecords, committedHash, headState, requireCommittable, requireNextStep, resumable, uncommittedLogs, } from './shared.js';
 const SHOWN_FILES = 5;
 function isChecked(plan, layer) {
     return plan !== undefined && parsePlan(plan).find((item) => item.layer === layer)?.done === true;
-}
-function requireNextStep(dir, layer) {
-    const hint = '（先に soujo next set で次の一手を書く）';
-    if (requireNext(dir, hint).layer === layer)
-        throw new Error(`NEXT.md の次がまだ「${layer}」${hint}`);
 }
 // Display only: the commit already succeeded, so a failure here must not turn the result into an error.
 function describeAdded(root) {

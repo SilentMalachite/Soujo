@@ -96,7 +96,7 @@ Claude Code のプラグインは `version` を書いていないので、新し
 
 git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init` が `.soujo/` と、なければ `CLAUDE.md`・`AGENTS.md` を作る。既存のファイルは上書きしない。
 
-`spec`・`plan`・`converge` はコミットしない。それらが変えた `.soujo/` は、次の `/soujo:go` が層を締めるまで（差のなかった `converge` の後は SPEC が変わって層が締まるまで）未コミットのまま待つ。`NEXT.md` がこの3つのどれかを指す間、Claude Code の Stop フックは未コミット件数から `.soujo/` を外すので、フェーズがコミットしないつもりの記録については黙る。それ以外の場所の変更は今までどおり警告する。
+`spec`・`plan`・`converge` は、`next set` の後に `soujo phase done` で `.soujo/` の記録だけを `phase: <フェーズ>` としてコミットする。ほかの変更は層に任せる。`NEXT.md` がこの3つのどれかを指す間、Claude Code の Stop フックは未コミット件数から `.soujo/` を外すので、フェーズがまだコミットしていない記録については黙る。それ以外の場所の変更は今までどおり警告する。
 
 ## ホストごとの注意
 
@@ -104,7 +104,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 |---|---|---|
 | フック | SessionStart で `NEXT.md` を文脈に入れ、Stop で `NEXT.md` がない・無効・PLAN と食い違う、未コミットの変更がある（`次:` がフェーズの間は `.soujo/` を除く）、または `soujo log rotate` が2か月分以上のエントリを移せるときに警告する（止めない） | 頼らない。止まる前に `$close`。Codex は信頼した後だけ `hooks/hooks.json` を実行するが、未確認なので信頼しないでおく |
 | effort | `/soujo:go` の前に、`NEXT.md` の `effort:` を見て会話で自分で設定 | `codex -c model_reasoning_effort=<low\|medium\|high\|xhigh>` か `~/.codex/config.toml` の `model_reasoning_effort` |
-| コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`soujo layer done` / `soujo close` の昇格を承認する（`codex exec` は `--add-dir "$PWD/.git"`）。再実行はコミットだけをやり直す |
+| コミット | 通常の権限で可 | `workspace-write` サンドボックスは `.git` に書けない。`soujo layer done` / `soujo close` / `soujo phase done` の昇格を承認する（`codex exec` は `--add-dir "$PWD/.git"`）。再実行はコミットだけをやり直す |
 | サブエージェント | `review` が `soujo:reviewer` を1体だけ起動。`export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2` で並列数を抑える | 使わない |
 
 ## CLI
@@ -125,6 +125,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo resume` | 4行の現在地。最終コミットから暦日で3日以上なら `再開:` が `soujo brief` を指す |
 | `soujo brief` | 何日も・何週間も離れた後に戻るための5行：PLAN の進捗と最後の層、その後のコミット、最後の `節目` エントリ、最終コミットからの日数（暦日）、次の一手。何も書かない |
 | `soujo close [--note '<メモ>']` | 中断を記録 → `wip: <層>` でコミット。`layer done` がコミット前に拒否するものは拒否する |
+| `soujo phase done '<フェーズ>'` | `spec` / `plan` / `converge` が `next set` で引き継いだ後、4つの記録だけを `phase: <フェーズ>` でコミットする。ほかの変更はそのまま残す |
 | `soujo map plan` / `soujo map code [<ディレクトリ>]` | 計画の ASCII 図（`PLAN.md` が使えないときは同じ1行を前に置く） / import の Mermaid 図かディレクトリ木。`<ディレクトリ>` がプロジェクトの外なら注記する |
 
 ## 開発

@@ -20,4 +20,9 @@
 1. ✓ A（CLI）と B（skills）をサブエージェントで並行 → main に取り込み（da08c18・d047fd7）。
 2. ✓ SPEC(+ja) §14・CHANGELOG(+ja) Unreleased（f22cfca・4a69e00）。`npm test` 435 通過。
 3. ✓ reviewer 指摘23件：21件を直した。見送り2件 — #14 1回1コマンドの規則は「読むもの」1行目（どのプロジェクトの soujo・git かを述べる共通行）に置くまま、#15 reviewer はプロジェクトを cwd に動くので `git -C` の案内は足さない。#4・#6・#22 は実装を広げず SPEC に限界として書いた。`npm test` 437 通過。
-4. O1・O3 を1問ずつ確認。
+4. O3 → 決定（2026-09-25）: 専用コマンド `soujo phase done '<spec|plan|converge>'`。
+   - 4つの記録（SPEC・PLAN・LOG・NEXT とその symlink 先）だけを `phase: <フェーズ>` でコミット。ほかの変更は残す（フェーズ名で他人の変更をコミットしない）。
+   - 拒否: フェーズ名でない・コミットできない状態（途中の merge 等・記録が ignore 等）・NEXT.md が無効か `次:` がまだそのフェーズ（先に next set）。記録に変更なしは「なし」で終了0（再実行できる）。
+   - スキル: spec・plan（層を足したとき）・converge は next set の後に phase done。
+   - 担当: 実装・スキル・テスト = サブエージェント / SPEC・README・CHANGELOG = 本体。
+5. O1（Codex フックの実地確認）は push が要る → 利用者の判断待ち。
