@@ -22,5 +22,5 @@ Soujo is maintained by one person, so there is no fixed response time. Reports a
 Soujo runs git and writes files in the project it is used in. Reports about these are in scope:
 
 - writing outside the project, for example through symlinks in a cloned repository;
-- committing files the user did not mean to commit (`layer done`, `close`, and `log rotate` stage every change in the project, and refuse only untracked files named like credential files that git does not ignore);
+- committing files the user did not mean to commit (`layer done`, `close`, and `log rotate` stage every change in the project, and refuse only untracked files named like credential files that git does not ignore; `phase done` stages only the records, with their symlink targets and, for `spec`, the untracked `CLAUDE.md` / `AGENTS.md` of `soujo init`, and refuses an untracked target named like a credential file);
 - the Claude Code hooks, which run `node dist/cli.js` from the plugin at every session start and stop.

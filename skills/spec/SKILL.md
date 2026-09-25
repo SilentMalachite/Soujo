@@ -16,7 +16,7 @@ description: "Soujo で作るものを1問ずつの対話で決め、.soujo/SPEC
 ## soujo に頼むこと
 - 最初に `soujo init`（`.soujo/` と、無ければ CLAUDE.md / AGENTS.md を作る。既存は上書きしない）。git リポジトリでないと出たら、`git init` するかを1問目で聞く。
 - 書き終えたら節目を残す：`soujo log add '節目' --line 'SPEC.md を書いた: <目的の要点>（原則を変えたら 原則: <変えたキーと何を>）' --line '未決: <「未定」の節と、決まらず空のままの原則。なければ なし>'`（1行目は `soujo brief` に出る。後のコマンドが失敗しても繰り返さない）。
-- 続けて `soujo next set --layer 'plan' --premise 'SPEC.md 完成' --check 'PLAN.md に層と完了条件が並ぶ'`（plan の effort は CLI が high にするので `--effort` は付けない）→ `soujo phase done 'spec'`（next set をしないときも。`git init` を断られたときはしない）。
+- 続けて `soujo next set --layer 'plan' --premise 'SPEC.md 完成' --check 'PLAN.md に層と完了条件が並ぶ'`（plan の effort は CLI が high にするので `--effort` は付けない）→ `soujo phase done 'spec'`（next set をしないときも。`git init` を断られたときはしない）。git に書けなければ権限を求めて、失敗したコマンドから再実行する。
 
 ## 出力の形
 - 質問中は、1問と番号付きの候補の短い表だけ。

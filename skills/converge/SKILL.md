@@ -14,7 +14,7 @@ description: "Soujo の最後の層の後に、コードを .soujo/SPEC.md の�
 - `unrequested` と上限を超えた差は層にせず、節目の未決の行に書く（残すか消すかは利用者が決める）。
 
 ## soujo に頼むこと
-- 最初に `soujo next check`。`PLAN.md の`・`PLAN.md を` で始まる警告があれば何も足さず、その警告を伝えて止める。節目は終わり方ごとに1回だけ残し（1行目は `soujo brief` に出る）、後のコマンドが失敗したらそのコマンドから再実行する。節目の `--line` は下に示した2つだけで、キーは行を足さずに1行目の括弧の中へ書く。
+- 最初に `soujo next check`。`PLAN.md の`・`PLAN.md を` で始まる警告があれば何も足さず、その警告を伝えて止める。節目は終わり方ごとに1回だけ残し（1行目は `soujo brief` に出る）、後のコマンドが失敗したら原因を直し、git に書けなければ権限を求めて、失敗したコマンドから再実行する。節目の `--line` は下に示した2つだけで、キーは行を足さずに1行目の括弧の中へ書く。
 - 差か未完了の層が残れば：`soujo log add '節目' --line 'converge: 差（<キー>）・PLAN.md に <N>層を追加' --line '未決: <unrequested と上限を超えた差。なければ なし>'` → `soujo next check`。NEXT.md がない・無効か、`次:` が PLAN の最初の未完了層でないか、警告が `確認:` を指したら `soujo next set --layer '<最初の未完了層>' --premise 'converge で差を確認' --check '<その層の完了条件を PLAN の行から写す>' --effort <low|medium|high|xhigh>`（effort はその層の難しさで選ぶ）。続けて `soujo phase done 'converge'` → `soujo map plan`。
 - 差も未完了の層もなければ（`unrequested` だけでも）：`soujo log add '節目' --line 'converge: 収束（<照らしたキー>）' --line '未決: <unrequested。なければ なし>'` → `soujo next set --layer 'plan' --premise 'converge で収束' --check 'SPEC に未実装が残っていない'`（plan の effort は CLI が high にするので `--effort` は付けない）→ `soujo phase done 'converge'`。
 

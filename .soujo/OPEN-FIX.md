@@ -4,7 +4,7 @@
 |---|---|---|---|
 | O1 | Codex で hooks の `${CLAUDE_PLUGIN_ROOT}` 展開・`systemMessage` 表示が未検証 | 実機確認（push が要る）→ 保留・確認 | 利用者 |
 | O2 | spec が SPEC を最後にまとめて書く | spec: 次の問いを出す前に書く | B skills |
-| O3 | spec/plan/converge がコミットしない | 設計判断（層でないコミットが増える）→ 保留・確認 | 利用者 |
+| O3 | spec/plan/converge がコミットしない | `soujo phase done` を足す（手順4）→ Decided へ | 本体+サブエージェント |
 | O4 | converge の文脈量 | 計測が要る → 受け入れた費用として Decided へ | 本体 |
 | O5 | converge の判定が揺れる | converge: 原則は利用者の起動経路で判定（テストが抑えた挙動を met の根拠にしない）+ SPEC に限界を明記 | B skills |
 | O6 | unrequested に init の CLAUDE.md | converge: init が置いたファイルと `.soujo/` は対象外 | B skills |
@@ -24,5 +24,6 @@
    - 4つの記録（SPEC・PLAN・LOG・NEXT とその symlink 先）だけを `phase: <フェーズ>` でコミット。ほかの変更は残す（フェーズ名で他人の変更をコミットしない）。
    - 拒否: フェーズ名でない・コミットできない状態（途中の merge 等・記録が ignore 等）・NEXT.md が無効か `次:` がまだそのフェーズ（先に next set）。記録に変更なしは「なし」で終了0（再実行できる）。
    - スキル: spec・plan（層を足したとき）・converge は next set の後に phase done。
-   - 担当: 実装・スキル・テスト = サブエージェント / SPEC・README・CHANGELOG = 本体。
+   - 担当（利用者の指示でサブエージェントを使う）: 実装・スキル・テスト = サブエージェント / SPEC・README・CHANGELOG = 本体。
+   - ✓ e1abe19 で追加。reviewer 指摘17件 → 途中の layer done・止まった rotate・symlink 先の認証情報・途中の symlink・spec の CLAUDE.md/AGENTS.md・plan の条件・スキルの再実行文をコードで、残りを文書で直した。見送り: 他ファイルをステージする pre-commit hook（git の仕組み。SPEC に限界として記載）。`npm test` 464 通過。
 5. O1（Codex フックの実地確認）は push が要る → 利用者の判断待ち。

@@ -315,6 +315,15 @@ export function gitUntracked(cwd: string, maxBytes: number = COUNT_OUTPUT): Untr
   return { paths: fields.filter((path) => path !== ''), truncated };
 }
 
+/** The given paths (relative to cwd, taken literally), in the given order, that git neither tracks nor ignores. */
+export function gitUntrackedPaths(cwd: string, paths: readonly string[]): string[] {
+  if (paths.length === 0) return [];
+  // Paths relative to cwd, as given; a directory's files are listed under it, so only a path itself counts.
+  const listed = completeFields(git(cwd, ['ls-files', '-z', '--others', '--exclude-standard', '--', ...literalPathspecs(paths)])).fields;
+  const untracked = new Set(listed);
+  return paths.filter((path) => untracked.has(path));
+}
+
 /**
  * Commits the changes in cwd and below; changes staged elsewhere stay staged. The repository's hooks run: a hook guarding
  * what is committed (a secret scanner) guards these commits too, and one that refuses fails the commit like any git failure.

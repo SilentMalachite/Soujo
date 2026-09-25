@@ -283,10 +283,25 @@ test('spec, plan, and converge run phase done with their own name after their ne
   // spec leaves next set out while 次: is a layer of PLAN; its records are committed all the same.
   assert.ok(asks('spec').some((line) => line.includes("`soujo phase done 'spec'`（next set をしないときも。`git init` を断られたときはしない）")), 'spec: next set がなくても phase done、git がなければしない');
   assert.deepEqual(sequence('plan'), ['log add', 'next check', 'next set', 'phase done', 'map plan']);
-  // Without layers added, NEXT.md still points at plan, which phase done refuses.
-  assert.ok(asks('plan').some((line) => line.includes("`soujo phase done 'plan'`（層を足したときだけ）→ `soujo map plan`")), 'plan: 層を足したときだけ');
+  // Without layers added or next set, NEXT.md still points at plan, which phase done refuses; after a next set alone, NEXT.md
+  // would stay uncommitted without it.
+  assert.ok(
+    asks('plan').some((line) => line.includes("`soujo phase done 'plan'`（層を足したか next set をして、`次:` が `plan` でなくなったときだけ）→ `soujo map plan`")),
+    'plan: 次: が plan でなくなったときだけ',
+  );
   // The next set of converge's first ending is conditional; phase done and map plan are not.
   assert.ok(asks('converge').some((line) => line.includes("。続けて `soujo phase done 'converge'` → `soujo map plan`。")), 'converge: 条件つきの next set の後に続けて');
+});
+
+// A git the host's sandbox keeps from writing fails the commit of layer done or phase done; the skill that ran it asks for the
+// permission and goes on from the failed command, so that a successful log add is not repeated.
+test('go, spec, plan, and converge re-run from the failed command after asking for permission to write git', () => {
+  const rule = 'git に書けなければ権限を求めて、失敗したコマンドから再実行する';
+  const where: Record<string, string> = { go: 'やること', spec: 'soujo に頼むこと', plan: 'soujo に頼むこと', converge: 'soujo に頼むこと' };
+  for (const [name, section] of Object.entries(where)) {
+    const lines = sections(body(name)).get(section) ?? [];
+    assert.equal(lines.filter((line) => line.includes(rule)).length, 1, `${name} の${section}: ${rule}`);
+  }
 });
 
 // SPEC §14: a layer named like a phase or 節目 is refused, so the skills that add layers say so.

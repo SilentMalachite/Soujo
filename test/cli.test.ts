@@ -330,8 +330,8 @@ test('phase done commits the records through the CLI, exits 0 with nothing left 
   const done = soujoIn(dir, 'phase', 'done', 'spec');
   assert.equal(done.status, 0, done.stderr);
   assert.match(done.stdout, /^フェーズ「spec」の記録をコミット: [0-9a-f]+ phase: spec\n$/);
-  // The files init placed next to .soujo/ are no record, so they are left for a layer.
-  assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' }), '?? AGENTS.md\n?? CLAUDE.md\n');
+  // The files init placed next to .soujo/, untracked yet, go with spec's records, so no Stop hook counts them meanwhile.
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' }), '');
   const again = soujoIn(dir, 'phase', 'done', 'spec');
   assert.deepEqual([again.status, again.stdout, again.stderr], [0, 'フェーズ「spec」の記録に未コミットの変更なし\n', '']);
 

@@ -10,7 +10,7 @@ AI coding sessions end mid-task: a usage limit, a compacted context, a meeting, 
 
 | | What it means | How Soujo does it |
 |---|---|---|
-| Interruptible development | Stopping at any moment loses no work and no decision | Layers of ≤30 minutes, one commit each; `close` commits unfinished work as `wip:` |
+| Interruptible development | Stopping at any moment loses no work and no decision | Layers of ≤30 minutes, one commit each; `close` commits unfinished work as `wip:`, and `phase done` a phase's records as `phase:` |
 | Resumable AI coding | A new session needs no conversation history, in either host, even weeks later | `NEXT.md` (≤5 lines) names the next step; `soujo resume` prints a four-line status; from 3 days away, `soujo brief` gives progress, the last `節目` (milestone) entry, and the gap, which the `resume` skill returns after the four lines |
 | Low-context development | Neither you nor the model has to keep much in mind | Each file has a line limit; one question at a time; the CLI updates the records |
 
@@ -29,10 +29,10 @@ Design and decisions: [SPEC.md](SPEC.md).
 
 | Skill | Claude Code | Codex | Result |
 |---|---|---|---|
-| spec | `/soujo:spec` | `$spec` | One question at a time (at most 7, the principles settled in one of them) → `.soujo/SPEC.md` with keyed principles and acceptance criteria, then a `節目` entry in `LOG.md` that says which principles changed |
-| plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added |
+| spec | `/soujo:spec` | `$spec` | One question at a time (at most 7, the principles settled in one of them) → `.soujo/SPEC.md` with keyed principles and acceptance criteria, then a `節目` entry in `LOG.md` that says which principles changed, committed as `phase: spec` |
+| plan | `/soujo:plan` | `$plan` | Layers of ≤30 minutes, each with a one-line completion condition → `.soujo/PLAN.md`, then a `節目` entry when layers were added, committed as `phase: plan` |
 | go | `/soujo:go` | `$go` | Implements the next layer, writes the next `NEXT.md` (after a `節目` entry on the last layer), commits `layer: <layer>`; after the last layer, goes on with converge. Asks one question only when the completion condition cannot hold without breaking a principle |
-| converge | `/soujo:converge` | `$converge` | Checks the code against the keyed acceptance criteria and principles of `SPEC.md` and appends each gap no unfinished layer closes to `PLAN.md` as a layer (`（A3 partial）`, up to 12 unfinished), or records that the code has converged; a `節目` entry either way, whose open line holds code nothing asks for and gaps past the limit. Changes neither SPEC nor code |
+| converge | `/soujo:converge` | `$converge` | Checks the code against the keyed acceptance criteria and principles of `SPEC.md` and appends each gap no unfinished layer closes to `PLAN.md` as a layer (`（A3 partial）`, up to 12 unfinished), or records that the code has converged; a `節目` entry either way, whose open line holds code nothing asks for and gaps past the limit. Changes neither SPEC nor code; commits its records as `phase: converge` |
 | resume | `/soujo:resume` | `$resume` | Four lines: next layer, last log entry, last commit, how to resume; from 3 days away, followed by the five lines of `soujo brief` |
 | close | `/soujo:close` | `$close` | Logs `中断: …` and commits `wip: <layer>` |
 | map | `/soujo:map` | `$map` | Plan diagram, import graph, or Before/After of the latest layer |
@@ -96,7 +96,7 @@ If `codex plugin marketplace upgrade soujo` fails with `` marketplace `soujo` is
 
 In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, which creates `.soujo/` and, when missing, `CLAUDE.md` and `AGENTS.md`. Existing files are never overwritten.
 
-`spec`, `plan`, and `converge` commit only their `.soujo/` records, with `soujo phase done` after their `next set`, as `phase: <phase>`; every other change is left for a layer. While `NEXT.md` points at one of the three, the Claude Code Stop hook leaves `.soujo/` out of its count of uncommitted changes, so it is quiet about records the phase has not committed yet; a change anywhere else still warns.
+`spec`, `plan`, and `converge` commit only their records (`.soujo/`, the files its symlinks point to, and after `spec` the new `CLAUDE.md` / `AGENTS.md`), with `soujo phase done` after their `next set`, as `phase: <phase>`; every other change is left for a layer. While `NEXT.md` points at one of the three, the Claude Code Stop hook leaves `.soujo/` out of its count of uncommitted changes, so it is quiet about records the phase has not committed yet; a change anywhere else still warns.
 
 ## Host notes
 

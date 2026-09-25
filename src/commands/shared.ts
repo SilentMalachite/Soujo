@@ -5,12 +5,14 @@ import {
   STATE_DIR,
   STATE_FILES,
   MAX_SYMLINKS,
+  insideProject,
   isSymlink,
   readState,
   removeRootTemps,
   requireState,
   requireStateDir,
   stateIdentities,
+  stateLinks,
   stateTarget,
   statePath,
   symlinkTargetParts,
@@ -33,10 +35,21 @@ import {
   gitToplevel,
   gitUnmergedCount,
   gitUntracked,
+  gitUntrackedPaths,
   type Commit,
   type HeadEntry,
 } from '../git.js';
-import { parseLog, parseNext, parsePlan, validateNext, validatePlan, type LogEntry, type Next, type PlanItem } from '../state.js';
+import {
+  newlyDone,
+  parseLog,
+  parseNext,
+  parsePlan,
+  validateNext,
+  validatePlan,
+  type LogEntry,
+  type Next,
+  type PlanItem,
+} from '../state.js';
 
 const CLIP = 60;
 // The records a layer, wip, or phase commit must carry as written. SPEC.md is one too: the skills write it, and a layer's
@@ -193,7 +206,7 @@ function isCredential(path: string): boolean {
 }
 
 /** paths joined for a message: the first SHOWN_PATHS of them, then how many are left. */
-function listPaths(paths: readonly string[]): string {
+export function listPaths(paths: readonly string[]): string {
   const rest = paths.length > SHOWN_PATHS ? ` ほか${paths.length - SHOWN_PATHS}件` : '';
   return `${paths.slice(0, SHOWN_PATHS).join(', ')}${rest}`;
 }
@@ -237,13 +250,18 @@ export function requireRecordsCommittable(root: string): void {
  */
 export function requireNoCredentials(root: string, maxUntracked?: number): void {
   const untracked = gitUntracked(root, maxUntracked);
-  const credentials = untracked.paths.filter((path) => isCredential(path));
-  if (credentials.length > 0) {
-    throw new Error(`${listPaths(credentials)} は認証情報のファイル名なのでコミットしない（.gitignore に足すか、コミットするなら先に git add する）`);
-  }
+  requireNoCredentialNames(untracked.paths);
   // Past the limit the rest was never read, so a credential file name among them would be staged unseen.
   if (untracked.truncated) {
     throw new Error(`未追跡のファイルが多すぎて認証情報のファイル名を確認できないのでコミットしない（不要なものを .gitignore に足すか消してから）`);
+  }
+}
+
+// Throws when one of the untracked paths has a credential file's name (see isCredential).
+function requireNoCredentialNames(untracked: readonly string[]): void {
+  const credentials = untracked.filter((path) => isCredential(path));
+  if (credentials.length > 0) {
+    throw new Error(`${listPaths(credentials)} は認証情報のファイル名なのでコミットしない（.gitignore に足すか、コミットするなら先に git add する）`);
   }
 }
 
@@ -260,10 +278,9 @@ function requireSafeTargets(root: string, files: readonly StateFile[]): void {
   }
 }
 
-/** Throws when git ignores a file or its symlink target, so that it would be missing from the commit. */
+/** Throws when git ignores a file, its symlink target, or a symlink on the way, so that it would be missing from the commit. */
 function requireNotIgnored(root: string, files: readonly StateFile[]): void {
-  const paths = files.flatMap((file) => [statePath(file), trackedStatePath(root, file)]);
-  const ignored = gitIgnored(root, [...new Set(paths)]);
+  const ignored = gitIgnored(root, statePaths(root, files));
   if (ignored.length > 0) {
     throw new Error(`${ignored.join(', ')} が git に無視されていて記録がコミットに残らない（.gitignore などから外してから）`);
   }
@@ -274,6 +291,18 @@ export function requireCommittableFiles(root: string, files: readonly StateFile[
   if (files.length === 0) return;
   requireSafeTargets(root, files);
   requireNotIgnored(root, files);
+}
+
+/**
+ * Throws when PLAN (its layers, items) checks a layer that HEAD's PLAN.md does not: a layer done that stopped before its commit.
+ * Only re-running that layer done finishes it; a commit of the check by anything else makes layer done refuse the layer as
+ * committed with PLAN's check, without its layer commit.
+ */
+export function requireNoStoppedLayerDone(root: string, items: readonly PlanItem[]): void {
+  const [pending] = newlyDone(parsePlan(headState(root, 'PLAN.md') ?? ''), [...items]);
+  if (pending === undefined) return;
+  const layer = pending.layer;
+  throw new Error(`層「${layer}」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done ${commandArg(layer)} を再実行する`);
 }
 
 /**
@@ -352,13 +381,16 @@ export function commitRecords(root: string, subject: string, extra: readonly Sta
 }
 
 /**
- * Commits SPEC, PLAN, LOG, and NEXT (a symlink together with its target) as written, as subject, and nothing else: every
- * other change in the project, staged or not, is left as it was, so that the subject names no one else's work. Returns
- * false, without committing, when none of them has an uncommitted change. As in commitRecords, nothing is committed while one
- * is not staged as written (skip-worktree).
+ * Commits SPEC, PLAN, LOG, and NEXT (a symlink together with its target and every symlink on the way) and the extra paths
+ * (relative to root) as written, as subject, and nothing else: every other change in the project, staged or not, is left as
+ * it was, so that the subject names no one else's work. Throws before staging anything when one of those paths is untracked
+ * and has a credential file's name (a record's symlink leading to .env), which requireCommittable refuses for a commit of
+ * everything. Returns false, without committing, when none of them has an uncommitted change. As in commitRecords, nothing
+ * is committed while one is not staged as written (skip-worktree); the paths then stay staged, as after a failed commit.
  */
-export function commitOnlyRecords(root: string, subject: string): boolean {
-  const paths = recordPaths(root);
+export function commitOnlyRecords(root: string, subject: string, extra: readonly string[] = []): boolean {
+  const paths = [...new Set([...recordPaths(root), ...extra])];
+  requireNoCredentialNames(gitUntrackedPaths(root, paths));
   gitAddPaths(root, paths);
   requireStaged(root, paths);
   const changed = gitChangedPaths(root, paths);
@@ -367,9 +399,19 @@ export function commitOnlyRecords(root: string, subject: string): boolean {
   return true;
 }
 
-// SPEC, PLAN, LOG, NEXT, and extra relative to root, each with the symlink target git tracks for it, once each.
+// SPEC, PLAN, LOG, NEXT, and extra, as statePaths gives them.
 function recordPaths(root: string, extra: readonly StateFile[] = []): string[] {
-  return [...new Set([...RECORDS, ...extra].flatMap((file) => [statePath(file), trackedStatePath(root, file)]))];
+  return statePaths(root, [...RECORDS, ...extra]);
+}
+
+/**
+ * The files relative to root, each followed by the symlinks on the way to its real path (see stateLinks) and the path git
+ * tracks for it (see trackedStatePath), once each; a path outside the project or inside .git is left out, since the
+ * project's commit cannot hold it.
+ */
+export function statePaths(root: string, files: readonly StateFile[]): string[] {
+  const paths = files.flatMap((file) => [statePath(file), ...stateLinks(root, file), trackedStatePath(root, file)]);
+  return [...new Set(paths.filter(insideProject))];
 }
 
 // Throws when staging left one of paths as it was: the commit would lack it, and a re-run could not add it afterwards.

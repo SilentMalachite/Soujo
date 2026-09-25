@@ -3,16 +3,16 @@
 import { dirname } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { appendLog, formatDate, logLines, newlyDone, nextStatus, parsePlan, validatePlan, type LogEntry } from '../state.js';
+import { appendLog, formatDate, logLines, nextStatus, parsePlan, validatePlan, type LogEntry } from '../state.js';
 import {
   INTERRUPTED,
   INTERRUPTION_NOTE,
-  commandArg,
   commitRecords,
   committedHash,
   headState,
   requireCommittable,
   requireNext,
+  requireNoStoppedLayerDone,
   resumable,
   skill,
   uncommittedLogs,
@@ -59,11 +59,7 @@ export function close(cwd: string, note?: string, now: Date = new Date()): strin
   const items = parsePlan(plan);
   const status = nextStatus(next.layer, items);
   if (status.state === 'done') throw new Error(`NEXT.md の次「${next.layer}」は PLAN で完了済み${HINT}`);
-  const [pending] = newlyDone(parsePlan(headState(root, 'PLAN.md') ?? ''), items);
-  if (pending !== undefined) {
-    const layer = pending.layer;
-    throw new Error(`層「${layer}」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done ${commandArg(layer)} を再実行する`);
-  }
+  requireNoStoppedLayerDone(root, items);
   const layer = status.state === 'skipped' ? status.unfinished.layer : next.layer;
 
   const log = readState(dir, 'LOG.md') ?? '';

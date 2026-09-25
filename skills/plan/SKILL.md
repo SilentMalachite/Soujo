@@ -15,7 +15,7 @@ description: "Soujo の .soujo/SPEC.md を30分以内の層に分け、.soujo/PL
 ## soujo に頼むこと
 - 層を足したら節目を残す：`soujo log add '節目' --line 'PLAN.md に <N>層: <最初の層>〜<最後の層>' --line '外したもの: <SPEC から外したこと。なければ なし>'`（1行目は `soujo brief` に出る。後のコマンドが失敗しても繰り返さない）。
 - `soujo next check`。未完了の層があって、NEXT.md がない・無効か、`次:` がその最初の層でないか、警告が `確認:` を指したら `soujo next set --layer '<最初の未完了層>' --premise 'PLAN.md 作成・更新' --check '<その層の完了条件を PLAN の行から写す>' --effort <low|medium|high|xhigh>`（effort はその層の難しさで選ぶ）。
-- `soujo phase done 'plan'`（層を足したときだけ）→ `soujo map plan`
+- `soujo phase done 'plan'`（層を足したか next set をして、`次:` が `plan` でなくなったときだけ）→ `soujo map plan`。git に書けなければ権限を求めて、失敗したコマンドから再実行する。
 
 ## 出力の形
 - `soujo map plan` の図をそのまま示す。補足は1文まで。

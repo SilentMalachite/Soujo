@@ -2,8 +2,8 @@
 import { dirname } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readState, removeLeftoverTemps, requireStateDir, writeState } from '../files.js';
-import { appendLog, formatDate, logLines, newlyDone, nextStatus, parsePlan, validatePlan } from '../state.js';
-import { INTERRUPTED, INTERRUPTION_NOTE, commandArg, commitRecords, committedHash, headState, requireCommittable, requireNext, resumable, skill, uncommittedLogs, } from './shared.js';
+import { appendLog, formatDate, logLines, nextStatus, parsePlan, validatePlan } from '../state.js';
+import { INTERRUPTED, INTERRUPTION_NOTE, commitRecords, committedHash, headState, requireCommittable, requireNext, requireNoStoppedLayerDone, resumable, skill, uncommittedLogs, } from './shared.js';
 const HINT = '（soujo next set で書き直してから再実行）';
 // The note as LOG lines with "中断: " before the first; a "中断:" already written by the caller is not doubled.
 function interruptionLines(note) {
@@ -44,11 +44,7 @@ export function close(cwd, note, now = new Date()) {
     const status = nextStatus(next.layer, items);
     if (status.state === 'done')
         throw new Error(`NEXT.md の次「${next.layer}」は PLAN で完了済み${HINT}`);
-    const [pending] = newlyDone(parsePlan(headState(root, 'PLAN.md') ?? ''), items);
-    if (pending !== undefined) {
-        const layer = pending.layer;
-        throw new Error(`層「${layer}」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done ${commandArg(layer)} を再実行する`);
-    }
+    requireNoStoppedLayerDone(root, items);
     const layer = status.state === 'skipped' ? status.unfinished.layer : next.layer;
     const log = readState(dir, 'LOG.md') ?? '';
     let newLog;

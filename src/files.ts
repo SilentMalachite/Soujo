@@ -340,13 +340,19 @@ function attempt<T>(step: () => T): T | undefined {
   }
 }
 
+interface Step {
+  /** Relative to root, "/"-separated; it starts with ".." when it is above root. */
+  path: string;
+  link: boolean;
+}
+
 /**
- * The paths the entry at path (relative to root, "/"-separated) leads through, in order, each part resolved in turn and every
- * symlink on the way followed, as the operating system does, so that ".." after a symlink is taken from where that points.
- * The last one is where it lands, which need not exist. Empty beyond MAX_SYMLINKS, as for a loop.
+ * The entries the entry at path (relative to root, "/"-separated) leads through, in order, each part resolved in turn and
+ * every symlink on the way followed, as the operating system does, so that ".." after a symlink is taken from where that
+ * points. The last one is where it lands, which need not exist. Empty beyond MAX_SYMLINKS, as for a loop.
  */
-function pathLeadsTo(root: string, path: string): string[] {
-  const visited: string[] = [];
+function stepsOf(root: string, path: string): Step[] {
+  const visited: Step[] = [];
   const pending = path.split('/');
   let dir = '';
   for (let links = 0; pending.length > 0; ) {
@@ -358,12 +364,13 @@ function pathLeadsTo(root: string, path: string): string[] {
       continue;
     }
     const full = join(root, ...next.split('/'));
-    visited.push(full);
-    if (isSymlink(full)) {
+    const link = isSymlink(full);
+    visited.push({ path: next, link });
+    if (link) {
       if (++links > MAX_SYMLINKS) return [];
-      const link = attempt(() => readlinkSync(full));
-      if (link === undefined) return visited;
-      pending.unshift(...symlinkTargetParts(root, next, link));
+      const text = attempt(() => readlinkSync(full));
+      if (text === undefined) return visited;
+      pending.unshift(...symlinkTargetParts(root, next, text));
       dir = '';
     } else if (pending.length === 0) {
       return visited;
@@ -372,6 +379,29 @@ function pathLeadsTo(root: string, path: string): string[] {
     }
   }
   return visited;
+}
+
+// The paths of stepsOf as absolute paths under root.
+function pathLeadsTo(root: string, path: string): string[] {
+  return stepsOf(root, path).map((step) => join(root, ...step.path.split('/')));
+}
+
+/**
+ * The symlinks the state file leads through to its real path, relative to root and "/"-separated, in the order they are
+ * followed: the file itself when it is one, then every symlink its target passes, a directory's included, so that committing
+ * them with the target leaves no link broken at HEAD. Those outside the project or inside .git are left out, since the
+ * project's commit cannot hold them. Empty for a loop.
+ */
+export function stateLinks(root: string, file: StateFile): string[] {
+  return stepsOf(root, statePath(file))
+    .filter((step) => step.link && insideProject(step.path))
+    .map((step) => step.path);
+}
+
+/** Whether path (relative to the project root, "/"-separated) is inside the project and outside .git. */
+export function insideProject(path: string): boolean {
+  const parts = path.split('/');
+  return !isAbsolute(path) && parts[0] !== '..' && !parts.some(isDotGit);
 }
 
 // Whether the file system of dir ignores letter case, told by looking for dir itself under an upper-cased name.

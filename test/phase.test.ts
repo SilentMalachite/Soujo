@@ -1,8 +1,11 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { init } from '../src/commands/init.js';
+import { layerDone } from '../src/commands/layer.js';
+import { logRotate } from '../src/commands/log.js';
 import { phaseDone } from '../src/commands/phase.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
 import { commitAll, project, repo, temp } from './helpers.js';
@@ -165,6 +168,8 @@ test('phase done commits nothing while a record is not staged as written, and a 
   git(dir, 'update-index', '--skip-worktree', '.soujo/NEXT.md');
   assert.throws(() => phaseDone(dir, 'converge'), /^Error: \.soujo\/NEXT\.md の変更を git が拾っていない（skip-worktree などを確認）$/);
   assert.equal(gitLastCommit(dir)?.hash, head);
+  // Refused after staging: the other records stay staged, NEXT.md is hidden by skip-worktree, the rest is as it was.
+  assert.deepEqual(gitStatus(dir), ['M  .soujo/LOG.md', 'M  .soujo/PLAN.md', 'A  .soujo/SPEC.md', ' M src.ts', 'A  staged.ts']);
 
   git(dir, 'update-index', '--no-skip-worktree', '.soujo/NEXT.md');
   phaseDone(dir, 'converge');
@@ -189,8 +194,9 @@ test('phase done runs the hooks: a refusing one is reported in one line, commits
     writeFileSync(path, '#!/bin/sh\necho "secret found" >&2\nexit 1\n', { mode: 0o755 });
     assert.throws(() => phaseDone(dir, 'converge'), /^Error: git commit に失敗: secret found$/, hook);
     assert.equal(gitLastCommit(dir)?.hash, head, hook);
-    // The records are staged by now; the rest is as it was.
-    assert.deepEqual(gitStatus(dir).filter((record) => !record.includes('.soujo/')), [' M src.ts', 'A  staged.ts'], hook);
+    // The records are staged by now, and stay so; the rest is as it was.
+    const staged = ['M  .soujo/LOG.md', 'M  .soujo/NEXT.md', 'M  .soujo/PLAN.md', 'A  .soujo/SPEC.md'];
+    assert.deepEqual(gitStatus(dir), [...staged, ' M src.ts', 'A  staged.ts'], hook);
 
     rmSync(path);
     assert.match(phaseDone(dir, 'converge')[0] ?? '', /^フェーズ「converge」の記録をコミット: /, hook);
@@ -202,7 +208,8 @@ test('phase done in a subdirectory project commits only its records, and works a
   const top = repo(t);
   writeFileSync(join(top, 'outside.txt'), 'outside\n');
   git(top, 'add', 'outside.txt');
-  const dir = project(join(top, 'app'), { ...STATE, 'NEXT.md': next('L1 scaffold') });
+  // Freshly planned: a layer checked before any commit would be a layer done that stopped before its commit.
+  const dir = project(join(top, 'app'), { ...STATE, 'PLAN.md': PLAN.replace('[x]', '[ ]'), 'NEXT.md': next('L1 scaffold') });
   writeFileSync(join(dir, 'app.ts'), '');
   mkdirSync(join(dir, 'src'));
   const [line] = phaseDone(join(dir, 'src'), 'plan');
@@ -219,4 +226,177 @@ test('phase done commits a record deleted by hand, staged or not', (t) => {
   phaseDone(dir, 'converge');
   assert.deepEqual(committedPaths(dir), ['.soujo/LOG.md', '.soujo/SPEC.md']);
   assert.deepEqual(gitStatus(dir), []);
+});
+
+const NOW = new Date(2026, 8, 13, 10, 0);
+
+// A layer done that stopped before its commit: the PLAN check and the LOG entry written, nothing committed. index.lock makes
+// its `git add` fail, as a git that cannot write would.
+test('after layer done stops before its commit, phase done refuses as close does, and re-running layer done finishes the layer', (t) => {
+  const dir = project(repo(t), { 'PLAN.md': `${PLAN}- [ ] L2 fix — b\n`, 'LOG.md': LOG, 'NEXT.md': next('L2 fix') });
+  commitAll(dir, 'layer: L1 scaffold');
+  writeFileSync(join(dir, 'fix.ts'), 'export {};\n');
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), next('converge'));
+  const lock = join(dir, '.git', 'index.lock');
+  writeFileSync(lock, '');
+  assert.throws(() => layerDone(dir, 'L2 fix', 'done', NOW), /git add に失敗/);
+  rmSync(lock);
+  // converge found a gap meanwhile and handed over.
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), `${PLAN}- [x] L2 fix — b\n- [ ] L3 gap — c（A1 partial）\n`);
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), next('L3 gap'));
+
+  const head = gitLastCommit(dir)?.hash;
+  const status = gitStatus(dir);
+  assert.throws(
+    () => phaseDone(dir, 'converge'),
+    /^Error: 層「L2 fix」の PLAN のチェックが未コミット（layer done の途中）。先に soujo layer done 'L2 fix' を再実行する$/,
+  );
+  assert.equal(gitLastCommit(dir)?.hash, head);
+  assert.deepEqual(gitStatus(dir), status);
+  assert.match(layerDone(dir, 'L2 fix', undefined, NOW)[0] ?? '', /のコミットをやり直した/);
+  assert.equal(gitLastCommit(dir)?.subject, 'layer: L2 fix');
+});
+
+// A log rotate that stopped before its commit: LOG.md lost its July entry, a new archive has it, nothing committed.
+test('after log rotate stops before its commit, phase done refuses, and re-running log rotate finishes it', (t) => {
+  const log = '# LOG\n\n## 2026-07-30 L0 old\na\n\n## 2026-09-12 L1 scaffold\nold\n';
+  const dir = project(repo(t), { 'PLAN.md': PLAN, 'LOG.md': log, 'NEXT.md': next('L2 fix') });
+  commitAll(dir, 'layer: L1 scaffold');
+  const september = new Date(2026, 8, 15, 10, 0);
+  const lock = join(dir, '.git', 'index.lock');
+  writeFileSync(lock, '');
+  assert.throws(() => logRotate(dir, undefined, september), /git add に失敗/);
+  rmSync(lock);
+
+  const head = gitLastCommit(dir)?.hash;
+  const refusal = /^Error: 書庫 \.soujo\/LOG-2026-07\.md の変更が未コミット（log rotate の途中）。先に soujo log rotate を再実行する$/;
+  assert.throws(() => phaseDone(dir, 'converge'), refusal);
+  assert.equal(gitLastCommit(dir)?.hash, head);
+  assert.deepEqual(gitStatus(dir), [' M .soujo/LOG.md', '?? .soujo/LOG-2026-07.md']);
+  // Stopped after writing the archive and before LOG.md: the archive alone is enough to refuse.
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), log);
+  assert.throws(() => phaseDone(dir, 'converge'), refusal);
+
+  writeFileSync(join(dir, '.soujo', 'LOG.md'), '# LOG\n\n## 2026-09-12 L1 scaffold\nold\n');
+  assert.match(logRotate(dir, undefined, september)[1] ?? '', /^コミット: [0-9a-f]+ log: rotate 2026-07$/);
+  assert.deepEqual(phaseDone(dir, 'converge'), ['フェーズ「converge」の記録に未コミットの変更なし']);
+});
+
+test('phase done refuses a record whose symlink target is an untracked file with a credential name, as close does', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { ...STATE, 'NEXT.md': next('plan') });
+  commitAll(dir, 'base');
+  writeFileSync(join(dir, '.env'), '# SPEC\n');
+  symlinkSync('../.env', join(dir, '.soujo', 'SPEC.md'));
+  const head = gitLastCommit(dir)?.hash;
+  assert.throws(
+    () => phaseDone(dir, 'spec'),
+    /^Error: \.env は認証情報のファイル名なのでコミットしない（\.gitignore に足すか、コミットするなら先に git add する）$/,
+  );
+  assert.equal(gitLastCommit(dir)?.hash, head);
+  // Refused before anything was staged.
+  assert.deepEqual(gitStatus(dir), ['?? .env', '?? .soujo/SPEC.md']);
+
+  // Added with `git add` first, it is committed as the user chose.
+  git(dir, 'add', '.env');
+  phaseDone(dir, 'spec');
+  assert.deepEqual(committedPaths(dir), ['.env', '.soujo/SPEC.md']);
+});
+
+test('phase done commits every symlink on the way to a record, a directory\'s included, so that HEAD has no broken link', { skip: process.platform === 'win32' }, (t) => {
+  const dir = project(repo(t), { ...STATE, 'NEXT.md': next('plan') });
+  commitAll(dir, 'base');
+  mkdirSync(join(dir, 'real'));
+  writeFileSync(join(dir, 'real', 'SPEC.md'), '# SPEC\n');
+  writeFileSync(join(dir, 'real', 'other.md'), 'someone else\n');
+  symlinkSync('real', join(dir, 'docs'));
+  symlinkSync('../docs/SPEC.md', join(dir, '.soujo', 'SPEC.md'));
+  phaseDone(dir, 'spec');
+  assert.deepEqual(committedPaths(dir), ['.soujo/SPEC.md', 'docs', 'real/SPEC.md']);
+  assert.deepEqual(gitStatus(dir), ['?? real/other.md']);
+  // HEAD alone resolves the link: a clone has the record.
+  const clone = temp(t);
+  git(clone, 'clone', '-q', dir, '.');
+  assert.equal(readFileSync(join(clone, '.soujo', 'SPEC.md'), 'utf8'), '# SPEC\n');
+});
+
+test('phase done leaves out a symlink on the way to a record that is outside the project', { skip: process.platform === 'win32' }, (t) => {
+  const top = repo(t);
+  const dir = project(join(top, 'app'), { ...STATE, 'NEXT.md': next('plan') });
+  commitAll(top, 'base');
+  mkdirSync(join(dir, 'real'));
+  writeFileSync(join(dir, 'real', 'SPEC.md'), '# SPEC\n');
+  symlinkSync('app/real', join(top, 'shared'));
+  symlinkSync('../../shared/SPEC.md', join(dir, '.soujo', 'SPEC.md'));
+  phaseDone(dir, 'spec');
+  assert.deepEqual(committedPaths(top), ['app/.soujo/SPEC.md', 'app/real/SPEC.md']);
+  assert.deepEqual(gitStatus(top), ['?? shared']);
+});
+
+test('phase done spec also commits the CLAUDE.md and AGENTS.md soujo init placed while git does not track them', (t) => {
+  const dir = repo(t);
+  init(dir);
+  writeFileSync(join(dir, '.soujo', 'SPEC.md'), '# SPEC\n\n## 目的\nx\n');
+  writeFileSync(join(dir, '.soujo', 'NEXT.md'), next('plan'));
+  phaseDone(dir, 'spec');
+  assert.deepEqual(committedPaths(dir), ['.soujo/LOG.md', '.soujo/NEXT.md', '.soujo/PLAN.md', '.soujo/SPEC.md', 'AGENTS.md', 'CLAUDE.md']);
+  assert.deepEqual(gitStatus(dir), []);
+
+  // Tracked, a change to them is the user's: spec leaves it, as the other phases leave them untracked.
+  writeFileSync(join(dir, 'CLAUDE.md'), 'mine\n');
+  writeFileSync(join(dir, '.soujo', 'SPEC.md'), '# SPEC\n\n## 目的\ny\n');
+  phaseDone(dir, 'spec');
+  assert.deepEqual(committedPaths(dir), ['.soujo/SPEC.md']);
+  assert.deepEqual(gitStatus(dir), [' M CLAUDE.md']);
+
+  const planned = repo(t);
+  init(planned);
+  writeFileSync(join(planned, '.soujo', 'NEXT.md'), next('L1 scaffold'));
+  for (const phase of ['plan', 'converge']) {
+    writeFileSync(join(planned, '.soujo', 'LOG.md'), `# LOG\n\n## 2026-09-13 節目\n${phase}\n`);
+    phaseDone(planned, phase);
+    assert.ok(!committedPaths(planned).some((path) => !path.startsWith('.soujo/')), phase);
+    assert.deepEqual(gitStatus(planned), ['?? AGENTS.md', '?? CLAUDE.md'], phase);
+  }
+
+  // Ignored, they are no record to commit, and no reason to refuse.
+  const ignoring = repo(t);
+  writeFileSync(join(ignoring, '.gitignore'), 'CLAUDE.md\n');
+  commitAll(ignoring, 'ignore');
+  init(ignoring);
+  writeFileSync(join(ignoring, '.soujo', 'NEXT.md'), next('plan'));
+  phaseDone(ignoring, 'spec');
+  assert.ok(committedPaths(ignoring).includes('AGENTS.md'));
+  assert.ok(!committedPaths(ignoring).includes('CLAUDE.md'));
+});
+
+test('phase done commits a partially staged record as written in the working tree', (t) => {
+  const dir = convergedProject(t);
+  const plan = `${PLAN}- [ ] L2 fix — b（A1 partial）\n`;
+  // As `git add -p` leaves it: the index has part of the change, the working tree all of it.
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), `${PLAN}- [ ] L2 half — b\n`);
+  git(dir, 'add', '.soujo/PLAN.md');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), plan);
+  phaseDone(dir, 'converge');
+  assert.equal(git(dir, 'show', 'HEAD:.soujo/PLAN.md'), plan);
+  assert.deepEqual(gitStatus(dir), [' M src.ts', 'A  staged.ts']);
+});
+
+test('phase done leaves another file\'s staged rename as it was', (t) => {
+  const dir = convergedProject(t);
+  git(dir, 'mv', 'src.ts', 'moved.ts');
+  phaseDone(dir, 'converge');
+  assert.deepEqual(committedPaths(dir), ['.soujo/LOG.md', '.soujo/NEXT.md', '.soujo/PLAN.md', '.soujo/SPEC.md']);
+  assert.deepEqual(gitStatus(dir), ['RM moved.ts', 'A  staged.ts']);
+});
+
+// A known limit, left as it is: `git commit --only` writes the commit from a temporary index of HEAD and the given paths, and a
+// pre-commit hook's `git add` goes into that one. The file it stages is committed with the records, while the index kept
+// afterwards lacks it, so that git shows it as a staged deletion and an untracked file.
+test('phase done commits a file a pre-commit hook stages, which the index kept afterwards lacks', { skip: process.platform === 'win32' }, (t) => {
+  const dir = convergedProject(t);
+  writeFileSync(join(dir, 'extra.txt'), 'extra\n');
+  writeFileSync(join(dir, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\ngit add extra.txt\n', { mode: 0o755 });
+  phaseDone(dir, 'converge');
+  assert.deepEqual(committedPaths(dir), ['.soujo/LOG.md', '.soujo/NEXT.md', '.soujo/PLAN.md', '.soujo/SPEC.md', 'extra.txt']);
+  assert.deepEqual(gitStatus(dir), ['D  extra.txt', ' M src.ts', 'A  staged.ts', '?? extra.txt']);
 });
