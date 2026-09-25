@@ -127,7 +127,7 @@ test('each skill stops for a missing soujo exactly where it runs soujo', () => {
 
 // SPEC §14: under a Bash allowlist a chained first command (`command -v soujo && soujo init; ls`) was denied, so every skill
 // and the reviewer say the same sentence where they say whose soujo and git they run.
-const ONE_COMMAND = 'コマンドはツール呼び出し1回に1つだけ実行し、`&&`・`;` でつながない（許可リストに拒まれることがある）。';
+const ONE_COMMAND = 'コマンドはツール呼び出し1回に1つだけ実行し、`&&`・`||`・`;` でつながない（許可リストに拒まれることがある）。';
 
 test('every skill and the reviewer run one command per tool call, and no soujo command in the skills is chained', () => {
   for (const name of SKILLS) {
@@ -273,6 +273,8 @@ test('go closes the last layer with 節目, next set converge, and layer done, t
   const tasks = found.get('やること') ?? [];
   assert.ok((tasks[0] ?? '').includes('`次:` が `spec` / `plan` / `converge` ならそのスキルに切り替える。'), 'go は次のフェーズへ切り替える');
   assert.equal(tasks.filter((line) => line.includes('最後の層なら 節目 → NEXT.md（`次: converge`）→ layer done で、締めたら converge スキルに切り替える。')).length, 1);
+  // A close on the last layer logs its 中断 after the milestone, so next set refuses converge until the milestone is left again.
+  assert.equal(tasks.filter((line) => line.includes('（成功した log add は繰り返さない。ただし next set が節目がないと拒否したら、節目を残し直す）')).length, 1);
   const argvs = commands(found.get('soujo に頼むこと')?.join('\n') ?? '');
   const milestone = argvs.findIndex(isMilestone);
   const converge = argvs.findIndex((argv) => phaseSet(argv).phase);
@@ -351,7 +353,14 @@ test('converge reads keyed lines and the layers\' code, classifies every gap, ap
   const expected: [string, string[]][] = [
     [
       '読むもの',
-      ['`A<n>`・`P<n>` の行（キーがなければ受け入れ基準と原則を持つ節）', '`layer:`・`wip:` コミットが変えたファイル', '基準の語（識別子にした語も）で検索して見つかる箇所', 'それより先は読まない'],
+      [
+        '`A<n>`・`P<n>` の行（キーがなければ受け入れ基準と原則を持つ節）',
+        '`layer:`・`wip:` コミットが変えたファイル',
+        '基準の語（識別子にした語も）で検索して見つかる箇所',
+        'それより先は読まない',
+        // The path the user runs, which the judgement below rests on, is often set by files no layer touched.
+        'ただし利用者が動かす経路を決めるファイル（エントリポイント・パッケージの設定・README の起動方法）は読む',
+      ],
     ],
     [
       'やること',
@@ -398,7 +407,8 @@ test('converge reads keyed lines and the layers\' code, classifies every gap, ap
   for (const argv of commands(text('soujo に頼むこと')).filter(isMilestone)) {
     const [first, second] = argv.flatMap((token, index) => (argv[index - 1] === '--line' ? [token] : []));
     assert.match(first ?? '', /（<[^>]*キー>）/, `converge の節目の1行目の括弧にキー: ${first}`);
-    assert.doesNotMatch(second ?? '', /キー/, `converge の節目の2行目にキーがない: ${second}`);
+    // Only the placeholder: the second line may still say 「SPEC にキーがない」.
+    assert.doesNotMatch(second ?? '', /<[^>]*キー>/, `converge の節目の2行目にキーがない: ${second}`);
   }
   const plan = sections(body('plan'));
   assert.ok((plan.get('読むもの') ?? []).some((line) => line.includes('既存の行は完了・未完了とも書き換えず、足すのは末尾だけ')), 'plan も追記だけ');

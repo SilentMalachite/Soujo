@@ -116,7 +116,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 | `soujo --help` / `soujo next set --help` | 全コマンド / 1コマンドの使い方の行。`next`・`plan`・`log`・`layer`・`map` の1語だけに付けるとその語で始まるコマンドの行。ほかは何も実行しない |
 | `soujo init` | `.soujo/`（と CLAUDE.md / AGENTS.md）を上書きせずに作る |
 | `soujo next show [--hook]` | `NEXT.md` を出す。無効ならその問題を挙げる1行も。`--hook` は SessionStart フック用 |
-| `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える。`spec` / `plan` / `converge` の effort は常に `high` |
+| `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える。`spec` / `plan` / `converge` の effort は常に `high`。`plan` / `converge` には、先に PLAN の層のエントリのうち最後のものより後の `節目` が LOG に要る |
 | `soujo next check [--hook]` | 再開できない状態を警告する。終了コードは常に0。`--hook` は Stop フック用 |
 | `soujo plan list` / `soujo plan next` | 層と状態 / 次の層。その前に `PLAN.md` 自体を使えなくしているものを1行で示す |
 | `soujo log add '<層>' --line '<行>' [--line '<行>']` | `LOG.md` に1〜3行を追記。`LOG.md` が同じ未コミットのエントリで終わっていれば足さない |

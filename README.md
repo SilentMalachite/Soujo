@@ -116,7 +116,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 | `soujo --help` / `soujo next set --help` | Usage lines of every command / of one command, or of the commands starting with `next`, `plan`, `log`, `layer`, or `map` when given only that word; runs nothing else |
 | `soujo init` | Creates `.soujo/` (and CLAUDE.md / AGENTS.md) without overwriting |
 | `soujo next show [--hook]` | Prints `NEXT.md`, with one line naming its problems when it is invalid; `--hook` is for the SessionStart hook |
-| `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md`; `spec` / `plan` / `converge` always get effort `high` |
+| `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md`; `spec` / `plan` / `converge` always get effort `high`, and `plan` / `converge` first need a `節目` in LOG after the last entry of a PLAN layer |
 | `soujo next check [--hook]` | Warns when the project is not resumable; always exits 0; `--hook` is for the Stop hook |
 | `soujo plan list` / `soujo plan next` | Layers with their state / the next layer, after one line naming what makes `PLAN.md` itself unusable |
 | `soujo log add '<layer>' --line '<line>' [--line '<line>']` | Appends 1–3 lines to `LOG.md`; nothing when `LOG.md` already ends with the same uncommitted entry |

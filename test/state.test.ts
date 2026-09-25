@@ -800,6 +800,22 @@ test('missingMilestone asks plan and converge for a milestone after the last ent
   assert.equal(missingMilestone('plan', [], log('L1 a\na')), 'LOG.md に節目がない');
 });
 
+test('missingMilestone takes an entry named after a PLAN layer as the layer\'s whoever wrote it, and one named after a phase as none', () => {
+  const items = parsePlan('- [x] L1 a — a\n- [ ] L2 b — b\n');
+  const log = (...entries: string[]) => `# LOG\n\n${entries.map((entry, index) => `## 2026-09-1${index} ${entry}\n`).join('\n')}`;
+  const after = 'LOG.md に層「L2 b」の記録より後の節目がない';
+  // Only the name counts: lines written by hand as much as layer done's note or close's 中断.
+  for (const lines of ['手で書いた\n何でも', '中断: x', '中断: x\n続き']) {
+    assert.equal(missingMilestone('converge', items, log('節目\nPLAN の全層完了', `L2 b\n${lines}`)), after, lines);
+    assert.equal(missingMilestone('converge', items, log('節目\nPLAN の全層完了', `L2 b\n${lines}`, '節目\n再び')), undefined, lines);
+  }
+  // close while NEXT.md points at a phase logs under the phase's name when no PLAN layer is left: not a layer's entry.
+  for (const phase of ['converge', 'plan']) {
+    assert.equal(missingMilestone('converge', items, log('節目\nPLAN の全層完了', `${phase}\n中断: x`)), undefined, phase);
+    assert.equal(missingMilestone('converge', items, log(`${phase}\n中断: x`)), 'LOG.md に節目がない', phase);
+  }
+});
+
 test('daysBetween counts local calendar days, and 0 when the end is not on a later date', () => {
   const from = new Date(2026, 8, 12, 18, 0);
   assert.equal(daysBetween(from, new Date(2026, 8, 15, 0, 0)), 3);

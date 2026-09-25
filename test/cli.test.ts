@@ -574,11 +574,53 @@ test('a layer name starting with "-" goes through the CLI as the messages spell 
   assert.deepEqual([set.status, set.stdout], [0, 'NEXT.md を更新: 次: -L1 scaffold\n'], set.stderr);
   // layer done refuses while NEXT.md still points at the layer, as it does for any other name. The last layer's milestone
   // comes first, as the go skill leaves it.
-  soujoIn(dir, 'log', 'add', '節目', '--line', 'PLAN の全層完了');
-  soujoIn(dir, 'next', 'set', '--layer', 'plan', '--premise=p', '--check=c');
+  const milestone = soujoIn(dir, 'log', 'add', '節目', '--line', 'PLAN の全層完了');
+  assert.equal(milestone.status, 0, milestone.stderr);
+  const converge = soujoIn(dir, 'next', 'set', '--layer', 'converge', '--premise=p', '--check=c');
+  assert.equal(converge.status, 0, converge.stderr);
   const done = soujoIn(dir, 'layer', 'done', '--', '-L1 scaffold');
   assert.equal(done.status, 0, done.stderr);
   assert.match(done.stdout, /^層「-L1 scaffold」を完了: /);
+});
+
+// SPEC §7: go leaves the last layer's milestone before next set converge; a close after that logs the layer's 中断 after the
+// milestone, so next set refuses converge until go leaves the milestone again.
+test('next set converge is refused after a close on the last layer until the milestone is left again', (t) => {
+  const dir = repo(t);
+  soujoIn(dir, 'init');
+  writeFileSync(join(dir, '.soujo', 'PLAN.md'), '- [x] L1 scaffold — build\n- [ ] L2 state — test\n');
+  // L1 closed earlier: its check at HEAD, so that close does not take it for a layer done that stopped before its commit.
+  commitAll(dir);
+  const layer = soujoIn(dir, 'next', 'set', '--layer', 'L2 state', '--premise=p', '--check=test', '--effort', 'low');
+  assert.equal(layer.status, 0, layer.stderr);
+  const logPath = join(dir, '.soujo', 'LOG.md');
+  const nextPath = join(dir, '.soujo', 'NEXT.md');
+  const leave = () => {
+    const added = soujoIn(dir, 'log', 'add', '節目', '--line', 'PLAN の全層完了: 状態', '--line', '未決: なし');
+    assert.equal(added.status, 0, added.stderr);
+  };
+  const setConverge = () => soujoIn(dir, 'next', 'set', '--layer', 'converge', '--premise=p', '--check=c');
+
+  leave();
+  const first = setConverge();
+  assert.deepEqual([first.status, first.stdout], [0, 'NEXT.md を更新: 次: converge\n'], first.stderr);
+  // NEXT.md already points past the unfinished layer, so close logs its 中断 under that layer.
+  const closed = soujoIn(dir, 'close', '--note', 'x');
+  assert.equal(closed.status, 0, closed.stderr);
+  assert.match(closed.stdout, /^中断を LOG に記録・コミット: [0-9a-f]+ wip: L2 state\n/);
+  assert.match(readFileSync(logPath, 'utf8'), /## \d{4}-\d{2}-\d{2} 節目\nPLAN の全層完了: 状態\n未決: なし\n\n## \d{4}-\d{2}-\d{2} L2 state\n中断: x\n$/);
+
+  const next = readFileSync(nextPath, 'utf8');
+  const refused = setConverge();
+  assert.deepEqual(
+    [refused.status, refused.stdout, refused.stderr],
+    [1, '', `soujo: NEXT.md を書かない: LOG.md に層「L2 state」の記録より後の節目がない（先に soujo log add '節目' --line '<何が終わったか>' --line '<何が未決か>'）\n`],
+  );
+  assert.equal(readFileSync(nextPath, 'utf8'), next);
+
+  leave();
+  const again = setConverge();
+  assert.deepEqual([again.status, again.stdout], [0, 'NEXT.md を更新: 次: converge\n'], again.stderr);
 });
 
 test('argument errors are one Japanese line with exit 1', () => {

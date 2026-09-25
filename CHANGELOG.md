@@ -8,9 +8,9 @@ The English version is canonical; the Japanese page is a translation. Versions f
 
 ### Changed
 
-- `soujo next set` refuses `plan` and `converge` until `LOG.md` has a milestone after the last layer's entry, so that a session stopped between the milestone and `next set` never resumes at a phase without the milestone `brief` shows.
-- The skills and `soujo:reviewer` run one command per tool call instead of chaining with `&&` / `;`, which a Bash allowlist denied.
-- `converge` judges principles and criteria on the path the user actually runs, so behaviour suppressed only by environment variables or settings (as tests do) is no ground for `met`, and it no longer counts the files `soujo init` placed (`CLAUDE.md` / `AGENTS.md`) or `.soujo/` as `unrequested`. Its milestone keeps to the two `--line`s shown, with the keys inside the first line's parentheses.
+- `soujo next set` refuses `plan` and `converge` until `LOG.md` has a milestone after the last entry of a PLAN layer (what `layer done` and `close` write), so `次:` can no longer move to one of these phases before the milestone `brief` shows is written. `go` leaves the milestone again when `next set` refuses for a missing one.
+- The skills and `soujo:reviewer` run one command per tool call instead of chaining with `&&` / `||` / `;`, which a Bash allowlist denied.
+- `converge` judges principles and criteria on the path the user actually runs, so behavior suppressed only by environment variables or settings (as tests do) is no ground for `met`; it reads the files that set that path (entry point, package settings, the README's start instructions), and it no longer counts the files `soujo init` placed (`CLAUDE.md` / `AGENTS.md`) or `.soujo/` as `unrequested`. Its milestone keeps to the two `--line`s shown, with the keys inside the first line's parentheses.
 - `spec` writes each answer into `SPEC.md` before asking the next question, so an interruption keeps the answers.
 - `review` names what showing the reviewer's table unedited rules out: shortened paths, reworded cells, dropped phrases, and a leading sentence.
 
