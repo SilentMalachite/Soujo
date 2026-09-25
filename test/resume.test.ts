@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { brief } from '../src/commands/brief.js';
 import { close } from '../src/commands/close.js';
+import { init } from '../src/commands/init.js';
 import { resume } from '../src/commands/resume.js';
 import { gitLastCommit, gitStatus } from '../src/git.js';
 import { readTemplate } from '../src/files.js';
@@ -312,4 +313,73 @@ test('resume points to soujo brief from three calendar days after the last commi
 
 test('resume outside Soujo projects throws', (t) => {
   assert.throws(() => resume(temp(t)), /\.soujo\/ が見つからない/);
+});
+
+// Stopped after a phase's next set and before its phase done (or phase done failed): NEXT.md has moved on, so without this
+// line the phase's records would be taken into the next layer's commit, or after a converged converge never committed.
+const phaseDoneLine = (phase: string) => `再開: フェーズ「${phase}」の記録が未コミット（phase done の前で止まった）→ soujo phase done '${phase}'`;
+const nextOf = (layer: string) => `次: ${layer}\n前提: p\n確認: c\n注意: なし\neffort: high\n`;
+
+test('resume points to phase done while a phase handed over with next set but its records are not committed', (t) => {
+  // A first spec: HEAD has no NEXT.md at all, here not even a commit.
+  const spec = repo(t);
+  init(spec);
+  writeFileSync(join(spec, '.soujo', 'SPEC.md'), '# SPEC\n\n## 目的\nx\n');
+  assert.equal(resume(spec)[3], GO);
+  writeFileSync(join(spec, '.soujo', 'NEXT.md'), nextOf('plan'));
+  assert.equal(resume(spec)[3], phaseDoneLine('spec'));
+
+  const plan = project(repo(t), { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '# PLAN\n', 'NEXT.md': nextOf('plan') });
+  commitAll(plan, 'phase: spec');
+  writeFileSync(join(plan, '.soujo', 'PLAN.md'), '# PLAN\n\n- [ ] L1 a — a\n');
+  writeFileSync(join(plan, '.soujo', 'NEXT.md'), nextOf('L1 a'));
+  assert.deepEqual(resume(plan)[0], '次: L1 a（effort: high）確認: c');
+  assert.equal(resume(plan)[3], phaseDoneLine('plan'));
+
+  // converge added a layer, or converged and handed over to plan.
+  for (const [layers, after] of [['- [ ] L2 fix — b（A1 partial）\n', 'L2 fix'], ['', 'plan']] as const) {
+    const converge = project(repo(t), { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '- [x] L1 a — a\n', 'NEXT.md': nextOf('converge') });
+    commitAll(converge, 'layer: L1 a', new Date(2026, 8, 12));
+    writeFileSync(join(converge, '.soujo', 'PLAN.md'), `- [x] L1 a — a\n${layers}`);
+    writeFileSync(join(converge, '.soujo', 'LOG.md'), '# LOG\n\n## 2026-09-13 節目\nconverge\n');
+    writeFileSync(join(converge, '.soujo', 'NEXT.md'), nextOf(after));
+    assert.equal(resume(converge, new Date(2026, 8, 13))[3], phaseDoneLine('converge'), after);
+    // The days away are still pointed out.
+    assert.equal(resume(converge, new Date(2026, 8, 20))[3], `${phaseDoneLine('converge')}・8日ぶり: 先に soujo brief`, after);
+  }
+});
+
+test('resume does not point to phase done while HEAD\'s 次: is a layer, 次: is unchanged, the records are clean, or a layer done stopped', (t) => {
+  // HEAD's 次: is a layer: the layer's own hint stays.
+  const layer = project(repo(t), { 'PLAN.md': PLAN, 'NEXT.md': NEXT });
+  commitAll(layer);
+  writeFileSync(join(layer, '.soujo', 'NEXT.md'), NEXT.replace('L3 io', 'L4 cli'));
+  assert.equal(resume(layer)[3], `再開: 「L3 io」を締めていない → 完了なら soujo layer done 'L3 io'、途中なら soujo next set --layer='L3 io' で次を戻す`);
+
+  // 次: still the phase: it has not handed over yet.
+  const unchanged = project(repo(t), { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '# PLAN\n', 'NEXT.md': nextOf('plan') });
+  commitAll(unchanged);
+  writeFileSync(join(unchanged, '.soujo', 'LOG.md'), '# LOG\n\n## 2026-09-13 節目\nplan\n');
+  assert.equal(resume(unchanged)[3], GO);
+  const first = repo(t);
+  init(first);
+  assert.equal(resume(first)[3], GO);
+
+  // Clean records: HEAD has no NEXT.md, since git ignores it, and the others are committed.
+  const clean = repo(t);
+  writeFileSync(join(clean, '.gitignore'), '.soujo/NEXT.md\n');
+  project(clean, { 'SPEC.md': '# SPEC\n目的\n', 'PLAN.md': '# PLAN\n\n- [ ] L1 a — a\n', 'NEXT.md': nextOf('L1 a') });
+  commitAll(clean);
+  assert.equal(resume(clean)[3], GO);
+
+  // A stopped layer done comes first: re-running it is what phase done would refuse over.
+  const stopped = project(repo(t), { 'PLAN.md': '- [x] L1 a — a\n- [ ] L2 b — b\n', 'NEXT.md': nextOf('converge') });
+  commitAll(stopped);
+  writeFileSync(join(stopped, '.soujo', 'PLAN.md'), '- [x] L1 a — a\n- [x] L2 b — b\n');
+  writeFileSync(join(stopped, '.soujo', 'NEXT.md'), nextOf('plan'));
+  assert.equal(resume(stopped)[3], `再開: 「L2 b」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done 'L2 b' を再実行`);
+
+  // Outside a repository there is nothing to commit with.
+  const outside = project(temp(t), { 'SPEC.md': '# SPEC\n目的\n', 'NEXT.md': nextOf('plan') });
+  assert.equal(resume(outside)[3], GO);
 });

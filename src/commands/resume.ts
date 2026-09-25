@@ -1,9 +1,10 @@
 // soujo resume: four lines to continue from — 次 (NEXT.md or PLAN), 前回 (LOG.md), コミット (git), 再開 (what to run).
 
 import { dirname } from 'node:path';
-import { readState, requireStateDir } from '../files.js';
-import { gitChangeCount, type Commit } from '../git.js';
+import { STATE_FILES, readState, requireStateDir } from '../files.js';
+import { gitChangeCount, gitToplevel, type Commit } from '../git.js';
 import {
+  PHASES,
   daysBetween,
   lastLog,
   newlyDone,
@@ -16,7 +17,19 @@ import {
   validatePlan,
   type PlanItem,
 } from '../state.js';
-import { attempt, clip, commandArg, describeInvalidNext, headState, optionArg, readHead, skill, type NoCommit } from './shared.js';
+import {
+  attempt,
+  clip,
+  commandArg,
+  describeInvalidNext,
+  headState,
+  optionArg,
+  readHead,
+  skill,
+  statePaths,
+  uncommittedPaths,
+  type NoCommit,
+} from './shared.js';
 
 // From this many days since the last commit, 再開 points to soujo brief first.
 const AWAY_DAYS = 3;
@@ -89,6 +102,28 @@ function unfinishedLayerDone(root: string, items: PlanItem[]): string | undefine
   return `再開: 「${clip(pending.layer)}」の layer done が途中（PLAN のチェックが未コミット）→ soujo layer done ${commandArg(pending.layer)} を再実行`;
 }
 
+// The phase whose next set handed over while its records are not committed: phase done was not run, or failed. HEAD's 次:
+// names it (HEAD without NEXT.md is a first spec), the working NEXT.md's 次: has moved on, and a record has an uncommitted
+// change. undefined outside a repository.
+function pendingPhase(root: string, dir: string): string | undefined {
+  if (gitToplevel(root) === undefined) return undefined;
+  const text = readState(dir, 'NEXT.md');
+  const next = text === undefined ? undefined : parseNext(text);
+  if (next === undefined) return undefined;
+  const head = headState(root, 'NEXT.md');
+  const phase = head === undefined ? 'spec' : parseNext(head)?.layer;
+  if (phase === undefined || !PHASES.includes(phase) || next.layer === phase) return undefined;
+  return uncommittedPaths(root, statePaths(root, STATE_FILES)).length > 0 ? phase : undefined;
+}
+
+// 再開 for a phase stopped between its next set and its phase done: the moved-on NEXT.md would lead past the phase's commit,
+// so that the next layer takes its records in, or after a converged converge they stay uncommitted.
+function unfinishedPhase(root: string, dir: string): string | undefined {
+  const phase = attempt(() => pendingPhase(root, dir));
+  if (phase === undefined || phase instanceof Error) return undefined;
+  return `再開: フェーズ「${phase}」の記録が未コミット（phase done の前で止まった）→ soujo phase done ${commandArg(phase)}`;
+}
+
 function logLine(dir: string): string {
   const text = attempt(() => readState(dir, 'LOG.md'));
   if (text instanceof Error) return '前回: LOG.md を読めない';
@@ -122,7 +157,8 @@ export function resume(cwd: string, now: Date = new Date()): string[] {
   const [next, command] = nextAndCommand(dir, plan);
   const items = typeof plan === 'string' ? parsePlan(plan) : [];
   const head = readHead(root);
-  // layer done refuses the PLAN nextAndCommand refuses, so re-running it is no way on.
-  const unfinished = planProblems(plan).length > 0 ? undefined : unfinishedLayerDone(root, items);
+  // layer done refuses the PLAN nextAndCommand refuses, so re-running it is no way on. A stopped layer done comes before a
+  // stopped phase, whose phase done would refuse until that layer done is re-run.
+  const unfinished = planProblems(plan).length > 0 ? undefined : (unfinishedLayerDone(root, items) ?? unfinishedPhase(root, dir));
   return [next, logLine(dir), commitLine(root, head), `${unfinished ?? command}${awayHint(head, now)}`];
 }

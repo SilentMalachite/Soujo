@@ -94,6 +94,17 @@ export function isSymlink(path: string): boolean {
   }
 }
 
+/** Whether path is a symlink whose real path cannot be found: its target, or a symlink on the way, is gone, or they loop. */
+export function isBrokenSymlink(path: string): boolean {
+  if (!isSymlink(path)) return false;
+  try {
+    realpathSync(path);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Where git tracks the state file, relative to root: the symlink target when the file is a symlink (root resolved too,
  * so /tmp and /private/tmp compare equal), otherwise ".soujo/<file>".
@@ -621,6 +632,23 @@ export function removeTempsOf(target: string): void {
 
 /** The files soujo init creates in the project root beside .soujo/, which have temporary files of their own there. */
 export const ROOT_FILES = ['CLAUDE.md', 'AGENTS.md'] as const;
+export type RootFile = (typeof ROOT_FILES)[number];
+
+/**
+ * Whether the project root's file is a regular file holding exactly what soujo init writes there (its template, copied as it
+ * is), rather than one of the user's own, which init keeps, or one changed since.
+ */
+export function isPlacedRootFile(root: string, file: RootFile): boolean {
+  const path = join(root, file);
+  try {
+    const template = Buffer.from(readTemplate(file));
+    const stats = lstatSync(path);
+    // The size first, so that a large file of the user's own is not read only to be told apart.
+    return stats.isFile() && stats.size === template.length && readFileSync(path).equals(template);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Deletes the temporary files a killed init left beside the project root's CLAUDE.md / AGENTS.md, so that a commit staging

@@ -96,7 +96,7 @@ If `codex plugin marketplace upgrade soujo` fails with `` marketplace `soujo` is
 
 In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, which creates `.soujo/` and, when missing, `CLAUDE.md` and `AGENTS.md`. Existing files are never overwritten.
 
-`spec`, `plan`, and `converge` commit only their records (`.soujo/`, the files its symlinks point to, and after `spec` the new `CLAUDE.md` / `AGENTS.md`), with `soujo phase done` after their `next set`, as `phase: <phase>`; every other change is left for a layer. While `NEXT.md` points at one of the three, the Claude Code Stop hook leaves `.soujo/` out of its count of uncommitted changes, so it is quiet about records the phase has not committed yet; a change anywhere else still warns.
+`spec`, `plan`, and `converge` commit only their records (`.soujo/`, the files its symlinks point to, and after `spec` the `CLAUDE.md` / `AGENTS.md` init placed, while unchanged), with `soujo phase done` after their `next set`, as `phase: <phase>`; every other change is left for a layer. While `NEXT.md` points at one of the three, the Claude Code Stop hook leaves `.soujo/` out of its count of uncommitted changes, so it is quiet about records the phase has not committed yet; a change anywhere else still warns.
 
 ## Host notes
 
@@ -113,7 +113,7 @@ In a git repository, run `/soujo:spec` (Codex: `$spec`). It runs `soujo init`, w
 
 | Command | Does |
 |---|---|
-| `soujo --help` / `soujo next set --help` | Usage lines of every command / of one command, or of the commands starting with `next`, `plan`, `log`, `layer`, or `map` when given only that word; runs nothing else |
+| `soujo --help` / `soujo next set --help` | Usage lines of every command / of one command, or of the commands starting with `next`, `plan`, `log`, `layer`, `phase`, or `map` when given only that word; runs nothing else |
 | `soujo init` | Creates `.soujo/` (and CLAUDE.md / AGENTS.md) without overwriting |
 | `soujo next show [--hook]` | Prints `NEXT.md`, with one line naming its problems when it is invalid; `--hook` is for the SessionStart hook |
 | `soujo next set --layer '<layer>' --premise '<premise>' --check '<check>' [--caution '<caution>'] [--effort <low\|medium\|high\|xhigh>]` | Rewrites `NEXT.md`; `spec` / `plan` / `converge` always get effort `high`, and `plan` / `converge` first need a `節目` in LOG after the last entry of a PLAN layer |

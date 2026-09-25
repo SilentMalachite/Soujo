@@ -6,8 +6,10 @@ import {
   STATE_FILES,
   MAX_SYMLINKS,
   insideProject,
+  isBrokenSymlink,
   isSymlink,
   readState,
+  removeLeftoverTemps,
   removeRootTemps,
   requireState,
   requireStateDir,
@@ -26,8 +28,10 @@ import {
   gitCommit,
   gitCommitPaths,
   gitHasCommits,
+  gitHasDirectory,
   gitHasStagedChanges,
   gitHeadEntry,
+  gitHiddenChanges,
   gitIgnored,
   gitLastCommit,
   gitNotStaged,
@@ -383,20 +387,59 @@ export function commitRecords(root: string, subject: string, extra: readonly Sta
 /**
  * Commits SPEC, PLAN, LOG, and NEXT (a symlink together with its target and every symlink on the way) and the extra paths
  * (relative to root) as written, as subject, and nothing else: every other change in the project, staged or not, is left as
- * it was, so that the subject names no one else's work. Throws before staging anything when one of those paths is untracked
- * and has a credential file's name (a record's symlink leading to .env), which requireCommittable refuses for a commit of
- * everything. Returns false, without committing, when none of them has an uncommitted change. As in commitRecords, nothing
- * is committed while one is not staged as written (skip-worktree); the paths then stay staged, as after a failed commit.
+ * it was, so that the subject names no one else's work. Throws before staging anything when:
+ * - a record is a symlink that cannot be resolved (its target gone): the link alone would be staged, and HEAD keep the old
+ *   record without a word
+ * - a symlink on the way to a record stands where HEAD or the index has a directory: staging it stages the deletion of the
+ *   files under that directory too, which are no records
+ * - one of those paths is untracked and has a credential file's name (a record's symlink leading to .env), which
+ *   requireCommittable refuses for a commit of everything
+ * Then the temporary files a killed init or state write left are deleted, as commitRecords and the commands writing state
+ * files do. Returns false, without committing, when none of them has an uncommitted change. As in commitRecords, nothing is
+ * committed while one is not staged as written (skip-worktree, a deletion included); the paths then stay staged, as after a
+ * failed commit.
  */
 export function commitOnlyRecords(root: string, subject: string, extra: readonly string[] = []): boolean {
+  requireResolvedRecords(root);
+  requireNoReplacedDirectories(root);
   const paths = [...new Set([...recordPaths(root), ...extra])];
   requireNoCredentialNames(gitUntrackedPaths(root, paths));
+  // As before a commit of everything: a killed write's leftover would otherwise stay, and keep the Stop hook warning.
+  removeLeftoverTemps(join(root, STATE_DIR));
+  removeRootTemps(root);
   gitAddPaths(root, paths);
   requireStaged(root, paths);
   const changed = gitChangedPaths(root, paths);
   if (changed.length === 0) return false;
   gitCommitPaths(root, subject, changed);
   return true;
+}
+
+// Throws when a record is a symlink whose real path cannot be found, naming it (see commitOnlyRecords).
+function requireResolvedRecords(root: string): void {
+  const broken = RECORDS.map((file) => statePath(file)).filter((path) => isBrokenSymlink(join(root, path)));
+  if (broken.length > 0) {
+    throw new Error(`${listPaths(broken)} は先をたどれない symlink（先がないかループ）なので記録をコミットできない（symlink の先を戻すか、実体のファイルに置き換えてから）`);
+  }
+}
+
+// Throws when a symlink on the way to a record stands where HEAD or the index has a directory (see commitOnlyRecords). Only a
+// commit of everything carries that change: layer done, or close.
+function requireNoReplacedDirectories(root: string): void {
+  const links = [...new Set(RECORDS.flatMap((file) => stateLinks(root, file)))];
+  const replaced = links.filter((path) => gitHasDirectory(root, path));
+  if (replaced.length > 0) {
+    throw new Error(`${listPaths(replaced)} はディレクトリだったところにある symlink なので、記録だけをコミットできない（soujo layer done か soujo close で全体と一緒にコミットする）`);
+  }
+}
+
+/**
+ * The paths (relative to root), in the given order, with an uncommitted change: the ones git status shows, and the ones it
+ * hides behind skip-worktree or assume-unchanged (see gitHiddenChanges).
+ */
+export function uncommittedPaths(root: string, paths: readonly string[]): string[] {
+  const changed = new Set([...gitChangedPaths(root, paths), ...gitHiddenChanges(root, paths)]);
+  return paths.filter((path) => changed.has(path));
 }
 
 // SPEC, PLAN, LOG, NEXT, and extra, as statePaths gives them.

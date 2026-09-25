@@ -96,7 +96,7 @@ Claude Code のプラグインは `version` を書いていないので、新し
 
 git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init` が `.soujo/` と、なければ `CLAUDE.md`・`AGENTS.md` を作る。既存のファイルは上書きしない。
 
-`spec`・`plan`・`converge` は、`next set` の後に `soujo phase done` で記録（`.soujo/` と、その symlink の先、`spec` の後は新しい `CLAUDE.md` / `AGENTS.md`）だけを `phase: <フェーズ>` としてコミットする。ほかの変更は層に任せる。`NEXT.md` がこの3つのどれかを指す間、Claude Code の Stop フックは未コミット件数から `.soujo/` を外すので、フェーズがまだコミットしていない記録については黙る。それ以外の場所の変更は今までどおり警告する。
+`spec`・`plan`・`converge` は、`next set` の後に `soujo phase done` で記録（`.soujo/` と、その symlink の先、`spec` の後は init が置いたまま変わっていない `CLAUDE.md` / `AGENTS.md`）だけを `phase: <フェーズ>` としてコミットする。ほかの変更は層に任せる。`NEXT.md` がこの3つのどれかを指す間、Claude Code の Stop フックは未コミット件数から `.soujo/` を外すので、フェーズがまだコミットしていない記録については黙る。それ以外の場所の変更は今までどおり警告する。
 
 ## ホストごとの注意
 
@@ -113,7 +113,7 @@ git リポジトリの中で `/soujo:spec`（Codex は `$spec`）。`soujo init`
 
 | コマンド | 動作 |
 |---|---|
-| `soujo --help` / `soujo next set --help` | 全コマンド / 1コマンドの使い方の行。`next`・`plan`・`log`・`layer`・`map` の1語だけに付けるとその語で始まるコマンドの行。ほかは何も実行しない |
+| `soujo --help` / `soujo next set --help` | 全コマンド / 1コマンドの使い方の行。`next`・`plan`・`log`・`layer`・`phase`・`map` の1語だけに付けるとその語で始まるコマンドの行。ほかは何も実行しない |
 | `soujo init` | `.soujo/`（と CLAUDE.md / AGENTS.md）を上書きせずに作る |
 | `soujo next show [--hook]` | `NEXT.md` を出す。無効ならその問題を挙げる1行も。`--hook` は SessionStart フック用 |
 | `soujo next set --layer '<層>' --premise '<前提>' --check '<確認>' [--caution '<注意>'] [--effort <low\|medium\|high\|xhigh>]` | `NEXT.md` を書き換える。`spec` / `plan` / `converge` の effort は常に `high`。`plan` / `converge` には、先に PLAN の層のエントリのうち最後のものより後の `節目` が LOG に要る |

@@ -20,8 +20,10 @@ import {
   gitFindCommit,
   gitFindCommitStarting,
   gitHasCommits,
+  gitHasDirectory,
   gitHasStagedChanges,
   gitHeadEntry,
+  gitHiddenChanges,
   gitIgnored,
   gitLastCommit,
   gitNotStaged,
@@ -182,6 +184,61 @@ test('gitNotStaged compares a symlink by its link text and reports a re-pointed 
   symlinkSync('b.md', join(dir, 'link.md'));
   gitAddAll(dir);
   assert.deepEqual(gitNotStaged(dir, ['link.md', 'b.md']), ['link.md']);
+});
+
+test('gitNotStaged reports a missing path the index still has, as a skip-worktree deletion leaves it, and skips one missing from both', (t) => {
+  const dir = repo(t);
+  writeFileSync(join(dir, 'a.md'), 'a\n');
+  writeFileSync(join(dir, 'b.md'), 'b\n');
+  commitAll(dir, 'base');
+  execFileSync('git', ['update-index', '--skip-worktree', 'a.md'], { cwd: dir });
+  rmSync(join(dir, 'a.md'));
+  rmSync(join(dir, 'b.md'));
+  gitAddAll(dir);
+  assert.deepEqual(gitNotStaged(dir, ['a.md', 'b.md', 'missing.md']), ['a.md']);
+});
+
+// git status shows none of these changes, and git add leaves them out.
+test('gitHiddenChanges names skip-worktree and assume-unchanged entries whose working tree differs from the index or is missing', { skip: process.platform === 'win32' }, (t) => {
+  const top = repo(t);
+  const app = join(top, 'app');
+  mkdirSync(app);
+  for (const name of ['changed.md', 'gone.md', 'same.md', 'assumed.md', 'plain.md', 'relinked.md']) writeFileSync(join(app, name), `${name}\n`);
+  symlinkSync('same.md', join(app, 'link.md'));
+  commitAll(top, 'base');
+  const hide = (flag: string, ...paths: string[]) => execFileSync('git', ['update-index', flag, ...paths], { cwd: app });
+  hide('--skip-worktree', 'changed.md', 'gone.md', 'same.md', 'link.md', 'relinked.md');
+  hide('--assume-unchanged', 'assumed.md');
+  writeFileSync(join(app, 'changed.md'), 'x\n');
+  rmSync(join(app, 'gone.md'));
+  writeFileSync(join(app, 'assumed.md'), 'x\n');
+  writeFileSync(join(app, 'plain.md'), 'x\n');
+  rmSync(join(app, 'relinked.md'));
+  symlinkSync('same.md', join(app, 'relinked.md'));
+  assert.deepEqual(gitStatus(top), [' M app/plain.md']);
+  const paths = ['plain.md', 'same.md', 'relinked.md', 'link.md', 'gone.md', 'assumed.md', 'changed.md', 'missing.md'];
+  assert.deepEqual(gitHiddenChanges(app, paths), ['relinked.md', 'gone.md', 'assumed.md', 'changed.md']);
+  assert.deepEqual(gitHiddenChanges(app, []), []);
+});
+
+test('gitHasDirectory tells a directory of HEAD or of the index from a file, a symlink, and nothing', { skip: process.platform === 'win32' }, (t) => {
+  const top = repo(t);
+  const app = join(top, 'app');
+  mkdirSync(join(app, 'docs'), { recursive: true });
+  writeFileSync(join(app, 'docs', 'other.txt'), 'o\n');
+  writeFileSync(join(app, 'file.md'), 'f\n');
+  symlinkSync('docs', join(app, 'link'));
+  assert.deepEqual(['docs', 'file.md', 'link', 'missing'].map((path) => gitHasDirectory(app, path)), [false, false, false, false]);
+  // Staged before the first commit: the index has entries under it.
+  execFileSync('git', ['add', 'app/docs'], { cwd: top });
+  assert.equal(gitHasDirectory(app, 'docs'), true);
+  commitAll(top, 'base');
+  // Replaced by a symlink and staged so: HEAD still has the directory.
+  rmSync(join(app, 'docs'), { recursive: true });
+  mkdirSync(join(app, 'real'));
+  symlinkSync('real', join(app, 'docs'));
+  execFileSync('git', ['add', '-A', 'app/docs'], { cwd: top });
+  assert.deepEqual(['docs', 'file.md', 'link', 'missing', 'doc'].map((path) => gitHasDirectory(app, path)), [true, false, false, false, false]);
 });
 
 test('gitHasCommits distinguishes an empty repository from a failure', (t) => {

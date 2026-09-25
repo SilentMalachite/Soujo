@@ -323,30 +323,52 @@ export function gitCommitPaths(cwd, message, paths) {
 export function gitHasStagedChanges(cwd) {
     return exitCode(cwd, ['diff', '--cached', '--quiet', ...HERE]) === 1;
 }
+// Whether the working tree's entry at path (relative to cwd) differs from the index's: only one of them has it, or they hold
+// other objects. Compared by object id, so clean filters and line-ending conversion count as the same; a symlink is compared by
+// its link text, as git stores it, not by the file it points to. A path missing from both is the same.
+function differsFromIndex(cwd, path) {
+    let stats;
+    try {
+        stats = lstatSync(join(cwd, path));
+    }
+    catch {
+        stats = undefined;
+    }
+    const staged = run(cwd, ['rev-parse', '--verify', '--quiet', `:./${path}`]);
+    if (staged.error !== undefined || (staged.status !== 0 && staged.status !== 1))
+        throw failure(['rev-parse'], staged);
+    if (stats === undefined)
+        return staged.status === 0;
+    if (staged.status === 1)
+        return true;
+    const object = stats.isSymbolicLink()
+        ? git(cwd, ['hash-object', '--stdin'], readlinkSync(join(cwd, path)))
+        : git(cwd, ['hash-object', '--', path]);
+    return staged.stdout.trim() !== object.trim();
+}
 /**
  * The paths (relative to cwd) whose file is not staged as it is, for example because skip-worktree or assume-unchanged
- * keeps `git add` from picking it up. Compared by object id, so clean filters and line-ending conversion count as staged;
- * a symlink is compared by its link text, as git stores it, not by the file it points to. Missing paths are skipped.
+ * keeps `git add` from picking it up, a deletion included: a missing path the index still has. Compared as differsFromIndex
+ * compares; a path missing from both is skipped.
  */
 export function gitNotStaged(cwd, paths) {
-    return paths.filter((path) => {
-        let stats;
-        try {
-            stats = lstatSync(join(cwd, path));
-        }
-        catch {
-            return false;
-        }
-        const staged = run(cwd, ['rev-parse', '--verify', '--quiet', `:./${path}`]);
-        if (staged.error !== undefined || (staged.status !== 0 && staged.status !== 1))
-            throw failure(['rev-parse'], staged);
-        if (staged.status === 1)
-            return true;
-        const object = stats.isSymbolicLink()
-            ? git(cwd, ['hash-object', '--stdin'], readlinkSync(join(cwd, path)))
-            : git(cwd, ['hash-object', '--', path]);
-        return staged.stdout.trim() !== object.trim();
-    });
+    return paths.filter((path) => differsFromIndex(cwd, path));
+}
+// The tag `git ls-files -v` gives an entry git does not compare with the working tree: "S" for skip-worktree, a lower-case
+// letter for assume-unchanged.
+const HIDDEN_TAG = /^[Sa-z]$/;
+/**
+ * The given paths (relative to cwd, taken literally), in the given order, whose index entry is skip-worktree or
+ * assume-unchanged while the working tree differs from it (see differsFromIndex), a deletion included: a change that git
+ * status does not show and git add leaves out.
+ */
+export function gitHiddenChanges(cwd, paths) {
+    if (paths.length === 0)
+        return [];
+    // "<tag> <path>" per index entry, the path relative to cwd as it is given here.
+    const records = completeFields(git(cwd, ['ls-files', '-z', '-v', '--', ...literalPathspecs(paths)])).fields;
+    const hidden = new Set(records.filter((record) => record.length > 2 && HIDDEN_TAG.test(record[0] ?? '')).map((record) => record.slice(2)));
+    return paths.filter((path) => hidden.has(path) && differsFromIndex(cwd, path));
 }
 /** The paths (relative to cwd) that git ignores. Tracked files are never reported. */
 export function gitIgnored(cwd, paths) {
@@ -426,6 +448,25 @@ export function gitHeadEntry(cwd, path) {
     if (!match)
         return undefined;
     return { symlink: match[1] === '120000', content: git(cwd, ['cat-file', 'blob', match[2] ?? '']) };
+}
+// An ls-tree -z record of a directory: its path.
+const TREE_RECORD = /^040000 tree [0-9a-f]+\t(.*)$/s;
+/**
+ * Whether HEAD has a directory at path (relative to cwd, "/"-separated, taken literally), or the index has entries under it:
+ * staging whatever stands there now stages the deletion of those files too. Git failures throw.
+ */
+export function gitHasDirectory(cwd, path) {
+    // Paths relative to cwd, as given; a directory's entries are listed under it.
+    const listed = completeFields(git(cwd, ['ls-files', '-z', '--', `:(literal)${path}`])).fields;
+    if (listed.some((entry) => entry.startsWith(`${path}/`)))
+        return true;
+    if (!gitHasCommits(cwd))
+        return false;
+    const full = posix.normalize(posix.join(pathLine(git(cwd, ['rev-parse', '--show-prefix'])), path));
+    if (full === '..' || full.startsWith('../'))
+        return false;
+    const output = git(cwd, ['ls-tree', '-z', '--full-tree', 'HEAD', '--', `:(literal)${full}`]);
+    return output.split('\0').some((record) => TREE_RECORD.exec(record)?.[1] === full);
 }
 /** Paths (relative to the top level) in cwd and below added by the HEAD commit, the root commit included. */
 export function gitAddedFiles(cwd) {

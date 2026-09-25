@@ -8,7 +8,7 @@ The English version is canonical; the Japanese page is a translation. Versions f
 
 ### Added
 
-- `soujo phase done '<phase>'` commits the four records of `spec` / `plan` / `converge` as `phase: <phase>` after their `next set`, leaving every other change as it was. The three skills run it, so a phase's records no longer wait for the next `layer done`.
+- `soujo phase done '<phase>'` commits the four records of `spec` / `plan` / `converge` as `phase: <phase>` after their `next set`, leaving every other change as it was. The three skills run it, so a phase's records no longer wait for the next `layer done`, and `soujo resume` points to it when a session stopped before it.
 
 ### Changed
 
@@ -17,6 +17,10 @@ The English version is canonical; the Japanese page is a translation. Versions f
 - `converge` judges principles and criteria on the path the user actually runs, so behavior suppressed only by environment variables or settings (as tests do) is no ground for `met`; it reads the files that set that path (entry point, package settings, the README's start instructions), and it no longer counts the files `soujo init` placed (`CLAUDE.md` / `AGENTS.md`) or `.soujo/` as `unrequested`. Its milestone keeps to the two `--line`s shown, with the keys inside the first line's parentheses.
 - `spec` writes each answer into `SPEC.md` before asking the next question, so an interruption keeps the answers.
 - `review` names what showing the reviewer's table unedited rules out: shortened paths, reworded cells, dropped phrases, and a leading sentence.
+
+### Fixed
+
+- `layer done`, `close`, and `log rotate` refuse a state file that was deleted while the index still has it (e.g. skip-worktree), instead of committing without the deletion.
 
 ## 0.6.0 — 2026-09-20
 

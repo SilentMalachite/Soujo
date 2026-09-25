@@ -329,6 +329,13 @@ test('go closes the last layer with 節目, next set converge, and layer done, t
   assert.ok(milestone !== -1 && milestone < converge && converge < done, `go: 節目 → next set converge → layer done（${[milestone, converge, done]}）`);
 });
 
+// resume points to phase done when a phase stopped between its next set and its phase done; go follows that 再開: as it
+// follows a re-run of layer done or a next set, and runs no phase done of its own.
+test('go follows a 再開: that re-runs layer done, or runs next set or phase done', () => {
+  const tasks = sections(body('go')).get('やること') ?? [];
+  assert.ok((tasks[0] ?? '').includes('`再開:` が go 以外（layer done の再実行・next set・phase done）ならその通りにする。'), 'go は再開: の phase done に従う');
+});
+
 // SPEC §7: the one question go asks is where a completion condition cannot hold without breaking a principle.
 test('go asks one question only when the completion condition cannot hold without breaking a principle', () => {
   const line = sections(body('go')).get('やること')?.find((task) => task.includes('原則')) ?? '';
